@@ -1,0 +1,14 @@
+{
+    "name": "PostgreSQL Development Container",
+    "dockerComposeFile": "docker-compose.yml",
+    "service": "db",
+    "workspaceFolder": "/workspace",
+    "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.remote-containers"
+    ],
+    "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+    },
+    "postCreateCommand": "psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -f /workspace/sql/init.sql"
+}
