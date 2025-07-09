@@ -16,16 +16,13 @@ services:
       - key: DATABASE_URL
         fromService:
           name: beta_sbaread_db
+          type: database       
           property: connectionString
 
 databases:
   - name: beta_sbaread_db
     databaseName: beta_sbaread_db
     user: beta_sbaread_user
-
-
-
-
 
 
 
