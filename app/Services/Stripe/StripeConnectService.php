@@ -583,13 +583,14 @@ class StripeConnectService
                 [
                     'external_account' => [
                         'object' => 'bank_account',
-                        'country' => strtoupper($payload->country ?? 'US'),
-                        'currency' => $payload->currency,
-                        'account_number' => $payload->account_number,
-                        'routing_number' => $payload->routing_number,
+                        'country' => strtoupper($payload['country'] ?? 'US'),
+                        'currency' => $payload['currency'],
+                        'account_number' => $payload['account_number'],
+                        'routing_number' => $payload['routing_number']
                     ],
                 ]
             );
+
             // check is the response is type of Exception froom stripe
             if ($bankAccount instanceof Exception\InvalidRequestException) {
                 $error = $bankAccount->getMessage();
@@ -639,7 +640,7 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-            //throw $th;
+//            throw $th;
             // Log::error('Stripe Bank Account Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe bank account', 500, $th->getMessage(), $th);
         }

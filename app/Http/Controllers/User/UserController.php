@@ -29,7 +29,8 @@ class UserController extends Controller
         $this->stripe = $stripe;
     }
 
-    public function index() {
+    public function index()
+    {
         return response()->json([
             'data' => null,
             'code' => 200,
@@ -37,7 +38,8 @@ class UserController extends Controller
         ], 200, []);
     }
 
-    public function register(Request $request) {
+    public function register(Request $request)
+    {
         try {
             // dd($request->all());
 
@@ -319,7 +321,7 @@ class UserController extends Controller
     public function verifyAuthorEmail(Request $request)
     {
         // dd($request->all());
-        $validator = Validator::make($request->all(),[
+        $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'token' => 'required|digits:4',
         ]);
@@ -409,7 +411,7 @@ class UserController extends Controller
     public function profile(Request $request)
     {
         // dd($request);
-        $user = $request->user();//->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
+        $user = $request->user(); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
         return $this->success($user, 'Profile retrieved successfully!', 200);
@@ -522,7 +524,7 @@ class UserController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'interests' => 'array',
-                'sort_by' =>'required|in:popularity,recent',
+                'sort_by' => 'required|in:popularity,recent',
                 'items_per_page' => 'integer|min:1|max:50',
             ]);
 
@@ -536,7 +538,7 @@ class UserController extends Controller
 
             // Update the object to jsonb of preferences in the db
             $user = $request->user();
-            $user->preferences = array_merge($user->preferences?? [], $request->all());
+            $user->preferences = array_merge($user->preferences ?? [], $request->all());
             $user->save();
 
             return $this->success(
@@ -587,7 +589,7 @@ class UserController extends Controller
 
             // Update the object to jsonb of settings in the db
             $user = $request->user();
-            $user->settings = array_merge($user->settings?? [], $request->all());
+            $user->settings = array_merge($user->settings ?? [], $request->all());
             $user->save();
 
             return $this->success(
@@ -673,7 +675,7 @@ class UserController extends Controller
 
         Mail::send('emails.password_change', $details, function ($message) use ($user, $details) {
             $message->to($user->email)
-            ->subject($details['subject']);
+                ->subject($details['subject']);
         });
     }
 
@@ -758,15 +760,15 @@ class UserController extends Controller
             }
 
             // For Nigeria (NG), we need to use the correct bank format
-            if ($validator['country'] === 'NG') {
-                $bankAccountData['sort_code'] = $validator['sort_code'];  // Nigeria uses sort code (Bank Code)
+            if ($request->input('country') === 'NG') {
+                $bankAccountData['sort_code'] = $request->input('sort_code');  // Nigeria uses sort code (Bank Code)
                 $bankAccountData['account_holder_name'] = $user->name;
                 $bankAccountData['currency'] = 'usd'; // USD or the local currency for Stripe payout
             }
 
             // For Canada (CA), we need to include the correct routing number
-            if ($validator['country'] === 'CA') {
-                $bankAccountData['routing_number'] = $validator['routing_number'];  // Canada uses routing number
+            if ($request->input('country') === 'CA') {
+                $bankAccountData['routing_number'] = $request->input('routing_number');  // Canada uses routing number
                 $bankAccountData['account_holder_name'] = $user->name;
                 $bankAccountData['currency'] = 'cad'; // Canadian dollars
             }
@@ -790,12 +792,13 @@ class UserController extends Controller
             }
 
             $bankAccount = $this->stripe->addBankAccount($request->all(), $user);
+            dd($bankAccount->getData());
 
-            if (isset($bankAccount['error'])) {
+            if (isset($bankAccount->getData()->error)) {
                 return $this->error(
                     'Failed to add bank account.',
                     400,
-                    $bankAccount['error']
+                    $bankAccount->getData()->error
                 );
             }
 
@@ -867,7 +870,7 @@ class UserController extends Controller
                 'per_page'    => 'sometimes|integer|min:1|max:100',
                 'page'        => 'sometimes|integer|min:1',
                 'search'      => 'sometimes|string|max:255',
-                'account_type'=> 'sometimes|string|in:reader,author,superadmin',
+                'account_type' => 'sometimes|string|in:reader,author,superadmin',
                 'status'      => 'sometimes|string|in:active,inactive,unverified,suspended',
                 'role'        => 'sometimes|string|exists:roles,name',
                 'sort_by'     => 'sometimes|string|in:id,name,email,created_at,updated_at',
@@ -904,8 +907,8 @@ class UserController extends Controller
             if ($search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('email', 'like', "%{$search}%")
-                    ->orWhere('name', 'like', "%{$search}%")
-                    ->orWhere('username', 'like', "%{$search}%");
+                        ->orWhere('name', 'like', "%{$search}%")
+                        ->orWhere('username', 'like', "%{$search}%");
                 });
             }
 

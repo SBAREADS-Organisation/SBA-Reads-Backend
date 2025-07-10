@@ -112,7 +112,7 @@ class KYCController extends Controller
                         return $this->error(
                             $responseData['error'],
                             400,
-                            null
+                            env('APP_DEBUG') ? $responseData : null
                         );
                     }
                 }
@@ -127,7 +127,7 @@ class KYCController extends Controller
                         return $this->error(
                             $responseData['error'],
                             400,
-                            null
+                            env('APP_DEBUG') ? $responseData : null
                         );
                     }
                 }
@@ -206,7 +206,7 @@ class KYCController extends Controller
                     return $this->error(
                         $responseData['message'] ?? 'Error uploading document',
                         400,
-                        $responseData['data'] ?? null
+                        env('APP_DEBUG') ? $responseData : null
                     );
                 }
             }
