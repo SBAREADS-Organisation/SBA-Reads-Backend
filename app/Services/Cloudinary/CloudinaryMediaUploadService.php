@@ -11,13 +11,15 @@ use Illuminate\Support\Str;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use App\Models\MediaUpload;
 use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
 
 class CloudinaryMediaUploadService
 {
     use ApiResponse;
     protected Cloudinary $cloudinary;
 
-    public function __construct() {
+    public function __construct()
+    {
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => config('cloudinary.cloud_name'),
@@ -32,7 +34,7 @@ class CloudinaryMediaUploadService
     /**
      * Upload a file to Cloudinary with dynamic foldering and optimization.
      */
-    public function upload(UploadedFile $file, string $context = 'general', $mediable = null): array
+    public function upload(UploadedFile $file, string $context = 'general', $mediable = null): array|JsonResponse
     {
         try {
             $folder = $this->resolveFolder($context);
@@ -99,10 +101,9 @@ class CloudinaryMediaUploadService
             ];
         } catch (\Exception $e) {
             return $this->error(
-                'An error occurred while uploading the file to Cloudinary.',
+                'An error occurred while uploading the file to Cloudinary',
                 500,
-                env('APP_DEBUG') ? $e->getMessage() : 'An error occurred while uploading the file to Cloudinary',
-                $e
+                config('app.debug') ? $e->getMessage() : null,
             );
         }
     }
@@ -127,11 +128,11 @@ class CloudinaryMediaUploadService
     protected function resolveFolder(string $context): string
     {
         return match ($context) {
-            'user_avatar' => 'users/avatars/' .date('Y/m/d'),
-            'book_cover' => 'books/covers/' .date('Y/m/d'),
-            'book_content' => 'books/content/' .date('Y/m/d'),
-            'stripe_kyc' => 'stripe/kyc/' .date('Y/m/d'),
-            default => 'general/' .date('Y/m/d')
+            'user_avatar' => 'users/avatars/' . date('Y/m/d'),
+            'book_cover' => 'books/covers/' . date('Y/m/d'),
+            'book_content' => 'books/content/' . date('Y/m/d'),
+            'stripe_kyc' => 'stripe/kyc/' . date('Y/m/d'),
+            default => 'general/' . date('Y/m/d')
         };
     }
 }
