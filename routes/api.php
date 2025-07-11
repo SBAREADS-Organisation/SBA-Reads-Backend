@@ -214,25 +214,32 @@ Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProvide
 //
 Route::get('migrate', function () {
     Artisan::call('migrate');
-    return 'Migrated';
+    $output = Artisan::output();
+    return response()->json([
+        'message' => 'Migrated successfully',
+        'code' => 200,
+        'output' => $output
+    ], 200);
 });
 
 Route::get('seed', function () {
     Artisan::call('db:seed');
-    return 'Seeded';
+    $output = Artisan::output();
+     return response()->json([
+        'message' => 'Seeder run successfully',
+        'code' => 200,
+        'output' => $output
+    ], 200);
 });
 
 Route::get('clear', function () {
-    Artisan::call('permission:cache-reset');
-    Artisan::call('config:clear');
-    Artisan::call('cache:clear');
-    Artisan::call('config:cache');
-    Artisan::call('view:clear');
-    Artisan::call('optimize');
+    Artisan::call('optimize:clear');
+    $output = Artisan::output();
     return response()->json(
         [
             'message' => 'Cache cleared successfully',
-            'code' => 200
+            'code' => 200,
+            'output' => $output
         ],
         200
     );
@@ -240,9 +247,10 @@ Route::get('clear', function () {
 
 // Routes List
 Route::get('routes', function () {
-    $list = Artisan::call('route:list');
+    Artisan::call('route:list');
+    $output = Artisan::output();
     return response()->json([
-        'data' => explode("\n", $list),
+        'data' => explode("\n", $output),
         'code' => 200,
         'message' => 'Routes listed successfully'
     ], 200);
@@ -250,12 +258,22 @@ Route::get('routes', function () {
 
 Route::get('storage-link', function () {
     Artisan::call('storage:link');
-    return 'Linked';
+    $output = Artisan::output();
+     return response()->json([
+        'message' => 'Storage linked successfully',
+        'code' => 200,
+        'output' => $output
+    ], 200);
 });
 
 Route::get('optimize', function () {
     Artisan::call('optimize');
-    return 'Optimized';
+    $output = Artisan::output();
+     return response()->json([
+        'message' => 'Optimized successfully',
+        'code' => 200,
+        'output' => $output
+    ], 200);
 });
 
 Route::get('key-generate', function () {
