@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
 use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
 
 class UserController extends Controller
 {
@@ -92,7 +93,6 @@ class UserController extends Controller
                 }
 
                 if ($cached) {
-                    // dd($cached);
                     return $this->error(
                         'Action denied, you might have an active session.',
                         403,
@@ -152,24 +152,19 @@ class UserController extends Controller
                 }
 
                 $customer = $this->stripe->createCustomer($user);
-                if (isset($customer['error'])) {
+                
+                if($customer instanceof JsonResponse) {
+                $customerData = (array) $customer->getData();
+
+                if (isset($customerData['error'])) {
                     $user->delete();
                     return $this->error(
                         'Failed to create Stripe customer.',
                         400,
-                        // $customer['error']
+                        config('app.debug') ? $customerData['data'] : null
                     );
                 }
-
-                // Check if the user was created successfully
-                // if(!$user->created) {
-                //     return response()->json([
-                //         'data' => null,
-                //         'code' => 400,
-                //         'message' => 'Failed to create user'
-                //     ], 400, []);
-                // }
-
+            }
                 Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
 
                 $user->refresh();
@@ -191,23 +186,21 @@ class UserController extends Controller
                 );
             }
         } catch (\Exception $e) {
-            // echo $e;
-            // dd($e);
             $user->delete();
+            dd($e->getMessage());
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
-                env('APP_DEBUG') ? $e->getMessage() : 'An error occurred while registering the user',
+                config('app.debug') ? $e->getMessage() : 'An error occurred while registering the user',
                 $e
             );
         } catch (\Throwable $th) {
-            // echo $e;
-            // dd($e);
             $user->delete();
+            dd($th->getMessage());
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while registering the user',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while registering the user',
                 $th
             );
         }
@@ -260,7 +253,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while creating the super admin.',
                 500,
-                env('APP_DEBUG') ? $e->getMessage() : 'An error occurred while creating the super admin.',
+                config('app.debug') ? $e->getMessage() : 'An error occurred while creating the super admin.',
                 $e
             );
         }
@@ -401,7 +394,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while creating the author account.',
                 500,
-                env('APP_DEBUG') ? $e->getMessage() : 'Error creating author account.',
+                config('app.debug') ? $e->getMessage() : 'Error creating author account.',
                 $e
             );
         }
@@ -510,7 +503,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while updating your profile.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while updating your profile.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while updating your profile.',
                 $th
             );
         }
@@ -552,7 +545,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while updating your preferences.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while updating your preferences.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while updating your preferences.',
                 $th
             );
         }
@@ -603,7 +596,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while updating your settings.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while updating your settings.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while updating your settings.',
                 $th
             );
         }
@@ -658,7 +651,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while changing your password.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while changing your password.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while changing your password.',
                 $th
             );
         }
@@ -727,7 +720,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while adding the payment method.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while adding the payment method.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while adding the payment method.',
                 $th
             );
         }
@@ -812,7 +805,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while adding the bank account.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while adding the bank account.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while adding the bank account.',
                 $th
             );
         }
@@ -853,7 +846,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while retrieving payment methods.',
                 500,
-                env('APP_DEBUG') ? $th->getMessage() : 'An error occurred while retrieving payment methods.',
+                config('app.debug') ? $th->getMessage() : 'An error occurred while retrieving payment methods.',
                 $th
             );
         }
@@ -939,7 +932,7 @@ class UserController extends Controller
 
             return $this->success($users, 'Users retrieved successfully.', 200);
         } catch (\Throwable $e) {
-            return $this->error(env('APP_DEBUG') ? $e->getMessage() : 'An error occurred while retrieving users.', 500);
+            return $this->error(config('app.debug') ? $e->getMessage() : 'An error occurred while retrieving users.', 500);
             // return response()->json([
             //     'data' => null,
             //     'code' => 500,
@@ -988,7 +981,7 @@ class UserController extends Controller
             return $this->error(
                 'An error occurred while retrieving the user.',
                 500,
-                env('APP_DEBUG') ? $e->getMessage() : 'An error occurred while retrieving the user.'
+                config('app.debug') ? $e->getMessage() : 'An error occurred while retrieving the user.'
             );
         }
     }
