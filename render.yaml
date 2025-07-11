@@ -10,19 +10,20 @@ services:
       - key: APP_KEY
         sync: false
       - key: APP_DEBUG
-        value: false
+        value: true
       - key: DB_CONNECTION
         value: pgsql
       - key: DATABASE_URL
-        fromService:
-          name: beta_sbaread_db
-          type: pserv     
-          property: connectionString
+        sync: true
+        # fromService:
+        #   name: beta_sbaread_db
+        #   type: pserv     
+        #   property: connectionString
 
-databases:
-  - name: beta_sbaread_db
-    databaseName: beta_sbaread_db
-    user: beta_sbaread_user
+# databases:
+#   - name: beta_sbaread_db
+#     databaseName: beta_sbaread_db
+#     user: beta_sbaread_user
 
 
 
