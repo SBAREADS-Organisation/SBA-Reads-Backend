@@ -213,6 +213,7 @@ Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProvide
 
 Route::get('migrate', function () {
     Artisan::call('migrate', ['--force' => true]);
+
     $output = Artisan::output();
 
     try {
@@ -233,6 +234,7 @@ Route::get('migrate', function () {
         'db_connection_status' => $connectionStatus,
     ]);
 });
+
 
 Route::get('seed', function () {
     Artisan::call('db:seed');
