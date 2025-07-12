@@ -223,24 +223,28 @@ Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProvide
 // });
 
 Route::get('migrate', function () {
-    Artisan::call('migrate', ['--force' => true]);
-
+    Artisan::call('migrate');
     $output = Artisan::output();
 
-    // Get current DB connection host info
     try {
-        $connectionStatus = DB::connection()->getPdo()->getAttribute(PDO::ATTR_CONNECTION_STATUS);
+        DB::select('SELECT 1');
+        $connection = DB::connection()->getConfig();
+
+        $host = $connection['host'] ?? 'unknown host';
+        $database = $connection['database'] ?? 'unknown database';
+
+        $connectionStatus = "Connected to host: {$host}, database: {$database}";
     } catch (\Exception $e) {
         $connectionStatus = 'Could not connect to database: ' . $e->getMessage();
     }
 
     return response()->json([
         'message' => 'Migration executed',
-        'code' => 200,
         'output' => $output,
-        'db_connection_status' => $connectionStatus
-    ], 200);
+        'db_connection_status' => $connectionStatus,
+    ]);
 });
+
 
 Route::get('seed', function () {
     Artisan::call('db:seed');
