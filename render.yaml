@@ -2,7 +2,6 @@ services:
   - type: web
     name: laravel-app
     env: docker
-    # repo:
     branch: main
     dockerfilePath: ./Dockerfile
     envVars:
@@ -11,33 +10,70 @@ services:
       - key: APP_KEY
         sync: false
       - key: APP_DEBUG
-        value: false
+        value: true
       - key: DB_CONNECTION
         value: pgsql
-      - key: DB_HOST
-        fromService:
-          name: beta_sbaread_db
-          type: postgres
-          property: host
-      - key: DB_PORT
-        value: 5432
-      - key: DB_DATABASE
-        fromService:
-          name: beta_sbaread_db
-          type: postgres
-          property: database
-      - key: DB_USERNAME
-        fromService:
-          name: beta_sbaread_db
-          type: postgres
-          property: user
-      - key: DB_PASSWORD
-        fromService:
-          name: beta_sbaread_db
-          type: postgres
-          property: password
+      - key: DATABASE_URL
+        sync: true
+        # fromService:
+        #   name: beta_sbaread_db
+        #   type: pserv     
+        #   property: connectionString
 
-databases:
-  - name: beta_sbaread_db
-    databaseName: beta_sbaread_db
-    user: beta_sbaread_user
+# databases:
+#   - name: beta_sbaread_db
+#     databaseName: beta_sbaread_db
+#     user: beta_sbaread_user
+
+
+
+
+
+
+
+
+
+
+# services:
+#   - type: web
+#     name: laravel-app
+#     env: docker
+#     # repo:
+#     branch: main
+#     dockerfilePath: ./Dockerfile
+#     envVars:
+#       - key: APP_ENV
+#         value: production
+#       - key: APP_KEY
+#         sync: false
+#       - key: APP_DEBUG
+#         value: false
+#       - key: DB_CONNECTION
+#         value: pgsql
+#       - key: DB_HOST
+#         fromService:
+#           name: beta_sbaread_db
+#           type: postgres
+#           property: host
+#       - key: DB_PORT
+#         value: 5432
+#       - key: DB_DATABASE
+#         fromService:
+#           name: beta_sbaread_db
+#           type: postgres
+#           property: database
+#       - key: DB_USERNAME
+#         fromService:
+#           name: beta_sbaread_db
+#           type: postgres
+#           property: user
+#       - key: DB_PASSWORD
+#         fromService:
+#           name: beta_sbaread_db
+#           type: postgres
+#           property: password
+
+# databases:
+#   - name: beta_sbaread_db
+#     databaseName: beta_sbaread_db
+#     user: beta_sbaread_user
