@@ -36,7 +36,7 @@ Route::prefix('user')->group(function () {
     Route::get('/', [UserController::class, 'index']);
 
     // Superadmin creation route
-    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']);//->middleware('auth:sanctum');
+    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']); //->middleware('auth:sanctum');
 
     Route::post('/register', [UserController::class, 'register']);
     Route::post('/verify-email', [UserController::class, 'verifyAuthorEmail'])->name('verify-email');
@@ -92,14 +92,14 @@ Route::prefix('user')->group(function () {
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
 
         // KYC
-        Route::prefix('kyc')->group(function() {
+        Route::prefix('kyc')->group(function () {
             Route::post('initiate', [KYCController::class, 'initiate_KYC'])->name('initiate-kyc');
             Route::post('upload-document', [KYCController::class, 'uploadDocument'])->name('upload-document');
             Route::get('status', [KYCController::class, 'kycStatus'])->name('kyc-status');
         });
 
         // Payment methods
-        Route::prefix('payment_method')->group(function() {
+        Route::prefix('payment_method')->group(function () {
             Route::get('list', [UserController::class, 'listPaymentMethods'])->name('list-payment-methods');
             Route::post('delete', [UserController::class, 'deletePaymentMethod'])->name('delete-payment-method');
             Route::post('add-card', [UserController::class, 'addCard'])->name('add-card');
@@ -116,7 +116,7 @@ Route::prefix('user')->group(function () {
 });
 
 // Get all available subscriptions
-Route::prefix('subscriptions')->group(function() {
+Route::prefix('subscriptions')->group(function () {
     Route::get('/', [SubscriptionController::class, 'available'])->name('available-subscriptions');
 });
 // Route::get('subscriptions', [SubscriptionController::class, 'available'])->name('available-subscriptions');
@@ -151,12 +151,12 @@ Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
     Route::get('author/my-books', [BookController::class, 'myBooks']);
 
     // Categories
-    Route::prefix('categories')->group(function(){
-        Route::get('/',    [CategoryController::class,'index']);
-        Route::get('/{category}', [CategoryController::class,'show']);
-        Route::post('/',   [CategoryController::class,'store']);
-        Route::put('/{category}', [CategoryController::class,'update']);
-        Route::delete('/{category}', [CategoryController::class,'destroy']);
+    Route::prefix('categories')->group(function () {
+        Route::get('/',    [CategoryController::class, 'index']);
+        Route::get('/{category}', [CategoryController::class, 'show']);
+        Route::post('/',   [CategoryController::class, 'store']);
+        Route::put('/{category}', [CategoryController::class, 'update']);
+        Route::delete('/{category}', [CategoryController::class, 'destroy']);
     });
 });
 
@@ -213,7 +213,7 @@ Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProvide
 
 //
 Route::get('migrate', function () {
-    Artisan::call('migrate');
+    Artisan::call('migrate', ['--force' => true]);
     $output = Artisan::output();
     return response()->json([
         'message' => 'Migrated successfully',
@@ -225,7 +225,7 @@ Route::get('migrate', function () {
 Route::get('seed', function () {
     Artisan::call('db:seed');
     $output = Artisan::output();
-     return response()->json([
+    return response()->json([
         'message' => 'Seeder run successfully',
         'code' => 200,
         'output' => $output
@@ -259,7 +259,7 @@ Route::get('routes', function () {
 Route::get('storage-link', function () {
     Artisan::call('storage:link');
     $output = Artisan::output();
-     return response()->json([
+    return response()->json([
         'message' => 'Storage linked successfully',
         'code' => 200,
         'output' => $output
@@ -269,7 +269,7 @@ Route::get('storage-link', function () {
 Route::get('optimize', function () {
     Artisan::call('optimize');
     $output = Artisan::output();
-     return response()->json([
+    return response()->json([
         'message' => 'Optimized successfully',
         'code' => 200,
         'output' => $output
