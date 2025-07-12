@@ -211,35 +211,27 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
-//
-// Route::get('migrate', function () {
-//     Artisan::call('migrate');
-//     $output = Artisan::output();
-//     return response()->json([
-//         'message' => 'Migrated successfully',
-//         'code' => 200,
-//         'output' => $output
-//     ], 200);
-// });
-
 Route::get('migrate', function () {
     Artisan::call('migrate', ['--force' => true]);
-
     $output = Artisan::output();
 
-    // Get current DB connection host info
     try {
-        $connectionStatus = DB::connection()->getPdo()->getAttribute(PDO::ATTR_CONNECTION_STATUS);
+        DB::select('SELECT 1');
+        $connection = DB::connection()->getConfig();
+
+        $host = $connection['host'] ?? 'unknown host';
+        $database = $connection['database'] ?? 'unknown database';
+
+        $connectionStatus = "Connected to host: {$host}, database: {$database}";
     } catch (\Exception $e) {
         $connectionStatus = 'Could not connect to database: ' . $e->getMessage();
     }
 
     return response()->json([
         'message' => 'Migration executed',
-        'code' => 200,
         'output' => $output,
-        'db_connection_status' => $connectionStatus
-    ], 200);
+        'db_connection_status' => $connectionStatus,
+    ]);
 });
 
 Route::get('seed', function () {
