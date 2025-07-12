@@ -211,19 +211,9 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
-//
-// Route::get('migrate', function () {
-//     Artisan::call('migrate');
-//     $output = Artisan::output();
-//     return response()->json([
-//         'message' => 'Migrated successfully',
-//         'code' => 200,
-//         'output' => $output
-//     ], 200);
-// });
-
 Route::get('migrate', function () {
-    Artisan::call('migrate');
+    Artisan::call('migrate', ['--force' => true]);
+
     $output = Artisan::output();
 
     try {
