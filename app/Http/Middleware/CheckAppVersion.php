@@ -137,8 +137,8 @@ class CheckAppVersion
             return response()->json([
                 'data' => null,
                 'message' => $th->getMessage() ?? 'An error occurred while checking app version.',
-                'code' => $th->getCode() ?? 500,
-            ], $th->getCode() ?? 500);
+                'code' => 500,
+            ], 500);
         }
     }
 
