@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use App\Models\MediaUpload;
 
 class UserController extends Controller
 {
@@ -488,10 +489,12 @@ class UserController extends Controller
             }
 
             $user->save();
-            \App\Models\MediaUpload::where('id', $upload['id'])->update([
+            if($request->hasFile('profile_picture')){
+            MediaUpload::where('id', $upload['id'])->update([
                 'mediable_type' => 'user',
                 'mediable_id' => $user->id,
             ]);
+        }
 
             return $this->success(
                 $user->fresh(),

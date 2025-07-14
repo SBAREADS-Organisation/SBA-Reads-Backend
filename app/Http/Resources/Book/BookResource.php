@@ -17,7 +17,8 @@ class BookResource extends JsonResource
     //     return parent::toArray($request);
     // }
 
-    public function toArray($request) {
+    public function toArray($request)
+    {
         return [
             'id'               => $this->id,
             'title'            => $this->title,
@@ -29,7 +30,7 @@ class BookResource extends JsonResource
             'language'         => $this->language,
             'tags'             => $this->tags,
             'genres'           => $this->genres,
-            'table_of_contents'=> $this->table_of_contents,
+            'table_of_contents' => $this->table_of_contents,
             'publication_date' => $this->publication_date,
             'actual_price'     => $this->actual_price,
             'discounted_price' => $this->discounted_price,
@@ -52,6 +53,7 @@ class BookResource extends JsonResource
             'archived'         => $this->archived,
             'deleted'          => $this->deleted,
             'author_id'        => $this->author_id,
+            'files' => $this->files,
             'categories'       => $this->categories->map(function ($cat) {
                 return [
                     'id'   => $cat->id,
