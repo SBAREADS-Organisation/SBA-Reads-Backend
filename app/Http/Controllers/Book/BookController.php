@@ -807,7 +807,8 @@ class BookController extends Controller
             $note = $request->input('note');
             $reviewNotes = $request->input('review_notes');
 
-            $book = Book::findOrFail($bookId)->with(['authors', 'categories'])->first();
+            // Correct way:
+            $book = Book::with(['authors', 'categories'])->findOrFail($bookId);
             if (!$book) {
                 return $this->error('Book not found.', 404);
             }
