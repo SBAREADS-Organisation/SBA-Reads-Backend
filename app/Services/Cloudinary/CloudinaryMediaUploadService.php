@@ -65,10 +65,6 @@ class CloudinaryMediaUploadService
                 'folder' => $folder,
                 'public_id' => $fileName,
                 'resource_type' => 'auto', // handles images, videos, pdf, etc.
-                'transformation' => [
-                    'quality' => 'auto:good', // bandwidth optimized
-                    'fetch_format' => 'auto'
-                ]
             ];
 
             $result = (new UploadApi())->upload($file->getRealPath(), $uploadOptions);
