@@ -265,7 +265,11 @@ class BookController extends Controller
             );
         } catch (\Exception $e) {
             // Log::error('Error fetching book overview: ' . $e->getMessage());
-            return $this->error('Failed to retrieve book details', 500, null, $e);
+            return $this->error(
+                'Failed to retrieve book details.', 
+                500, 
+                null, 
+                $e->getMessage());
         }
     }
 
