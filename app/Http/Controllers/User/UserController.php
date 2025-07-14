@@ -17,6 +17,7 @@ use Spatie\Permission\Models\Role;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use App\Models\MediaUpload;
+use App\Http\Resources\User\UserResource;
 
 class UserController extends Controller
 {
@@ -405,10 +406,12 @@ class UserController extends Controller
     public function profile(Request $request)
     {
         // dd($request);
-        $user = $request->user(); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
+        $user = $request->user()->load('bookmarks'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
-        return $this->success($user, 'Profile retrieved successfully!', 200);
+        return $this->success(new UserResource($user), 
+        'Profile retrieved successfully!', 
+        200);
     }
 
     public function updateProfile(Request $request)
@@ -497,7 +500,7 @@ class UserController extends Controller
         }
 
             return $this->success(
-                $user->fresh(),
+                new UserResource($user),
                 'Profile updated successfully!',
                 200
             );
