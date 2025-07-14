@@ -22,9 +22,9 @@ class CloudinaryMediaUploadService
     {
         Configuration::instance([
             'cloud' => [
-                'cloud_name' => config('cloudinary.cloud_name'),
-                'api_key'    => config('cloudinary.api_key'),
-                'api_secret' => config('cloudinary.api_secret'),
+                'cloud_name' => config('services.cloud.cloud_name'),
+                'api_key'    => config('services.cloud.api_key'),
+                'api_secret' => config('services.cloud.api_secret'),
             ],
             'url' => [
                 'secure' => true
