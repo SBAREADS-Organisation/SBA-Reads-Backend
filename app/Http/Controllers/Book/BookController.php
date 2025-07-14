@@ -809,13 +809,6 @@ class BookController extends Controller
 
             // Correct way:
             $book = Book::with(['authors', 'categories'])->findOrFail($bookId);
-            if (!$book) {
-                return $this->error('Book not found.', 404);
-            }
-
-            if (!$book->relationLoaded('authors')) {
-                $book->load('authors');
-            }
 
             if ($action === 'request_changes') {
                 if ($book->status !== 'needs_changes') {
