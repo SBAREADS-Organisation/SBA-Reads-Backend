@@ -88,7 +88,7 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->getRoleNames()->first(),
                 'token' => $token,
-                'account_type' => $user->account_type,
+                'account_type' => $user->account_type,    
             ], 'Login successful', 200);
         } catch (\Exception $e) {
             // dd($e);
