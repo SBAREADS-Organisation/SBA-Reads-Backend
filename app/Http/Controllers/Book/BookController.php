@@ -970,7 +970,7 @@ class BookController extends Controller
 
                 $book->refresh();
 
-                return $this->success(['audit' => $audit, 'book' => $book], 'Book declined.');
+                return $this->success(['audit' => $audit ?? null, 'book' => $book], 'Book declined.');
             }
 
             return $this->error('Invalid action.');
