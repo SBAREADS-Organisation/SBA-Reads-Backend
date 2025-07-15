@@ -26,7 +26,7 @@ class MediaUploadController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return $this->error($validator->errors(), 'Validation failed.', 422);
+            return $this->error($validator->errors(), 422, 'Validation failed.');
         }
 
         // dd($validator);

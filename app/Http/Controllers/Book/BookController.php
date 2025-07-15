@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Log;
 // use App\Traits\ApiResponse;
 use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
+use App\Mail\Book\BookDeleted;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
@@ -266,10 +267,11 @@ class BookController extends Controller
         } catch (\Exception $e) {
             // Log::error('Error fetching book overview: ' . $e->getMessage());
             return $this->error(
-                'Failed to retrieve book details.', 
-                500, 
-                null, 
-                $e->getMessage());
+                'Failed to retrieve book details.',
+                500,
+                null,
+                $e->getMessage()
+            );
         }
     }
 
@@ -704,9 +706,40 @@ class BookController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Book $book)
+    public function destroy(Book $book, Request $request)
     {
-        //
+        try {
+            $validator = validator($request->all(), [
+                'reason' => 'required|string|max:255'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->error($validator->errors(), 422, 'Validation failed.');
+            }
+
+            $deleted = $this->service->deleteBook($book, $request->input('reason'));
+
+            if ($deleted) {
+                $this->notifier()->send(
+                    User::find($book->author_id),
+                    'New Book Created',
+                    'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
+                    ['in-app', 'email'],
+                    $book,
+                    new BookDeleted(
+                        $book,
+                        $request->input('reason'),
+                        User::find($book->author_id)
+                    ),
+                );
+
+                return $this->success(null, 'Book deleted successfully.');
+            }
+
+            return $this->error('Failed to delete book.', 500);
+        } catch (\Throwable $th) {
+            return $this->error('Failed to delete book.', 500, null, $th);
+        }
     }
 
     /**

@@ -135,4 +135,11 @@ class BookService
 
         return $book;
     }
+
+    public function deleteBook(Book $book, string $reason)
+    {
+        $book->delete();
+
+        return true;
+    }
 }
