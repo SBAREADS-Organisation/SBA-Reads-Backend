@@ -133,7 +133,7 @@ Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
     Route::get('books/{id}/download', [BookController::class, 'download'])->name('book.download');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{id}', [BookController::class, 'update']);
-    Route::delete('books/{id}', [BookController::class, 'destroy']);
+    Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);
     Route::get('books/search', [BookController::class, 'search']);
 
     // Reader-specific endpoints
@@ -143,7 +143,7 @@ Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
     // Route::get('books/bookmarks/all', [BookController::class, 'getBookmarks']);
     Route::get('books/bookmarks/all', [BookController::class, 'getAllBookmarks']);
     Route::post('books/{id}/bookmark', [BookController::class, 'bookmark']);
-    Route::middleware(['role:admin,superadmin'])->post('books/{action}/{id}', [BookController::class, 'auditAction'])
+    Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
 
