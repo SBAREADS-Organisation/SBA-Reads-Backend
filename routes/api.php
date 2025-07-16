@@ -13,6 +13,7 @@ use App\Http\Controllers\Notification\NotificationsController;
 use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Transaction\TransactionsController;
+use App\Http\Controllers\Admin\DashboardController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,8 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->g
         Route::put('/{id}', [SubscriptionController::class, 'update'])->name('update-subscription');
         Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('delete-subscription');
     });
+
+    Route::get('dashboard', DashboardController::class);
 });
 
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect']);
