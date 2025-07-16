@@ -232,4 +232,15 @@ class SubscriptionService
     {
         $subscription->delete();
     }
+
+    /**
+     * Get active subscription count.
+     * 
+     * return int
+     */
+    public function getActiveSubscriptionCount(): int
+    {
+        $activeCount = UserSubscription::where('starts_at', '<', now())->where('ends_at', '>', now())->count();
+        return $activeCount;
+    } 
 }
