@@ -89,6 +89,11 @@ class User extends Authenticatable
         return $this->morphOne(MediaUpload::class, 'mediable')->where('context', 'user_avatar');
     }
 
+    public function kycInfo()
+    {
+        return $this->hasOne(UserKycInfo::class);
+    }
+
     /**
      * Get the professional profile associated with the user.
      */
