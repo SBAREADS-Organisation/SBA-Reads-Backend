@@ -16,6 +16,8 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Stripe\Webhook;
 use App\Traits\ApiResponse;
+use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class StripeConnectService
 {
@@ -25,7 +27,8 @@ class StripeConnectService
         Stripe::setApiKey(config('services.stripe.secret'));
     }
 
-    function arrayToObject($array) {
+    function arrayToObject($array)
+    {
         return json_decode(json_encode($array));
     }
 
@@ -75,125 +78,92 @@ class StripeConnectService
     public function createCustomAccount($payload, $user)
     {
         try {
-            // $payload = (object) $payload;
-            // $payload = arrayToObject($payload);
-            $isNigeria = strtoupper($payload->country) === 'NG';
             $payload = json_decode(json_encode($payload));
+            $isNigeria = strtoupper($payload->country) === 'NG';
             $email = $user->email;
-            // dd($payload);
-            $account = Account::create([
-                'type' => 'custom',
-                'country' => strtoupper($payload->country ?? 'US'),
-                'email' => $email,
-                // 'external_account' => [
-                //     'object' => 'bank_account',
-                //     'country' => strtoupper($payload->country ?? 'US'),
-                //     'currency' => $payload->currency,
-                //     'account_number' => $payload->account_number,
-                //     'routing_number' => $payload->routing_number,
-                // ],
-                // 'business_profile' => [
-                //     'mcc' => $payload->mcc,
-                //     'url' => $payload->url,
-                //     'name' => $payload->name,
-                //     'product_description' => $payload->product_description,
-                // ],
-                'settings' => [
-                    'payouts' => [
-                        'schedule' => [
-                            'interval' => 'manual',
-                            // 'delay_days' => $payload->delay_days,
+            // Wrap Stripe account creation in a database transaction
+            return DB::transaction(function () use ($payload, $user, $email, $isNigeria) {
+
+                $account = Account::create([
+                    'type' => 'custom',
+                    'country' => strtoupper($payload->country ?? 'US'),
+                    'email' => $email,
+                    'settings' => [
+                        'payouts' => [
+                            'schedule' => [
+                                'interval' => 'manual',
+                            ],
                         ],
                     ],
-                ],
-                'business_type' => 'individual',
-                'individual' => [
+                    'business_type' => 'individual',
+                    'individual' => [
+                        'first_name' => $payload->first_name,
+                        'last_name' => $payload->last_name,
+                        'dob' => [
+                            'day' => $payload->dob->day,
+                            'month' => $payload->dob->month,
+                            'year' => $payload->dob->year,
+                        ],
+                        'email' => $email,
+                        'address' => [
+                            'line1' => $payload->address->line1,
+                            'city' => $payload->address->city,
+                            'postal_code' => $payload->address->postal_code,
+                            'state' => $payload->address->state,
+                            'country' => strtoupper($payload->country),
+                        ],
+                        'gender' => $payload->gender,
+                        'phone' => $payload->phone,
+                        'relationship' => [
+                            'owner' => true,
+                            'title' => 'CEO'
+                        ],
+                    ],
+                    'tos_acceptance' => [
+                        'date' => time(),
+                        'ip' => request()->ip(),
+                        'service_agreement' => 'recipient',
+                        'user_agent' => request()->header('User-Agent'),
+                    ],
+                    'capabilities' => $isNigeria
+                        ? [ // 🇳🇬 For Nigeria, only transfers
+                            'transfers' => ['requested' => true],
+                        ]
+                        : [ // 🌎 For other countries, allow transfers + card payments
+                            'transfers' => ['requested' => true],
+                            'card_payments' => ['requested' => true],
+                        ],
+                ]);
+
+                // check is the response is type of Exception froom stripe
+                if ($account instanceof Exception\InvalidRequestException) {
+                    $error = $account->getMessage();
+                    return response()->json([
+                        'message' => 'Error creating Stripe account',
+                        'code' => 400,
+                        'data' => null,
+                        'error' => $error
+                    ], 400);
+                }
+
+                $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
+                $user->kycInfo()->create([
                     'first_name' => $payload->first_name,
                     'last_name' => $payload->last_name,
-                    'dob' => [
-                        'day' => $payload->dob->day,
-                        'month' => $payload->dob->month,
-                        'year' => $payload->dob->year,
-                    ],
-                    'email' => $email,
-                    'address' => [
-                        'line1' => $payload->address->line1,
-                        'city' => $payload->address->city,
-                        'postal_code' => $payload->address->postal_code,
-                        'state' => $payload->address->state,
-                        'country' => strtoupper($payload->country),
-                    ],
-                    // 'address' => $payload->address,
-                    // 'ssn_last_4' => $payload->ssn_last_4,
-                    'gender' => $payload->gender,
+                    'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
+                    'address_line1' => $payload->address->line1,
+                    'address_line2' => $payload->address->line2 ?? null,
+                    'city' => $payload->address->city,
+                    'state' => $payload->address->state,
+                    'postal_code' => $payload->address->postal_code,
+                    'country' => $payload->country,
                     'phone' => $payload->phone,
-                    // 'id_number' => $payload->id_number,
-                    'relationship' => [
-                        'owner' => true,
-                        'title' => 'CEO'
-                    ],
-                ],
-                'tos_acceptance' => [
-                    'date' => time(),
-                    'ip' => request()->ip(),
-                    'service_agreement' => 'recipient',
-                    'user_agent' => request()->header('User-Agent'),
-                ],
-                // 'tos_acceptance' => [
-                //     'ip' => '',
-                //     'date' => '',
-                //     'user_agent' => ''
-                // ],
-                // 'business_profile' => [
-                //     'name' => '',
-                //     'url' => '',
-                //     'mcc' => '',
-                //     'product_description' => '',
-                // ],
-                'capabilities' => $isNigeria
-                ? [ // 🇳🇬 For Nigeria, only transfers
-                    'transfers' => ['requested' => true],
-                ]
-                : [ // 🌎 For other countries, allow transfers + card payments
-                    'transfers' => ['requested' => true],
-                    'card_payments' => ['requested' => true],
-                ],
-            ]);
+                    'gender' => $payload->gender,
+                ]);
 
-            // throw_if(!$account, 'Failed to create Stripe account');
-
-            // check is the response is type of Exception froom stripe
-            if ($account instanceof Exception\InvalidRequestException) {
-                $error = $account->getMessage();
-                return response()->json([
-                    'message' => 'Error creating Stripe account',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error
-                ], 400);
-                // return response()->json(['error' => $error], 400);
-            }
-
-            // // Check is response is successful the update else return with error
-            // if (isset($account->error)) {
-            //     // dd($account);
-            //     $error = $account->error->message;
-            //     return response()->json(['error' => $error], 400);
-            // }
-
-            // if ($account->requirements->currently_due) {
-            //     $requirements = $account->requirements->currently_due;
-            //     $error = 'Please complete the following requirements: ' . implode(', ', $requirements);
-            //     return response()->json(['error' => $error], 400);
-            // }
-
-            $account_update = $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
-            // dd($account_update);
-
-            return $account;
+                return $account;
+            });
         } catch (\Throwable $th) {
-            //throw $th;
-            // dd($th);
             // Log::error('Stripe Account Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe account', 500, $th->getMessage(), $th);
         }
@@ -203,68 +173,68 @@ class StripeConnectService
     public function updateCustomAccount($payload, $user)
     {
         try {
-            $isNigeria = strtoupper($payload->country) === 'NG';
             $payload = json_decode(json_encode($payload));
+            $isNigeria = strtoupper($payload->country) === 'NG';
             $email = $user->email;
-            $account = Account::update(
-                $user->kyc_account_id,
-                [
-                    // 'external_account' => [
-                    //     'object' => 'bank_account',
-                    //     'country' => strtoupper($payload->country ?? 'US'),
-                    //     'currency' => $payload->currency,
-                    //     'account_number' => $payload->account_number,
-                    //     'routing_number' => $payload->routing_number,
-                    // ],
-                    // 'business_profile' => [
-                    //     'mcc' => $payload->mcc,
-                    //     'url' => $payload->url,
-                    //     'name' => $payload->name,
-                    //     'product_description' => $payload->product_description,
-                    // ],
-                    'individual' => [
-                        'first_name' => $payload->first_name,
-                        'last_name' => $payload->last_name,
-                        'dob' => [
-                            'day' => $payload->dob->day,
-                            'month' => $payload->dob->month,
-                            'year' => $payload->dob->year,
+            return DB::transaction(function () use ($payload, $user, $email, $isNigeria) {
+                $account = Account::update(
+                    $user->kyc_account_id,
+                    [
+                        'individual' => [
+                            'first_name' => $payload->first_name,
+                            'last_name' => $payload->last_name,
+                            'dob' => [
+                                'day' => $payload->dob->day,
+                                'month' => $payload->dob->month,
+                                'year' => $payload->dob->year,
+                            ],
+                            'email' => $email,
+                            'address' => [
+                                'line1' => $payload->address->line1,
+                                'city' => $payload->address->city,
+                                'postal_code' => $payload->address->postal_code,
+                                'state' => $payload->address->state,
+                                'country' => strtoupper($payload->country),
+                            ],
+                            'gender' => $payload->gender,
+                            'phone' => $payload->phone,
                         ],
-                        'email' => $user->email,
-                        'address' => [
-                            'line1' => $payload->address->line1,
-                            'city' => $payload->address->city,
-                            'postal_code' => $payload->address->postal_code,
-                            'state' => $payload->address->state,
-                            'country' => strtoupper($payload->country),
-                        ],
-                        // 'address' => $payload->address,
-                        // 'ssn_last_4' => $payload->ssn_last_4,
-                        'gender' => $payload->gender,
-                        'phone' => $payload->phone,
-                    ],
-                ]
-            );
+                    ]
+                );
 
-            // check is the response is type of Exception froom stripe
-            if ($account instanceof Exception\InvalidRequestException) {
-                $error = $account->getMessage();
-                return response()->json([
-                    'message' => 'Error updating Stripe account',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error
-                ], 400);
-                // return response()->json(['error' => $error], 400);
-            }
+                // check is the response is type of Exception froom stripe
+                if ($account instanceof Exception\InvalidRequestException) {
+                    $error = $account->getMessage();
+                    return response()->json([
+                        'message' => 'Error updating Stripe account',
+                        'code' => 400,
+                        'data' => null,
+                        'error' => $error
+                    ], 400);
+                    // return response()->json(['error' => $error], 400);
+                }
 
-            $account_update = $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
-            // dd($account_update);
 
-            return ['account' => $account, 'user' => $account_update];
+                $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
+                $user->kycInfo()->updateOrCreate(
+                    [],
+                    [
+                    'first_name' => $payload->first_name,
+                    'last_name' => $payload->last_name,
+                    'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
+                    'address_line1' => $payload->address->line1,
+                    'address_line2' => $payload->address->line2 ?? null,
+                    'city' => $payload->address->city,
+                    'state' => $payload->address->state,
+                    'postal_code' => $payload->address->postal_code,
+                    'country' => $payload->country,
+                    'phone' => $payload->phone,
+                    'gender' => $payload->gender,
+                ]);
+
+                return $account;
+            });
         } catch (\Throwable $th) {
-            //throw $th;
-            // dd($th);
             // Log::error('Stripe Account Update Error: ' . $th->getMessage());
             return $this->error('Error updating Stripe account', 500, $th->getMessage(), $th);
         }
@@ -640,7 +610,7 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-//            throw $th;
+            //            throw $th;
             // Log::error('Stripe Bank Account Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe bank account', 500, $th->getMessage(), $th);
         }

@@ -406,7 +406,7 @@ class UserController extends Controller
     public function profile(Request $request)
     {
         // dd($request);
-        $user = $request->user()->load('bookmarks'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
+        $user = $request->user()->load('bookmarks', 'kycInfo'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
         return $this->success(new UserResource($user), 
@@ -791,7 +791,6 @@ class UserController extends Controller
             }
 
             $bankAccount = $this->stripe->addBankAccount($request->all(), $user);
-            dd($bankAccount->getData());
 
             if (isset($bankAccount->getData()->error)) {
                 return $this->error(
@@ -900,6 +899,7 @@ class UserController extends Controller
                 'paymentMethods',
                 'professionalProfile',
                 'roles',
+                'kycInfo',
             ]);
 
             // Search by email, name, or username

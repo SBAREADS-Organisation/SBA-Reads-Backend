@@ -5,27 +5,25 @@ namespace App\Http\Controllers\KYC;
 use App\Http\Controllers\Controller;
 use App\Models\KYCVerification;
 use App\Models\User;
-// use App\Services\KYC\KYCVerificationService;
 use App\Services\Stripe\StripeConnectService;
 use Illuminate\Http\Request;
-// use PragmaRX\Countries\Package\Countries;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Stripe\Webhook;
 use App\Services\Slack\SlackWebhookService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
+use Stripe\Account as StripeAccount;
+use Illuminate\Validation\Rule;
 
 class KYCController extends Controller
 {
     protected $stripe;
     protected $kycService;
-    // $countries = new Countries();
-    // $validCountryCodes = $countries->all()->pluck('cca2')->toArray();
 
     public function __construct(StripeConnectService $stripe, /*KYCVerificationService $kycService*/)
     {
-        // $this->middleware('auth:sanctum');
-        // $this->kycService = $kycService;
         $this->stripe = $stripe;
     }
 
@@ -53,34 +51,47 @@ class KYCController extends Controller
         try {
             $user = Auth::user();
 
+            // Prepare combined DOB for validation
+            $request->merge([
+                'dob_combined' => "{$request->input('dob.year')}-{$request->input('dob.month')}-{$request->input('dob.day')}"
+            ]);
+
             $validator = Validator::make($request->all(), [
                 'first_name' => 'required|string|max:255',
                 'last_name' => 'required|string|max:255',
                 'dob.day' => 'required|integer|min:1|max:31',
                 'dob.month' => 'required|integer|min:1|max:12',
-                'dob.year' => 'required|integer|digits:4|before_or_equal:' . now()->subYears(18)->year,
-                // 'email' => 'required|email',
-                // 'address' => 'required|string|max:500',
+                'dob.year' => 'required|integer|digits:4',
+                'dob_combined' => [
+                    'required',
+                    'date_format:Y-n-j',
+                    function ($attribute, $value, $fail) use ($request) {
+                        try {
+                            $dob = Carbon::create($request->dob['year'], $request->dob['month'], $request->dob['day']);
+                            if ($dob->isFuture()) {
+                                $fail('Date of birth cannot be in the future.');
+                            }
+                            if ($dob->greaterThan(Carbon::now()->subYears(18))) {
+                                $fail('You must be at least 18 years old.');
+                            }
+                        } catch (\Exception $e) {
+                            $fail('Invalid date of birth provided.');
+                        }
+                    },
+                ],
                 'address.line1' => 'required|string|max:255',
                 'address.city' => 'required|string|max:255',
                 'address.postal_code' => 'required|string|max:20',
                 'address.state' => 'required|string|size:2',
                 'gender' => 'required|in:male,female,other',
                 'phone' => 'required|string|max:20',
-                'country' => 'required|size:2|alpha|in:' . implode(',', $this->getValidCountryCodes()),
+                'country' => ['required', 'size:2', 'alpha', Rule::in($this->getValidCountryCodes())],
             ]);
-
             if ($validator->fails()) {
-                return $this->error(
-                    'Validation failed',
-                    400,
-                    $validator->errors()
-                );
+                return $this->error('Validation failed', 400, $validator->errors());
             }
 
-            // dd($user->kyc_account_id);
-
-            // Check if the user already has a KYC account verified
+            // Early exit if already verified (checking the *current* user object)
             if ($user->kyc_status === 'verified') {
                 return $this->success(
                     [
@@ -92,73 +103,67 @@ class KYCController extends Controller
                 );
             }
 
-            // CHeck is status is requiring document upload
+            // Early exit if already requires document upload
             if ($user->kyc_status === 'document-required') {
-                return $this->error(
-                    'KYC already requires document upload',
-                    400,
-                    null
-                );
+                return $this->error('KYC already requires document upload', 400);
             }
 
+            // --- Call the Stripe Service to Create or Update Account ---
+            // The service is responsible for determining create/update and saving to DB.
+            $stripeAccountResponse = null;
             if (!$user->kyc_account_id) {
-                $response = $this->stripe->createCustomAccount((object) $request->all(), $user);
-
-                // dd($user->kyc_account_id, $response);
-
-                if ($response instanceof \Illuminate\Http\JsonResponse) {
-                    $responseData = $response->getData(true);
-                    if (isset($responseData['error'])) {
-                        return $this->error(
-                            $responseData['error'],
-                            400,
-                            config('app.debug') ? $responseData : null
-                        );
-                    }
-                }
+                // If user doesn't have an account ID, call the creation method
+                $stripeAccountResponse = $this->stripe->createCustomAccount($request->all(), $user);
+            } else {
+                // If user has an account ID, call the update method
+                $stripeAccountResponse = $this->stripe->updateCustomAccount($request->all(), $user);
             }
 
-            if ($user->kyc_account_id) {
-                $response = $this->stripe->updateCustomAccount((object) $request->all(), $user);
-                // dd($response);
-                if ($response instanceof \Illuminate\Http\JsonResponse) {
-                    $responseData = $response->getData(true);
-                    if (isset($responseData['error'])) {
-                        return $this->error(
-                            $responseData['error'],
-                            400,
-                            config('app.debug') ? $responseData : null
-                        );
-                    }
-                }
-            }
+            // --- Handle the Stripe Service Response ---
+            $finalAccountId = null;
+            $finalAccountStatus = null;
 
-            if ($user->kyc_status === 'verified') {
-                return $this->success(
-                    [
-                        'account_id' => $user->kyc_account_id,
-                        'status' => $user->kyc_status,
-                    ],
-                    'KYC already verified',
-                    200
+            if ($stripeAccountResponse instanceof JsonResponse) {
+                // This indicates an error response from your Stripe service
+                $responseData = $stripeAccountResponse->getData(true);
+                $errorDetails = $responseData['error'] ?? 'Unknown error from Stripe service.';
+
+                return $this->error(
+                    'Stripe API Error',
+                    $stripeAccountResponse->getStatusCode(),
+                    config('app.debug') ? $errorDetails : null
+                );
+            } elseif ($stripeAccountResponse instanceof StripeAccount) {
+                // This indicates a successful Stripe API call
+                $finalAccountId = $stripeAccountResponse->id;
+                $user->refresh();
+                $finalAccountStatus = $user->kyc_status;
+            } else {
+                // This should ideally not happen if your service returns only StripeAccount or JsonResponse
+                Log::error('Unexpected return type from Stripe service', ['response' => $stripeAccountResponse]);
+                return $this->error(
+                    'Internal Server Error: Unexpected Stripe service response.',
+                    500,
+                    config('app.debug') ? 'Stripe service returned an unhandled type.' : null
                 );
             }
 
+            // --- Final Success Response ---
             return $this->success(
                 [
-                    'account_id' => $user->kyc_account_id,
-                    'status' => $user->kyc_status,
+                    'account_id' => $finalAccountId,
+                    'status' => $finalAccountStatus,
                 ],
-                'KYC initiated successfully',
+                'KYC initiated/updated successfully',
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
-            // dd($th);
+            Log::error("KYC initiation error for user " . (Auth::id() ?? 'N/A') . ": " . $th->getMessage(), ['exception' => $th, 'trace' => $th->getTraceAsString()]);
+
             return $this->error(
                 'Error initiating KYC',
                 500,
-                null,
+                config('app.debug') ? $th->getMessage() : null,
                 $th
             );
         }
@@ -173,13 +178,6 @@ class KYCController extends Controller
 
             // Only allow if status is document-required
             $user = Auth::user();
-            // if ($user->kyc_status !== 'document-required') {
-            //     return $this->error(
-            //         'KYC does not require document upload',
-            //         400,
-            //         null
-            //     );
-            // }
 
             if ($validator->fails()) {
                 return $this->error(
@@ -188,8 +186,6 @@ class KYCController extends Controller
                     $validator->errors()
                 );
             }
-
-            // dd($request->file());
 
             $user = Auth::user();
             $file = $request->file('document');
