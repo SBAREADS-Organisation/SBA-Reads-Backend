@@ -592,7 +592,7 @@ class BookController extends Controller
             $sortBy = $request->input('sort_by', 'recommended');
 
             $query = Book::query()
-                ->whereHas('bookmarks', function ($q) use ($user) {
+                ->whereHas('bookmarkedBy', function ($q) use ($user) {
                     $q->where('user_id', $user->id);
                 })
                 ->with([
@@ -619,13 +619,6 @@ class BookController extends Controller
             }
 
             $books = $query->paginate($perPage);
-
-            if ($books->isEmpty()) {
-                return $this->error(
-                    'No bookmarks found',
-                    404
-                );
-            }
 
             return $this->success(
                 [

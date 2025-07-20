@@ -154,7 +154,7 @@ class UserController extends Controller
                 }
 
                 $customer = $this->stripe->createCustomer($user);
-                
+
                 if($customer instanceof JsonResponse) {
                 $customerData = (array) $customer->getData();
 
@@ -189,7 +189,6 @@ class UserController extends Controller
             }
         } catch (\Exception $e) {
             $user->delete();
-            dd($e->getMessage());
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
@@ -409,8 +408,8 @@ class UserController extends Controller
         $user = $request->user()->load('bookmarks', 'kycInfo'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
-        return $this->success(new UserResource($user), 
-        'Profile retrieved successfully!', 
+        return $this->success(new UserResource($user),
+        'Profile retrieved successfully!',
         200);
     }
 
@@ -422,6 +421,7 @@ class UserController extends Controller
 
             // Common validation rules
             $rules = [
+                'name' => 'nullable|string|max:255',
                 'profile_info.username' => 'required|string|max:255|unique:users,username,' . $user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
@@ -430,9 +430,7 @@ class UserController extends Controller
                 // 'profile_picture.public_id' => 'nullable|string|max:255',
             ];
 
-            if ($user->account_type === 'reader') {
-                // Only allow reader fields
-            } elseif ($user->account_type === 'author') {
+            if ($user->account_type === 'author') {
                 // Add author-specific required fields
                 $rules = array_merge($rules, [
                     'socials' => 'required|array|min:1',
@@ -706,28 +704,45 @@ class UserController extends Controller
                 );
             }
 
-            $paymentMethod = $this->stripe->addCard($request->all(), $user);
+            $stripeResponse = $this->stripe->addCard($request->all(), $user);
 
-            if (isset($paymentMethod['error'])) {
+            // Handle the mixed return type
+            $responsePayload = []; // Data to return to the frontend
+
+            if ($stripeResponse instanceof JsonResponse) {
+                // Error returned from Stripe service
+                $responseData = $stripeResponse->getData(true);
+                $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
+
                 return $this->error(
                     'Failed to add payment method.',
-                    400,
-                    $paymentMethod['error']
+                    $stripeResponse->getStatusCode(),
+                    config('app.debug') ? $errorMessage : null
+                );
+            } elseif ($stripeResponse instanceof \App\Models\PaymentMethod) {
+                // Payment method created successfully
+                $responsePayload = $stripeResponse;
+            } else {
+                // Unexpected return type
+                return $this->error(
+                    'An internal error occurred due to an unexpected service response.',
+                    500,
+                    config('app.debug') ? 'Stripe service returned an unhandled type.' : null
                 );
             }
 
+            // Return success response with the prepared payload
             return $this->success(
-                $paymentMethod,
+                $responsePayload,
                 'Payment method added successfully!',
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
             return $this->error(
                 'An error occurred while adding the payment method.',
                 500,
-                config('app.debug') ? $th->getMessage() : 'An error occurred while adding the payment method.',
-                $th
+                config('app.debug') ? $th->getMessage() : null, // Pass $th here if your error method handles debug details
+                $th // Pass the actual exception object
             );
         }
     }
@@ -967,7 +982,8 @@ class UserController extends Controller
             $user = User::with([
                 'paymentMethods',
                 'professionalProfile',
-                'roles'
+                'roles',
+                'kycInfo'
             ])->find($id);
 
             if (!$user) {
@@ -979,7 +995,7 @@ class UserController extends Controller
             }
 
             return $this->success(
-                $user,
+                new UserResource($user),
                 'User retrieved successfully.',
                 200
             );
