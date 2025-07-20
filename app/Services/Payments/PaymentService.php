@@ -4,6 +4,7 @@ namespace App\Services\Payments;
 
 use App\Models\Transaction;
 use App\Services\Stripe\StripeConnectService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use Stripe\Stripe;
 use Stripe\PaymentIntent;
@@ -18,60 +19,60 @@ class PaymentService
         $this->stripe = $stripe;
     }
 
-    public function createPayment(array $data, $user)
+    public function createPayment(array $data, $user): JsonResponse|Transaction
     {
         try {
-            // dd($data, $user);
             $data = json_decode(json_encode($data));
             $str = Str::of($data->purpose)->take(3);
-            $reference = uniqid("$str".'_');//strtoupper(Str::random(12));
+            $reference = uniqid("$str" . '_');
 
             $paymentIntentPayload = [
-                'amount' => $data->amount,
+                'amount' => $this->convertToSubunit($data->amount, $data->currency),
                 'currency' => $data->currency,
                 'purpose' => $data->purpose,
                 'reference' => $reference,
                 'description' => $data->description ?? null,
-                'purpose_id' => $data->purpose_id ?? null,
+                'purpose_id' => $data->purpose_id ?? 0,
             ];
 
-            $paymentIntent = $this->stripe->createPaymentIntent($paymentIntentPayload, $user);
+            $responsePayload = $this->stripe->createPaymentIntent($paymentIntentPayload, $user);
 
-            // dd($paymentIntent);
+            if ($responsePayload instanceof JsonResponse) {
+                $responseData = $responsePayload->getData(true);
+                $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
+                return $this->error(
+                    'An error occurred while creating the payment intent.',
+                    500,
+                    config('app.debug') ? $errorMessage : null,
 
-            if (isset($paymentIntent->error)) {
-                return response()->json([
-                    'data' => null,
-                    'code' => 400,
-                    'message' => $paymentIntent->error,
-                    'error' => $paymentIntent->error,
-                ], 400);
+                );
+            } elseif($responsePayload instanceof PaymentIntent) {
+                // Save Payment record
+                return Transaction::create([
+                    'id' => Str::uuid(),
+                    'user_id' => $user->id,
+                    'reference' => $reference,
+                    'payment_intent_id' => $responsePayload->id,
+                    'payment_client_secret' => $responsePayload->client_secret,
+                    'amount' => $data->amount,
+                    'currency' => $data->currency ?? 'usd',
+                    'payment_provider' => 'stripe',
+                    'description' => $data->description ?? null,
+                    'purpose_type' => $data->purpose,
+                    'purpose_id' => $data->purpose_id ?? null,
+                    'meta_data' => json_encode($data->meta_data ?? []),
+                    'status' => 'pending',
+                    'type' => 'purchase',
+                    'direction' => 'debit',
+                ]);
+
+            } else {
+                return $this->error(
+                    'An internal error occurred due to an unexpected service response.',
+                    500,
+                    config('app.debug') ? 'Stripe service returned an unhandled type.' : null
+                );
             }
-
-            // Save Payment record
-            $payment = Transaction::create([
-                'id' => Str::uuid(),
-                'user_id' => $user->id,
-                'reference' => $reference,
-                'payment_intent_id' => $paymentIntent->id,
-                'payment_client_secret' => $paymentIntent->client_secret,
-                'amount' => $data->amount,
-                'currency' => $data->currency ?? 'usd',
-                'payment_provider' => 'stripe',
-                'description' => $data->description ?? null,
-                'purpose_type' => $data->purpose,
-                'purpose_id' => $data->purpose_id ?? null,
-                'meta_data' => json_encode($data->meta_data ?? []),
-                'status' => 'pending',
-                'type' => 'purchase',
-                'direction' => 'debit',
-                // 'meta_data' => json_encode($data['meta_data'] ?? []),
-            ]);
-
-            return [
-                'client_secret' => $paymentIntent->client_secret,
-                'payment' => $payment,
-            ];
         } catch (\Throwable $th) {
             //throw $th;
             // dd($th);
@@ -126,7 +127,7 @@ class PaymentService
             //     $payment->update(['status' => $status]);
             // }
 
-            return $this->success(['status' => $status], 'Transaction status '.$status, 200);
+            return $this->success(['status' => $status], 'Transaction status ' . $status, 200);
         } catch (\Throwable $th) {
             return $this->error('An error occurred while verifying the transaction.', 500, $th->getMessage(), $th);
         }
@@ -180,5 +181,50 @@ class PaymentService
         } catch (\Throwable $th) {
             return $this->error('An error occurred while retrieving the transaction.', 500, $th->getMessage(), $th);
         }
+    }
+
+    /**
+     * Converts a currency amount from its major unit (e.g., dollars)
+     * to its smallest subunit (e.g., cents).
+     *
+     * @param float|string $amount The amount in the major currency unit (e.g., 10.50 for $10.50).
+     * @param string $currency The 3-letter ISO currency code (e.g., 'USD', 'EUR', 'JPY').
+     * @return int The amount in the smallest currency subunit (e.g., 1050 for $10.50).
+     * @throws \InvalidArgumentException If the currency is not supported or amount is invalid.
+     */
+    public function convertToSubunit($amount, string $currency): int
+    {
+        if (!is_numeric($amount)) {
+            throw new \InvalidArgumentException('Amount must be a numeric value.');
+        }
+
+        $currency = strtoupper($currency);
+
+        // Currencies with zero decimal places (e.g., JPY, KRW) as per Stripe documentation
+        $zeroDecimalCurrencies = [
+            'BIF',
+            'CLP',
+            'DJF',
+            'GNF',
+            'JPY',
+            'KMF',
+            'KRW',
+            'MGA',
+            'PYG',
+            'RWF',
+            'UGX',
+            'VND',
+            'VUV',
+            'XAF',
+            'XOF',
+            'XPF'
+        ];
+
+        if (in_array($currency, $zeroDecimalCurrencies)) {
+            return (int) round($amount);
+        }
+
+        // For all other currencies (typically 2 decimal places), multiply by 100
+        return (int) round($amount * 100);
     }
 }

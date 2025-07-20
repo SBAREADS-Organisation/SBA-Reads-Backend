@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Book extends Model
 {
@@ -103,9 +104,14 @@ class Book extends Model
         return $this->belongsToMany(User::class, 'book_user_bookmarks', 'book_id', 'user_id')->withTimestamps();
     }
 
-    public function categories()
+    public function categories(): BelongsToMany
     {
-        return $this->belongsToMany(Category::class, 'book_categories', 'book_id', 'category_id');
+        return $this->belongsToMany(Category::class, 'book_categories');
+    }
+
+    public function purchasers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'book_user', 'book_id', 'user_id')->withTimestamps();
     }
 
     // public function files()

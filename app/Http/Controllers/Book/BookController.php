@@ -3,34 +3,33 @@
 namespace App\Http\Controllers\Book;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Books\StoreBooksRequest;
 use App\Http\Resources\Book\BookResource;
 use App\Http\Resources\ReadingProgress\ReadingProgressResource;
-use App\Mail\Books\BookCreatedNotification;
-use App\Models\Book;
-use App\Models\User;
-use App\Services\Book\PdfTocExtractorService;
-use App\Models\BookReviews;
-use App\Models\ReadingProgress;
-use App\Notifications\Book\Milestone\MilestoneReachedNotification;
-use App\Services\Book\BookService;
-// use App\Services\Notification\NotificationService;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
-// use App\Traits\ApiResponse;
 use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
 use App\Mail\Book\BookDeleted;
+use App\Mail\Books\BookCreatedNotification;
+use App\Models\Book;
+use App\Models\BookReviews;
+use App\Models\ReadingProgress;
+use App\Models\User;
+use App\Notifications\Book\Milestone\MilestoneReachedNotification;
+use App\Services\Book\BookService;
+use App\Services\Book\PdfTocExtractorService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Validator;
+
+// use App\Services\Notification\NotificationService;
+
+// use App\Traits\ApiResponse;
 
 class BookController extends Controller
 {
     protected BookService $service;
     private $rules;
+
     // use ApiResponse;
 
     public function __construct(BookService $service)
@@ -40,51 +39,51 @@ class BookController extends Controller
         $this->service = $service;
 
         $this->rules = [
-            'books'                              => 'required|array|min:1',
-            'books.*.title'                      => 'required|string|max:255',
-            'books.*.sub_title'                  => 'nullable|string|max:255',
-            'books.*.description'                => 'required|string',
-            'books.*.author_id'                  => 'required|exists:users,id',
-            'books.*.authors'                    => 'required|array',
-            'books.*.authors.*'                  => 'required|exists:users,id',
-            'books.*.isbn'                       => 'required|string|unique:books,isbn',
-            'books.*.table_of_contents'          => 'required|json',
-            'books.*.tags'                       => 'nullable|array',
-            'books.*.tags.*'                     => 'string|max:50',
-            'books.*.category'                   => 'nullable|array',
-            'books.*.categories'                 => 'nullable|array',
-            'books.*.category.*'                 => 'exists:categories,id',
-            'books.*.categories.*'               => 'exists:categories,id',
-            'books.*.genres'                     => 'nullable|array',
-            'books.*.genres.*'                   => 'string|max:50',
-            'books.*.publication_date'           => 'nullable|date',
-            'books.*.language'                   => 'nullable|array',
-            'books.*.language.*'                 => 'string|max:50',
-            'books.*.cover_image'                => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'books' => 'required|array|min:1',
+            'books.*.title' => 'required|string|max:255',
+            'books.*.sub_title' => 'nullable|string|max:255',
+            'books.*.description' => 'required|string',
+            'books.*.author_id' => 'required|exists:users,id',
+            'books.*.authors' => 'required|array',
+            'books.*.authors.*' => 'required|exists:users,id',
+            'books.*.isbn' => 'required|string|unique:books,isbn',
+            'books.*.table_of_contents' => 'required|json',
+            'books.*.tags' => 'nullable|array',
+            'books.*.tags.*' => 'string|max:50',
+            'books.*.category' => 'nullable|array',
+            'books.*.categories' => 'nullable|array',
+            'books.*.category.*' => 'exists:categories,id',
+            'books.*.categories.*' => 'exists:categories,id',
+            'books.*.genres' => 'nullable|array',
+            'books.*.genres.*' => 'string|max:50',
+            'books.*.publication_date' => 'nullable|date',
+            'books.*.language' => 'nullable|array',
+            'books.*.language.*' => 'string|max:50',
+            'books.*.cover_image' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             // 'books.*.cover_image.url'            => 'nullable|url',
             // 'books.*.cover_image.public_id'      => 'nullable|string',
-            'books.*.format'                     => 'nullable|string|max:50',
-            'books.*.files'                      => 'required|array',
-            'books.*.files.*'                    => 'file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'books.*.format' => 'nullable|string|max:50',
+            'books.*.files' => 'required|array',
+            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:5120',
             // 'books.*.files.*.url'                => 'required_with:books.*.files|url',
             // 'books.*.files.*.public_id'          => 'nullable|string',
-            'books.*.target_audience'            => 'nullable|array',
-            'books.*.target_audience.*'          => 'string|max:50',
-            'books.*.pricing'                    => 'nullable|array',
-            'books.*.pricing.actual_price'       => 'required_with:books.*.pricing|numeric|min:0',
-            'books.*.pricing.discounted_price'   => 'nullable|numeric|min:0',
-            'books.*.actual_price'               => 'nullable|numeric|min:0',
-            'books.*.discounted_price'           => 'nullable|numeric|min:0',
-            'books.*.currency'                   => 'nullable|string|size:3',
-            'books.*.availability'               => 'nullable|array',
-            'books.*.availability.*'             => 'string',
-            'books.*.file_size'                  => 'nullable|string|max:50',
-            'books.*.drm_info'                   => 'nullable|json',
-            'books.*.meta_data'                  => 'nullable|array',
-            'books.*.meta_data.pages'            => 'required|numeric|min:0',
-            'books.*.publisher'                  => 'nullable|string|max:255',
-            'books.*.archived'                   => 'boolean',
-            'books.*.deleted'                    => 'boolean',
+            'books.*.target_audience' => 'nullable|array',
+            'books.*.target_audience.*' => 'string|max:50',
+            'books.*.pricing' => 'nullable|array',
+            'books.*.pricing.actual_price' => 'required_with:books.*.pricing|numeric|min:0',
+            'books.*.pricing.discounted_price' => 'nullable|numeric|min:0',
+            'books.*.actual_price' => 'nullable|numeric|min:0',
+            'books.*.discounted_price' => 'nullable|numeric|min:0',
+            'books.*.currency' => 'nullable|string|size:3',
+            'books.*.availability' => 'nullable|array',
+            'books.*.availability.*' => 'string',
+            'books.*.file_size' => 'nullable|string|max:50',
+            'books.*.drm_info' => 'nullable|json',
+            'books.*.meta_data' => 'nullable|array',
+            'books.*.meta_data.pages' => 'required|numeric|min:0',
+            'books.*.publisher' => 'nullable|string|max:255',
+            'books.*.archived' => 'boolean',
+            'books.*.deleted' => 'boolean',
         ];
     }
 
@@ -171,9 +170,9 @@ class BookController extends Controller
 
             return BookResource::collection($books)
                 ->additional([
-                    'code'    => 200,
+                    'code' => 200,
                     'message' => 'Books retrieved successfully!',
-                    'error'   => null,
+                    'error' => null,
                 ]);
         } catch (\Exception $e) {
             // dd($e);
@@ -522,7 +521,7 @@ class BookController extends Controller
             "Your book '{$book->title}' has received a new review.",
             ['in-app', 'email'], // push notifications can be added later(push)
             $book,
-            // new \App\Notifications\Book\BookReviewed($review)
+        // new \App\Notifications\Book\BookReviewed($review)
         );
 
         return $this->success(
@@ -738,7 +737,7 @@ class BookController extends Controller
     /**
      * Extracts preview details (such as table of contents) from an uploaded PDF book file.
      *
-     * @param  \Illuminate\Http\Request  $request
+     * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function extractPreview(Request $request)
@@ -972,6 +971,48 @@ class BookController extends Controller
         } catch (\Exception $e) {
             // Log::error('Book audit action error: ' . $e->getMessage());
             return $this->error('An error occurred while processing the audit action.', 400, $e->getMessage(), $e);
+        }
+    }
+
+
+    public function purchaseBooks(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'books' => 'required|array',
+                'books.*' => 'required|integer|exists:books,id',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->error('Validation failed.', 422, $validator->errors());
+            }
+
+            $user = $request->user();
+            $bookIds = $request->input('books');
+
+            // Check if the user already owns any of the books
+            $ownedBooks = $user->purchasedBooks()->whereIn('book_id', $bookIds)->pluck('book_id');
+
+            if ($ownedBooks->isNotEmpty()) {
+                $alreadyOwnedIds = $ownedBooks->toArray();
+                $newBookIds = array_diff($bookIds, $alreadyOwnedIds);
+
+                if (empty($newBookIds)) {
+                    return $this->error('You already own all the selected books.', 409);
+                }
+
+                $conflictingBooks = Book::whereIn('id', $alreadyOwnedIds)->pluck('title')->implode(', ');
+                return $this->error('You already own the following book(s): ' . $conflictingBooks, 409);
+            }
+
+//            $user->purchasedBooks()->attach($bookIds);
+            return $this->service->purchaseBooks($bookIds, $user);
+
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
+        } catch (\Exception $e) {
+            // Log::error('Book purchase error: ' . $e->getMessage());
+            return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
 }
