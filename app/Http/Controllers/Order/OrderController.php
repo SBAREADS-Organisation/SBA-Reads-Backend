@@ -13,8 +13,8 @@ class OrderController extends Controller
 {
     //
     use ApiResponse;
-    protected $service;
-    protected $stripe;
+    protected OrderService $service;
+    protected StripeConnectService $stripe;
 
     public function __construct(OrderService $service, StripeConnectService $stripe) {
         $this->service = $service;
@@ -124,7 +124,7 @@ class OrderController extends Controller
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
             //throw $th;
-            $message = $th->getMessage() ?? 'An error occurred while creating books.';
+            $message = $th->getMessage() ?? 'An error occurred while placing order.';
             return $this->error($message, 500, null, $th);
         }
     }

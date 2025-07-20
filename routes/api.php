@@ -7,6 +7,7 @@ use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\KYC\KYCController;
 use App\Http\Controllers\Order\OrderController;
 use App\Http\Controllers\Socials\SocialAuthController;
+use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\User\UserController;
 use App\Http\Controllers\Notification\NotificationsController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Transaction\TransactionsController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Services\Stripe\StripeConnectService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -122,7 +124,7 @@ Route::prefix('subscriptions')->group(function () {
 });
 // Route::get('subscriptions', [SubscriptionController::class, 'available'])->name('available-subscriptions');
 
-Route::post('/webhooks/stripe', [KYCController::class, 'handle'])->name('handle-webhook');
+Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
 // Books
 Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
@@ -136,6 +138,7 @@ Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
     Route::put('books/{id}', [BookController::class, 'update']);
     Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);
     Route::get('books/search', [BookController::class, 'search']);
+    Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
 
     // Reader-specific endpoints
     Route::post('books/{id}/start-reading', [BookController::class, 'startReading']);
@@ -200,7 +203,7 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->g
         Route::get('/', [SubscriptionController::class, 'available'])->name('subscriptions');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscription');
         Route::post('/', [SubscriptionController::class, 'store'])->name('create-subscription');
-        Route::put('/{id}', [SubscriptionController::class, 'update'])->name('update-subscription');
+        Route::put ('/{id}', [SubscriptionController::class, 'update'])->name('update-subscription');
         Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('delete-subscription');
     });
 

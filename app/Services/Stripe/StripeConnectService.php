@@ -146,7 +146,14 @@ class StripeConnectService
                     ], 400);
                 }
 
-                $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
+                $user->update([
+                    'name' => "$payload->first_name $payload->last_name",
+                    'kyc_account_id' => $account->id,
+                    'kyc_status' => 'document-required',
+                    'kyc_provider' => 'stripe',
+                    'status' => 'pending'
+                ]);
+
                 $user->kycInfo()->create([
                     'first_name' => $payload->first_name,
                     'last_name' => $payload->last_name,
@@ -215,22 +222,30 @@ class StripeConnectService
                 }
 
 
-                $user->update(['kyc_account_id' => $account->id, 'kyc_status' => 'document-required', 'kyc_provider' => 'stripe', 'status' => 'pending']);
+                $user->update([
+                    'name' => "$payload->first_name $payload->last_name",
+                    'kyc_account_id' => $account->id,
+                    'kyc_status' => 'document-required',
+                    'kyc_provider' => 'stripe',
+                    'status' => 'pending'
+                ]);
+
                 $user->kycInfo()->updateOrCreate(
                     [],
                     [
-                    'first_name' => $payload->first_name,
-                    'last_name' => $payload->last_name,
-                    'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
-                    'address_line1' => $payload->address->line1,
-                    'address_line2' => $payload->address->line2 ?? null,
-                    'city' => $payload->address->city,
-                    'state' => $payload->address->state,
-                    'postal_code' => $payload->address->postal_code,
-                    'country' => $payload->country,
-                    'phone' => $payload->phone,
-                    'gender' => $payload->gender,
-                ]);
+                        'first_name' => $payload->first_name,
+                        'last_name' => $payload->last_name,
+                        'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
+                        'address_line1' => $payload->address->line1,
+                        'address_line2' => $payload->address->line2 ?? null,
+                        'city' => $payload->address->city,
+                        'state' => $payload->address->state,
+                        'postal_code' => $payload->address->postal_code,
+                        'country' => $payload->country,
+                        'phone' => $payload->phone,
+                        'gender' => $payload->gender,
+                    ]
+                );
 
                 return $account;
             });
@@ -310,7 +325,9 @@ class StripeConnectService
 
         try {
             $event = Webhook::constructEvent($payload, $sigHeader, $secret);
+            Log::info($event);
         } catch (\Exception $e) {
+            Log::error($e->getMessage());
             throw new \Exception("Failed to construct webhook event: " . $e->getMessage(), 0, $e);
         }
 
@@ -431,15 +448,15 @@ class StripeConnectService
     public function addCard($payload, $user)
     {
         try {
-            $existPaymentMethod = PaymentMethod::retrieve($payload->token);
+            $existPaymentMethod = PaymentMethod::retrieve($payload['payment_method_id']);
+            //    dd($existPaymentMethod);
             if ($existPaymentMethod instanceof Exception\InvalidRequestException) {
                 $error = $existPaymentMethod->getMessage();
-                return response()->json([
-                    'message' => 'Error retrieving Stripe payment method',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error
-                ], 400);
+                return $this->error(
+                    'Error retrieving Stripe payment method',
+                    404,
+                    $error
+                );
             }
 
             // Attach the payment method to the Stripe customer
@@ -487,11 +504,11 @@ class StripeConnectService
                 'user_id' => $user->id,
                 'type' => 'card',
                 // 'payment_platform' => 'stripe',
-                'payment_data' => json_encode([
-                    'card_last4' => $existPaymentMethod->card->last4,
-                    'card_brand' => $existPaymentMethod->card->brand,
-                    'exp_month' => $existPaymentMethod->card->exp_month,
-                    'exp_year' => $existPaymentMethod->card->exp_year,
+                'payment_method_data' => json_encode([
+                    'card_last4' => $existPaymentMethod->card['last4'],
+                    'card_brand' => $existPaymentMethod->card['brand'],
+                    'exp_month' => $existPaymentMethod->card['exp_month'],
+                    'exp_year' => $existPaymentMethod->card['exp_year'],
                 ]),
                 'purpose' => 'payment',
                 'default' => true,
@@ -501,7 +518,7 @@ class StripeConnectService
                     'customer_id' => $user->kyc_customer_id,
                     'payment_method_id' => $existPaymentMethod->id,
                 ]),
-                'country_code' => $user->country_code, // Assuming you have a country_code on the user model
+                'country_code' => $existPaymentMethod->billing_details->address->country
             ]);
 
             // Check if the payment method was created successfully
@@ -660,31 +677,22 @@ class StripeConnectService
     {
         try {
             $paymentIntent = \Stripe\PaymentIntent::create([
-                // convert amount to cents based on currency provided
-                'amount' => $payload['amount'] * 100,
-                // 'amount' => $payload['amount'],
+                'amount' => $payload['amount'],
                 'currency' => $payload['currency'],
                 'customer' => $user->kyc_customer_id,
-                // calculate the application fee added with the payment
-                // 'application_fee_amount' => $payload['application_fee_amount'] * 100,
-                // if the user had a payment method saved, use it
-                // 'payment_method' => $user->default_payment_method_id,
-                // 'payment_method_types' => ['card'],
-                'confirm' => true, //REVIEW - this will confirm the payment immediately
                 'metadata' => [
                     'user_id' => $user->id,
                     'description' => $payload['description'] ?? '',
                     'purpose' => $payload['purpose'] ?? '',
+                    'purpose_id' => $payload['purpose_id'],
                     'reference' => $payload['reference'],
-                    'reference_id' => $payload['purpose_id'],
                 ],
                 'description' => $payload['description'] ?? '',
                 'automatic_payment_methods' => [
                     'enabled' => true,
-                ]
+                ],
+                // 'return_url' => config('app.url') . '/api/stripe/webhook'
             ]);
-
-            // dd('PAYMENT INTENT', $paymentIntent);
 
             // Error Handling
             if ($paymentIntent instanceof Exception\InvalidRequestException) {
@@ -695,7 +703,6 @@ class StripeConnectService
                     'data' => null,
                     'error' => $error
                 ], 400);
-                // return response()->json(['error' => $error], 400);
             }
 
             return $paymentIntent;

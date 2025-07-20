@@ -56,7 +56,7 @@ class SubscriptionService
             $userSubscription = json_decode(json_encode($userSubscription));
 
             $transaction = $this->paymentService->createPayment([
-                'amount' => $subscription->price,
+                'amount' => $subscription->price * 100,
                 // pick currency from subscription model currencies []
                 'currency' => $subscription->currencies[0] ?? 'usd',
                 // 'currency' => 'usd',
@@ -72,7 +72,7 @@ class SubscriptionService
 
             $transaction = json_decode(json_encode($transaction));
 
-            // dd($transaction);
+            dd($transaction);
 
             if (isset($transaction->error)) {
                 // Rollback the subscription creation if payment fails
@@ -84,7 +84,7 @@ class SubscriptionService
                     'error' => $transaction->error,
                 ], 400);
             }
-
+            dd($transaction);
             // Transaction::create([
             //     'user_id' => $user->id,
             //     'type' => 'subscription',
@@ -197,7 +197,7 @@ class SubscriptionService
             'title' => $payload->title,
             'price' => $payload->price,
             'duration_in_days' => $payload->duration_in_days,
-            'perks' => $payload->perks,
+            'perks' => $payload->perks ?? json_encode([]),
             'model' => $payload->model,
             'currencies' => $payload->currencies ?? json_encode([]),
         ]);
@@ -216,7 +216,9 @@ class SubscriptionService
             'title' => $payload->title,
             'price' => $payload->price,
             'duration_in_days' => $payload->duration_in_days,
-            'perks' => $payload->perks,
+            'perks' => $payload->perks ?? json_encode([]),
+            'model' => $payload->model,
+            'currencies' => $payload->currencies ?? json_encode([]),
         ]);
 
         return $subscription;

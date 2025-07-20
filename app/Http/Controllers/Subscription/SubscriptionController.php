@@ -39,7 +39,7 @@ class SubscriptionController extends Controller
             return $this->error(
                 'An error occurred while subscribing to the plan.',
                 500,
-                null,
+                config('app.debug') ? $th->getMessage() : null,
                 $th
             );
         }
@@ -235,29 +235,16 @@ class SubscriptionController extends Controller
             return $this->error(
                 'An error occurred while updating the subscription.',
                 500,
-                null,
+                config('app.debug') ? $th->getMessage() : null,
                 $th
             );
         }
     }
 
     // Delete a subscription
-    public function delete(Request $request, $id)
+    public function destroy(Request $request, $id)
     {
         try {
-            // Validate the request
-            $validation = Validator::make($request->all(), [
-                'id' => 'required|exists:subscriptions,id'
-            ]);
-
-            if ($validation->fails()) {
-                return $this->error(
-                    'Validation failed',
-                    400,
-                    $validation->errors()
-                );
-            }
-
             $subscription = $this->service->getSubscriptionById($id);
 
             if (!$subscription) {

@@ -405,7 +405,7 @@ class UserController extends Controller
     public function profile(Request $request)
     {
         // dd($request);
-        $user = $request->user()->load('bookmarks', 'kycInfo'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
+        $user = $request->user()->load('bookmarks', 'kycInfo', 'purchasedBooks'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
         return $this->success(new UserResource($user),
@@ -472,6 +472,7 @@ class UserController extends Controller
 
             // Update user fields
             // $user->profile_info = $request->input('profile_info', $user->profile_info);
+            $user->name = $request->input('name', $user->name);
             $user->username = $request->input('profile_info.username', $user->username);
             $user->bio = $request->input('profile_info.bio', $user->bio);
             $user->pronouns = $request->input('profile_info.pronouns', $user->pronouns);
@@ -915,6 +916,8 @@ class UserController extends Controller
                 'professionalProfile',
                 'roles',
                 'kycInfo',
+                'purchasedBooks',
+                'bookmarks'
             ]);
 
             // Search by email, name, or username
@@ -983,7 +986,9 @@ class UserController extends Controller
                 'paymentMethods',
                 'professionalProfile',
                 'roles',
-                'kycInfo'
+                'kycInfo',
+                'purchasedBooks',
+                'bookmarks'
             ])->find($id);
 
             if (!$user) {

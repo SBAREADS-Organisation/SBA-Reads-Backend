@@ -52,24 +52,17 @@ class OrderService
 
             $order->update(['total_amount' => $total]);
 
-            // dd($order);
-
             $transaction = $this->paymentService->createPayment([
                 'amount' => $total,
-                // pick currency from subscription model currencies []
                 'currency' => $book->currency ?? $book->currency[0] ?? 'usd',
-                'description' => "Books purchase", // Optimize by including the books names seperated by 'comas'.
+                'description' => "Books purchase",
                 'purpose' => 'order',
                 'purpose_id' => $order->id,
-                // 'purpose_id' => $userSubscription->id,
                 'meta_data' => [
                     'order_id' => $order->id,
                     'user_id' => $user->id,
                 ],
-
             ], $user);
-
-            $transaction = json_decode(json_encode($transaction));
 
             if (isset($transaction->error)) {
                 // Rollback the subscription creation if payment fails
@@ -82,17 +75,10 @@ class OrderService
                 ], 400);
             }
 
-            $transaction_id = $transaction->payment->id;
+            $order->update(['transaction_id' => $transaction->id]);
 
-            // dd($transaction->payment->id);
-
-            $order->update(['transaction_id' => $transaction_id]);
-
-            // $order->transaction_id = $transaction->payment->id;
 
             DB::commit();
-
-            // dd($transaction->payment);
 
             return ['order' => $order, 'transaction' => $transaction];
         } catch (\Exception $e) {

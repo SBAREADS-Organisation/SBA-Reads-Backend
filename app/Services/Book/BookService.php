@@ -3,6 +3,10 @@
 namespace App\Services\Book;
 
 use App\Models\Book;
+use App\Models\User;
+use App\Services\Payments\PaymentService;
+use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use Illuminate\Support\Arr;
 use Illuminate\Http\UploadedFile;
@@ -11,7 +15,12 @@ use Illuminate\Support\Facades\DB;
 
 class BookService
 {
-    public function __construct(protected CloudinaryMediaUploadService $cloudinaryMediaService) {}
+    use ApiResponse;
+    private PaymentService $paymentService;
+
+    public function __construct(protected CloudinaryMediaUploadService $cloudinaryMediaService, PaymentService $paymentService) {
+        $this->paymentService = $paymentService;
+    }
     /**
      * Create multiple books in a transaction.
      *
@@ -141,5 +150,45 @@ class BookService
         $book->delete();
 
         return true;
+    }
+
+    public function purchaseBooks(array $bookIds, User $user)
+    {
+        $total = 0;
+        foreach ($bookIds as $bookId) {
+            $book = Book::findOrFail($bookId);
+            $price = $book->pricing['actual_price'];
+
+            $total += $price;
+        }
+
+        $transaction = $this->paymentService->createPayment([
+            'amount' => $total,
+            'currency' => 'usd',
+            'description' => "Digital books purchase",
+            'purpose' => 'digital_book_purchase',
+            'purpose_id' => 0,
+            'meta_data' => [
+                'book_ids' => $bookIds,
+                'user_id' => $user->id,
+            ],
+        ], $user);
+
+        if ($transaction instanceof JsonResponse) {
+            $responseData = $transaction->getData(true);
+            return $this->error(
+                'An error occurred while initiating the books purchase process.',
+                $transaction->getStatusCode(),
+                $responseData['error'] ?? 'Unknown error from payment service.'
+            );
+        }
+
+        return $this->success(
+            [
+                'transaction' => $transaction,
+                'book_ids' => $bookIds
+            ],
+            'Books purchase process initiated successfully.'
+        );
     }
 }
