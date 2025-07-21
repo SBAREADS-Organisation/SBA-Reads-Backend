@@ -312,6 +312,14 @@ class BookController extends Controller
     {
         $user = $request->user();
 
+        // Check if user has purchased the book
+        if (!$user->purchasedBooks()->where('book_id', $bookId)->exists()) {
+            return $this->error(
+                'You must purchase the book before reading it.',
+                403
+            );
+        }
+
         $validator = Validator::make($request->all(), [
             // 'progress' => 'required|integer|min:0|max:100',
             'page' => 'required|string',
