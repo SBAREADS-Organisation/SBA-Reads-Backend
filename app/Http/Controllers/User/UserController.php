@@ -83,7 +83,7 @@ class UserController extends Controller
             $email = $request->email;
 
             if ($accountType === 'author') {
-            DB::beginTransaction();
+                DB::beginTransaction();
                 $cacheKey = "author_register_{$email}";
                 $cached = Cache::get($cacheKey);
 
@@ -199,6 +199,7 @@ class UserController extends Controller
             }
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
@@ -207,6 +208,7 @@ class UserController extends Controller
             );
         } catch (\Throwable $th) {
             DB::rollBack();
+
             return $this->error(
                 'An error occurred while registering the user.',
                 500,

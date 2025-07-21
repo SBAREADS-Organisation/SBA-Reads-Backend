@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 class OrderService
 {
     use ApiResponse;
+
     protected $paymentService;
 
     public function __construct(PaymentService $paymentService)

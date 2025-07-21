@@ -29,7 +29,7 @@ class StripeWebhookService
             $transaction = Transaction::where('reference', $metadata->reference)->first();
             $user = $transaction->user;
 
-            if (!$transaction) {
+            if (! $transaction) {
                 Log::error('Transaction not found for reference', ['reference' => $metadata->reference]);
             }
 
@@ -51,7 +51,7 @@ class StripeWebhookService
                     break;
 
                 default:
-                    Log::warning('Stripe Webhook: Unhandled transaction type received: ' . $purpose, ['transaction_id' => $transaction->id]);
+                    Log::warning('Stripe Webhook: Unhandled transaction type received: '.$purpose, ['transaction_id' => $transaction->id]);
                     break;
             }
 
@@ -131,7 +131,7 @@ class StripeWebhookService
                         'kyc_status' => 'verified',
                         'first_name' => $account->individual->first_name,
                         'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
+                        'name' => $account->individual->first_name.' '.$account->individual->last_name,
                     ]);
 
                     Log::info('Stripe Account Update Processed', ['account' => $account]);
