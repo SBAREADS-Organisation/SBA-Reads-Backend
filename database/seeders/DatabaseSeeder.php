@@ -29,6 +29,6 @@ class DatabaseSeeder extends Seeder
             RolesAndPermissionsSeeder::class,
         ]);
 
-        echo "Seeded";
+        echo 'Seeded';
     }
 }

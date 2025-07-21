@@ -2,10 +2,10 @@
 
 namespace Database\Seeders;
 
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class AppVersionSeeder extends Seeder
 {
@@ -20,7 +20,7 @@ class AppVersionSeeder extends Seeder
             'com.sbareads',
             'com.sbareads.author',
             'com.sbareads.admin',
-            'com.sbareads.reader'
+            'com.sbareads.reader',
         ];
 
         $supportExpiresAt = Carbon::now()->addDays(120)->toDateTimeString();

@@ -3,10 +3,9 @@
 namespace App\Services\Analytics;
 
 use App\Models\Book;
-use App\Models\Subscription;
-use App\Models\UserSubscription;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\UserSubscription;
 use Carbon\Carbon;
 
 class AnalyticsService
@@ -30,7 +29,7 @@ class AnalyticsService
                 'expired' => Book::where('status', 'expired')->count(),
                 'in_review' => Book::where('status', ['needs_changes', 'review'])->count(),
                 'pending' => Book::where('status', 'pending')->count(),
-                'views' => 'upcoming'/*Book::sum('views')*/,
+                'views' => 'upcoming'/* Book::sum('views') */,
             ],
             'users' => [
                 'total' => User::count(),
@@ -41,7 +40,7 @@ class AnalyticsService
             'transactions' => [
                 'total_sales' => Transaction::sum('amount'),
                 'weekly_sales' => $this->weeklyRevenueTrend(),
-                'pending_payouts' => 'loading'/*Transaction::where('payout_status', 'pending')->sum('amount')*/,
+                'pending_payouts' => 'loading'/* Transaction::where('payout_status', 'pending')->sum('amount') */,
             ],
             'subscriptions' => [
                 'active' => UserSubscription::where('status', 'active')->count(),
@@ -52,11 +51,11 @@ class AnalyticsService
                 ->take(5)->get()*/,
             'top_authors' => /*User::with(['books' => function ($q) {
                 $q->withCount('sales')->orderBy('sales_count', 'desc');
-            }])->where('account_type', 'author')->get()*/'loading',
+            }])->where('account_type', 'author')->get()*/ 'loading',
             'growth' => [
                 'users' => $this->weeklyGrowth(User::class),
                 'books' => $this->weeklyGrowth(Book::class),
-            ]
+            ],
         ];
     }
 
@@ -70,8 +69,8 @@ class AnalyticsService
                 'expired' => $user->books()->where('status', 'expired')->count(),
                 'in_review' => $user->books()->where('status', ['needs_changes', 'review'])->count(),
                 'pending' => $user->books()->where('status', 'pending')->count(),
-                'views' => 'upcoming'/*$user->books()->sum('views')*/,
-                'sold' => /*$user->books()->withCount('sales')->sum('sales_count')*/'loading',
+                'views' => 'upcoming'/* $user->books()->sum('views') */,
+                'sold' => /* $user->books()->withCount('sales')->sum('sales_count') */ 'loading',
             ],
             'revenue' => [
                 'total' => $user->payments()->sum('amount'),
@@ -80,10 +79,10 @@ class AnalyticsService
             'top_books' => /*$user->books()
                 ->withCount('sales')
                 ->orderBy('sales_count', 'desc')
-                ->take(3)->get()*/'loading',
+                ->take(3)->get()*/ 'loading',
             'payouts' => [
-                'pending' => 'loading'/*$user->payments()->where('payout_status', 'pending')->sum('amount')*/,
-            ]
+                'pending' => 'loading'/* $user->payments()->where('payout_status', 'pending')->sum('amount') */,
+            ],
         ];
     }
 

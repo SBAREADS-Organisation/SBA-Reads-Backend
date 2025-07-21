@@ -3,14 +3,15 @@
 namespace App\Notifications\SlackWebhook;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class SlackWebhookNotification extends Notification
 {
     use Queueable;
+
     protected string $message;
+
     protected object $content;
 
     /**
@@ -29,7 +30,7 @@ class SlackWebhookNotification extends Notification
      */
     public function via(object $notifiable): array
     {
-        return [/*'mail', */'slack'];
+        return [/* 'mail', */ 'slack'];
     }
 
     /**

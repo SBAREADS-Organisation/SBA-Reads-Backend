@@ -3,29 +3,31 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\User\UserResource;
 use App\Mail\Onboarding\WelcomeEmail;
 use App\Mail\Registration\AuthorVerificationToken;
+use App\Models\MediaUpload;
 use App\Models\User;
 use App\Services\Stripe\StripeConnectService;
+use App\Traits\ApiResponse;
 use Error;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
-use App\Traits\ApiResponse;
-use Illuminate\Http\JsonResponse;
-use App\Models\MediaUpload;
-use App\Http\Resources\User\UserResource;
 
 class UserController extends Controller
 {
     use ApiResponse;
+
     protected $stripe;
     //
 
-    public function __construct(StripeConnectService $stripe, /*KYCVerificationService $kycService*/)
+    public function __construct(StripeConnectService $stripe /* KYCVerificationService $kycService */)
     {
         // $this->middleware('auth:sanctum');
         // $this->kycService = $kycService;
@@ -37,7 +39,7 @@ class UserController extends Controller
         return response()->json([
             'data' => null,
             'code' => 200,
-            'message' => 'You have reached the users APIs.'
+            'message' => 'You have reached the users APIs.',
         ], 200, []);
     }
 
@@ -81,6 +83,7 @@ class UserController extends Controller
             $email = $request->email;
 
             if ($accountType === 'author') {
+            DB::beginTransaction();
                 $cacheKey = "author_register_{$email}";
                 $cached = Cache::get($cacheKey);
 
@@ -114,7 +117,9 @@ class UserController extends Controller
                 ]), now()->addMinutes(10));
 
                 // Send email with token (stub or actual)
-                Mail::to($email)->send(new AuthorVerificationToken($token));
+                Mail::to($email)->queue(new AuthorVerificationToken($token));
+
+                DB::commit();
 
                 return $this->success(
                     ['email' => $email, 'otp' => $token],
@@ -125,14 +130,15 @@ class UserController extends Controller
 
             // For readers - create account immediately
             if ($accountType === 'reader') {
+                DB::beginTransaction();
                 $user = new User;
                 $user->fill([
                     // 'name' => $request->fullname,
                     'email' => $request->email,
-                    'password' =>  Hash::make($request->password),
+                    'password' => Hash::make($request->password),
                     'default_login' => 'email',
                     'account_type' => $request->account_type,
-                    'status' => 'active'
+                    'status' => 'active',
                 ]);
                 $user->save();
 
@@ -145,6 +151,7 @@ class UserController extends Controller
                     // Delete user if already created when faced with error
                     $user->delete();
                     $user->refresh();
+
                     // dd($user, $role);
                     return $this->error(
                         'User creation failed, please contact support.',
@@ -155,23 +162,26 @@ class UserController extends Controller
 
                 $customer = $this->stripe->createCustomer($user);
 
-                if($customer instanceof JsonResponse) {
-                $customerData = (array) $customer->getData();
+                if ($customer instanceof JsonResponse) {
+                    $customerData = (array) $customer->getData();
 
-                if (isset($customerData['error'])) {
-                    $user->delete();
-                    return $this->error(
-                        'Failed to create Stripe customer.',
-                        400,
-                        config('app.debug') ? $customerData['data'] : null
-                    );
+                    if (isset($customerData['error'])) {
+                        $user->delete();
+
+                        return $this->error(
+                            'Failed to create Stripe customer.',
+                            400,
+                            config('app.debug') ? $customerData['data'] : null
+                        );
+                    }
                 }
-            }
-                Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+                Mail::to($user->email)->queue(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
 
                 $user->refresh();
 
                 $token = $user->createToken('auth_token')->plainTextToken;
+
+                DB::commit();
 
                 return $this->success([
                     'user_id' => $user->id,
@@ -188,7 +198,7 @@ class UserController extends Controller
                 );
             }
         } catch (\Exception $e) {
-            $user->delete();
+            DB::rollBack();
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
@@ -196,8 +206,7 @@ class UserController extends Controller
                 $e
             );
         } catch (\Throwable $th) {
-            $user->delete();
-            dd($th->getMessage());
+            DB::rollBack();
             return $this->error(
                 'An error occurred while registering the user.',
                 500,
@@ -288,7 +297,7 @@ class UserController extends Controller
         $cacheKey = "author_register_{$request->email}";
         $cached = Cache::get($cacheKey);
 
-        if (!$cached) {
+        if (! $cached) {
             return $this->error(
                 'Verification expired or not found.',
                 410,
@@ -303,7 +312,7 @@ class UserController extends Controller
         Cache::put($cacheKey, json_encode(array_merge($userData, ['token' => $token])), now()->addMinutes(10));
 
         // Send email with new token
-        Mail::to($request->email)->send(new AuthorVerificationToken($token));
+        Mail::to($request->email)->queue(new AuthorVerificationToken($token));
 
         return $this->success(
             ['email' => $request->email],
@@ -341,7 +350,7 @@ class UserController extends Controller
         $cacheKey = "author_register_{$request->email}";
         $cached = Cache::get($cacheKey);
 
-        if (!$cached) {
+        if (! $cached) {
             return $this->error(
                 'Verification expired or not found.',
                 410,
@@ -379,7 +388,7 @@ class UserController extends Controller
 
             Cache::forget($cacheKey);
 
-            Mail::to($user->email)->send(new WelcomeEmail($user->name || 'NO NAME', $user->account_type));
+            Mail::to($user->email)->queue(new WelcomeEmail($user->name || 'NO NAME', $user->account_type));
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -401,16 +410,15 @@ class UserController extends Controller
         }
     }
 
-
     public function profile(Request $request)
     {
         // dd($request);
-        $user = $request->user()->load('bookmarks', 'kycInfo', 'purchasedBooks'); //->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
+        $user = $request->user()->load('bookmarks', 'kycInfo', 'purchasedBooks'); // ->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
         return $this->success(new UserResource($user),
-        'Profile retrieved successfully!',
-        200);
+            'Profile retrieved successfully!',
+            200);
     }
 
     public function updateProfile(Request $request)
@@ -422,7 +430,7 @@ class UserController extends Controller
             // Common validation rules
             $rules = [
                 'name' => 'nullable|string|max:255',
-                'profile_info.username' => 'required|string|max:255|unique:users,username,' . $user->id,
+                'profile_info.username' => 'required|string|max:255|unique:users,username,'.$user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 // 'profile_picture' => 'nullable|array',
@@ -491,12 +499,12 @@ class UserController extends Controller
             }
 
             $user->save();
-            if($request->hasFile('profile_picture')){
-            MediaUpload::where('id', $upload['id'])->update([
-                'mediable_type' => 'user',
-                'mediable_id' => $user->id,
-            ]);
-        }
+            if ($request->hasFile('profile_picture')) {
+                MediaUpload::where('id', $upload['id'])->update([
+                    'mediable_type' => 'user',
+                    'mediable_id' => $user->id,
+                ]);
+            }
 
             return $this->success(
                 new UserResource($user),
@@ -545,7 +553,7 @@ class UserController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error(
                 'An error occurred while updating your preferences.',
@@ -563,14 +571,14 @@ class UserController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'theme'         => ['required', 'string', 'in:light,dark'],
+                'theme' => ['required', 'string', 'in:light,dark'],
                 'notifications' => ['required', 'array', function ($attribute, $value, $fail) {
                     $allowedKeys = ['email', 'sms'];
                     foreach ($value as $key => $val) {
-                        if (!in_array($key, $allowedKeys)) {
+                        if (! in_array($key, $allowedKeys)) {
                             return $fail("The {$attribute} field contains an invalid key: {$key}.");
                         }
-                        if (!is_bool($val)) {
+                        if (! is_bool($val)) {
                             return $fail("The value for {$attribute}.{$key} must be true or false.");
                         }
                     }
@@ -596,7 +604,7 @@ class UserController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error(
                 'An error occurred while updating your settings.',
@@ -618,17 +626,17 @@ class UserController extends Controller
                 'current_password' => [
                     'required',
                     function ($attribute, $value, $fail) use ($request) {
-                        if (!Hash::check($value, $request->user()->password)) {
+                        if (! Hash::check($value, $request->user()->password)) {
                             $fail('The current password is incorrect.');
                         }
-                    }
+                    },
                 ],
                 'new_password' => [
                     'required',
                     'string',
                     'min:8',
                     // Ensure at least one uppercase, one lowercase, one number, and one special character
-                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/'
+                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).+$/',
                 ],
                 'confirm_new_password' => ['required', 'same:new_password'],
             ]);
@@ -662,13 +670,12 @@ class UserController extends Controller
         }
     }
 
-
     private function sendPasswordChangeEmail($user)
     {
         $details = [
             'subject' => 'Password Change Notification',
-            'name'    => $user->name,
-            'body'    => "Hello {$user->name},\n\nYour password has been successfully changed. If you did not authorize this change, please contact support immediately.",
+            'name' => $user->name,
+            'body' => "Hello {$user->name},\n\nYour password has been successfully changed. If you did not authorize this change, please contact support immediately.",
         ];
 
         Mail::send('emails.password_change', $details, function ($message) use ($user, $details) {
@@ -697,7 +704,7 @@ class UserController extends Controller
             }
 
             // Ensure the user has a Stripe customer ID
-            if (!$user->kyc_customer_id) {
+            if (! $user->kyc_customer_id) {
                 return $this->error(
                     'Stripe customer ID not found.',
                     400,
@@ -798,7 +805,7 @@ class UserController extends Controller
             }
 
             // Ensure the user has a Stripe customer ID
-            if (!$user->kyc_account_id) {
+            if (! $user->kyc_account_id) {
                 return $this->error(
                     'Stripe account ID not found.',
                     400,
@@ -822,7 +829,7 @@ class UserController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while adding the bank account.',
                 500,
@@ -862,7 +869,7 @@ class UserController extends Controller
             //     'message' => 'Payment methods retrieved successfully!',
             // ], 200);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error(
                 'An error occurred while retrieving payment methods.',
@@ -881,14 +888,14 @@ class UserController extends Controller
         try {
             // Validate query parameters
             $validator = Validator::make($request->all(), [
-                'per_page'    => 'sometimes|integer|min:1|max:100',
-                'page'        => 'sometimes|integer|min:1',
-                'search'      => 'sometimes|string|max:255',
+                'per_page' => 'sometimes|integer|min:1|max:100',
+                'page' => 'sometimes|integer|min:1',
+                'search' => 'sometimes|string|max:255',
                 'account_type' => 'sometimes|string|in:reader,author,superadmin',
-                'status'      => 'sometimes|string|in:active,inactive,unverified,suspended',
-                'role'        => 'sometimes|string|exists:roles,name',
-                'sort_by'     => 'sometimes|string|in:id,name,email,created_at,updated_at',
-                'sort_order'  => 'sometimes|string|in:asc,desc',
+                'status' => 'sometimes|string|in:active,inactive,unverified,suspended',
+                'role' => 'sometimes|string|exists:roles,name',
+                'sort_by' => 'sometimes|string|in:id,name,email,created_at,updated_at',
+                'sort_order' => 'sometimes|string|in:asc,desc',
             ]);
 
             if ($validator->fails()) {
@@ -906,8 +913,8 @@ class UserController extends Controller
 
             // Search and filter parameters
             $search = $request->input('search');
-            $accountType = $request->input('account_type'/*, 'author'*/);
-            $status = $request->input('status'/*, 'verified'*/);
+            $accountType = $request->input('account_type'/* , 'author' */);
+            $status = $request->input('status'/* , 'verified' */);
             $role = $request->input('role');
 
             // Build query
@@ -917,7 +924,7 @@ class UserController extends Controller
                 'roles',
                 'kycInfo',
                 'purchasedBooks',
-                'bookmarks'
+                'bookmarks',
             ]);
 
             // Search by email, name, or username
@@ -988,10 +995,10 @@ class UserController extends Controller
                 'roles',
                 'kycInfo',
                 'purchasedBooks',
-                'bookmarks'
+                'bookmarks',
             ])->find($id);
 
-            if (!$user) {
+            if (! $user) {
                 return $this->error(
                     'User not found.',
                     404,
@@ -1024,13 +1031,13 @@ class UserController extends Controller
         $allowedActions = ['active', 'suspended', 'unverified', 'verified', 'pending', 'banned', 'rejected'];
 
         // Validate action
-        if (!in_array($action, $allowedActions)) {
-            return $this->error('Invalid action. Allowed actions: ' . implode(', ', $allowedActions), 400);
+        if (! in_array($action, $allowedActions)) {
+            return $this->error('Invalid action. Allowed actions: '.implode(', ', $allowedActions), 400);
         }
 
         // Validate user
         $user = User::find($user_id);
-        if (!$user) {
+        if (! $user) {
             $this->error('User not found.', 404);
         }
 

@@ -2,9 +2,9 @@
 
 namespace App\Exceptions;
 
+use App\Services\Slack\SlackWebhookService;
 use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Throwable;
-use App\Services\Slack\SlackWebhookService;
 
 class Handler extends ExceptionHandler
 {
@@ -21,18 +21,18 @@ class Handler extends ExceptionHandler
             // Avoid sending notifications in local/dev environment
             if (app()->environment('production', 'staging')) {
                 SlackWebhookService::send('🚨 Exception Captured', [
-                    'Error'      => $e->getMessage(),
-                    'Type'       => get_class($e),
-                    'File'       => $e->getFile(),
-                    'Line'       => $e->getLine(),
-                    'URL'        => request()->fullUrl(),
-                    'Method'     => request()->method(),
-                    'IP'         => request()->ip(),
-                    'User'       => optional(request()->user())->email,
+                    'Error' => $e->getMessage(),
+                    'Type' => get_class($e),
+                    'File' => $e->getFile(),
+                    'Line' => $e->getLine(),
+                    'URL' => request()->fullUrl(),
+                    'Method' => request()->method(),
+                    'IP' => request()->ip(),
+                    'User' => optional(request()->user())->email,
                 ], 'error');
             }
         } catch (\Throwable $th) {
-            logger()->error("Slack Notification Failed: " . $th->getMessage());
+            logger()->error('Slack Notification Failed: '.$th->getMessage());
         }
     }
 }

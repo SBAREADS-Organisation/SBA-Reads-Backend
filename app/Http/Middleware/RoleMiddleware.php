@@ -20,16 +20,16 @@ class RoleMiddleware
 
         // $userWithRoles = User::with(['roles'])->find($user->id);
 
-        if (!$user) {
+        if (! $user) {
             return response()->json([
                 'data' => null,
                 'code' => 401,
                 'message' => 'Unauthorized',
-                'error' => 'Unauthorized'
+                'error' => 'Unauthorized',
             ], 401);
         }
 
-        //TODO - Use the User model's roles relationship to check users access
+        // TODO - Use the User model's roles relationship to check users access
 
         if (method_exists($user, 'load')) {
             $user->load('roles');
@@ -47,7 +47,7 @@ class RoleMiddleware
         // dd($user->account_type, $roles);
 
         // Assuming 'role' is a column in your 'users' table
-        if (!in_array($user->account_type, $roles)) {
+        if (! in_array($user->account_type, $roles)) {
             return response()->json([
                 'data' => null,
                 'code' => 403,

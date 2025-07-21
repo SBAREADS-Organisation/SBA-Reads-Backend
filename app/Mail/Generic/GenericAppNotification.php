@@ -3,7 +3,6 @@
 namespace App\Mail\Generic;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -14,6 +13,7 @@ class GenericAppNotification extends Mailable
     use Queueable, SerializesModels;
 
     public string $title;
+
     public string $message;
 
     /**

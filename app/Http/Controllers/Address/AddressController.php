@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Address;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use App\Traits\ApiResponse;
 use App\Services\Address\AddressService;
+use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class AddressController extends Controller
 {
     //
     use ApiResponse;
+
     protected $service;
 
     public function __construct(AddressService $service)
@@ -36,11 +37,12 @@ class AddressController extends Controller
 
             if ($validator->fails()) {
                 return $this->error('Validation failed', 400, $validator->errors());
-            };
+            }
 
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while creating address.';
+
             return $this->error($message, 500, null, $th);
         }
     }
@@ -51,6 +53,7 @@ class AddressController extends Controller
             return $this->service->getAll($request->user());
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while retrieving addresses.';
+
             return $this->error($message, 500, null, $th);
         }
     }

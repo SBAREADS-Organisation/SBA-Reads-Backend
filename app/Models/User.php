@@ -4,10 +4,9 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
@@ -15,7 +14,7 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasRoles;
+    use HasApiTokens, HasFactory, HasRoles, Notifiable;
 
     protected $guard_name = 'api';
 
@@ -111,11 +110,13 @@ class User extends Authenticatable
         return $this->hasMany(PaymentMethod::class);
     }
 
-    public function bookmarks() {
+    public function bookmarks()
+    {
         return $this->belongsToMany(Book::class, 'book_user_bookmarks')->withTimestamps();
     }
 
-    public function authoredBooks() {
+    public function authoredBooks()
+    {
         return $this->belongsToMany(Book::class, 'books_authors', 'author_id', 'book_id');
     }
 

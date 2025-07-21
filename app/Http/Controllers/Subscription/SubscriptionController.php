@@ -20,7 +20,7 @@ class SubscriptionController extends Controller
     {
         try {
             $validation = Validator::make($request->all(), [
-                'subscription_id' => 'required|exists:subscriptions,id'
+                'subscription_id' => 'required|exists:subscriptions,id',
             ]);
 
             // Check if validation fails
@@ -34,7 +34,7 @@ class SubscriptionController extends Controller
 
             return $this->service->subscribe($request->user(), $request->subscription_id);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error(
                 'An error occurred while subscribing to the plan.',
@@ -62,7 +62,7 @@ class SubscriptionController extends Controller
                 'User subscriptions retrieved successfully.'
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while retrieving subscriptions.',
                 500,
@@ -90,7 +90,7 @@ class SubscriptionController extends Controller
                 'Available subscriptions retrieved successfully.'
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while retrieving subscriptions.',
                 500,
@@ -106,7 +106,7 @@ class SubscriptionController extends Controller
         try {
             $subscription = $this->service->getSubscriptionById($id);
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return $this->error(
                     'Subscription not found.',
                     404
@@ -119,7 +119,7 @@ class SubscriptionController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while retrieving the subscription.',
                 500,
@@ -144,7 +144,7 @@ class SubscriptionController extends Controller
                 'model' => 'required|in:monthly,yearly',
                 // currencies as array of strings
                 'currencies' => 'nullable|array',
-                'currencies.*' => 'string|distinct'
+                'currencies.*' => 'string|distinct',
             ]);
 
             if ($validation->fails()) {
@@ -172,7 +172,7 @@ class SubscriptionController extends Controller
                 201
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error(
                 'An error occurred while creating the subscription.',
@@ -189,7 +189,7 @@ class SubscriptionController extends Controller
         try {
             $subscription = $this->service->getSubscriptionById($id);
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return $this->error(
                     'Subscription not found.',
                     404
@@ -203,7 +203,7 @@ class SubscriptionController extends Controller
                 'duration_in_days' => 'nullable|integer|min:1',
                 // perks is a json field, so we can use the json rule
                 'perks' => 'nullable|json',
-                'model' => 'required|in:monthly,yearly'
+                'model' => 'required|in:monthly,yearly',
             ]);
 
             if ($validation->fails()) {
@@ -231,7 +231,7 @@ class SubscriptionController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while updating the subscription.',
                 500,
@@ -247,7 +247,7 @@ class SubscriptionController extends Controller
         try {
             $subscription = $this->service->getSubscriptionById($id);
 
-            if (!$subscription) {
+            if (! $subscription) {
                 return $this->error(
                     'Subscription not found.',
                     404
@@ -262,7 +262,7 @@ class SubscriptionController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'An error occurred while deleting the subscription.',
                 500,

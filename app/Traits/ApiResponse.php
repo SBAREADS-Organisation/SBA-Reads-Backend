@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Traits;
-use App\Services\Slack\SlackWebhookService;
 
 use Illuminate\Http\JsonResponse;
 
@@ -10,28 +9,22 @@ trait ApiResponse
     /**
      * Return a successful JSON response.
      *
-     * @param  mixed   $data
-     * @param  string  $message
-     * @param  int     $code
-     * @return \Illuminate\Http\JsonResponse
+     * @param  mixed  $data
      */
     protected function success($data, string $message = '', int $code = 200): JsonResponse
     {
         return response()->json([
-            'code'    => $code,
-            'data'    => $data,
+            'code' => $code,
+            'data' => $data,
             'message' => $message,
-            'error'   => null,
+            'error' => null,
         ], $code);
     }
 
     /**
      * Return an error JSON response.
      *
-     * @param  string     $message
-     * @param  int        $code
-     * @param  mixed|null $data
-     * @return \Illuminate\Http\JsonResponse
+     * @param  mixed|null  $data
      */
     protected function error(string $message, int $code = 400, $data = null, $exception = null): JsonResponse
     {
@@ -46,28 +39,28 @@ trait ApiResponse
         try {
             if ($exception) {
                 \App\Services\Slack\SlackWebhookService::send('🚨 API Error Notification', [
-                    'Message'    => $message,
-                    'Code'       => $code,
-                    'Exception'  => get_class($exception) ?? null,
-                    'Error'      => $exception->getMessage() ?? null,
-                    'File'       => $exception->getFile() ?? null,
-                    'Line'       => $exception->getLine() ?? null,
-                    'URL'        => request()->fullUrl(),
-                    'Method'     => request()->method(),
-                    'IP'         => request()->ip(),
-                    'User'       => optional(request()->user())->email,
+                    'Message' => $message,
+                    'Code' => $code,
+                    'Exception' => get_class($exception) ?? null,
+                    'Error' => $exception->getMessage() ?? null,
+                    'File' => $exception->getFile() ?? null,
+                    'Line' => $exception->getLine() ?? null,
+                    'URL' => request()->fullUrl(),
+                    'Method' => request()->method(),
+                    'IP' => request()->ip(),
+                    'User' => optional(request()->user())->email,
                     'stack_trace' => $exception->getTraceAsString() ?? null,
                 ]);
             }
         } catch (\Throwable $th) {
-            logger()->error('Failed to notify Slack in ApiResponse trait: ' . $th->getMessage());
+            logger()->error('Failed to notify Slack in ApiResponse trait: '.$th->getMessage());
         }
 
         return response()->json([
-            'code'    => $code,
-            'data'    => $data,
+            'code' => $code,
+            'data' => $data,
             'message' => null,
-            'error'   => $message,
+            'error' => $message,
         ], $code);
     }
 
@@ -82,6 +75,7 @@ trait ApiResponse
                 }
             }
         }
+
         return null;
     }
 }

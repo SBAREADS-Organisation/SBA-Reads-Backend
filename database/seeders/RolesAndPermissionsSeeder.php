@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class RolesAndPermissionsSeeder extends Seeder
 {
@@ -28,16 +28,16 @@ class RolesAndPermissionsSeeder extends Seeder
         foreach ($permissions as $perm) {
             Permission::firstOrCreate([
                 'name' => $perm,
-                'guard_name' => $guard
+                'guard_name' => $guard,
             ]);
         }
 
         // Assign permissions to roles as needed
         $rolePermissions = [
-            'admin'  => ['create books', 'edit books', 'delete books', 'view books', 'manage users'],
+            'admin' => ['create books', 'edit books', 'delete books', 'view books', 'manage users'],
             'author' => ['create books', 'edit books', 'view books'],
             'reader' => ['view books'],
-            'user'   => ['create books', 'edit books', 'view books'],
+            'user' => ['create books', 'edit books', 'view books'],
             'superadmin' => ['create books', 'edit books', 'delete books', 'view books', 'manage users'],
         ];
 

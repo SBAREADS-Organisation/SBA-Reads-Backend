@@ -24,7 +24,7 @@ return new class extends Migration
             $table->string('postal_code')->nullable();
             $table->string('country');
             $table->string('phone');
-            $table->string('gender');   
+            $table->string('gender');
             $table->timestamps();
         });
     }

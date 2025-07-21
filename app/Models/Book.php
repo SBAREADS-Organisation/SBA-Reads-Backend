@@ -4,9 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Book extends Model
 {
@@ -52,6 +52,7 @@ class Book extends Model
 
     /**
      * Get the attributes that should be casted
+     *
      * @return array<string, string>
      */
     protected function casts()
@@ -100,7 +101,8 @@ class Book extends Model
     }
 
     // Bookmarks
-    public function bookmarkedBy() {
+    public function bookmarkedBy()
+    {
         return $this->belongsToMany(User::class, 'book_user_bookmarks', 'book_id', 'user_id')->withTimestamps();
     }
 

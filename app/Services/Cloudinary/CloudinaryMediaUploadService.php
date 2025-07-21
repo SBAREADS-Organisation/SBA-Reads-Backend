@@ -3,19 +3,20 @@
 namespace App\Services\Cloudinary;
 
 // use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
-use Cloudinary\Cloudinary;
-use Cloudinary\Api\Upload\UploadApi;
-use Cloudinary\Configuration\Configuration;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Str;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use App\Models\MediaUpload;
 use App\Traits\ApiResponse;
+use Cloudinary\Api\Upload\UploadApi;
+use Cloudinary\Cloudinary;
+use Cloudinary\Configuration\Configuration;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Str;
 
 class CloudinaryMediaUploadService
 {
     use ApiResponse;
+
     protected Cloudinary $cloudinary;
 
     public function __construct()
@@ -23,14 +24,15 @@ class CloudinaryMediaUploadService
         Configuration::instance([
             'cloud' => [
                 'cloud_name' => config('services.cloud.cloud_name'),
-                'api_key'    => config('services.cloud.api_key'),
+                'api_key' => config('services.cloud.api_key'),
                 'api_secret' => config('services.cloud.api_secret'),
             ],
             'url' => [
-                'secure' => true
-            ]
+                'secure' => true,
+            ],
         ]);
     }
+
     /**
      * Upload a file to Cloudinary with dynamic foldering and optimization.
      */
@@ -55,7 +57,7 @@ class CloudinaryMediaUploadService
             }
 
             // If not found, set to null
-            if (!isset($morphType)) {
+            if (! isset($morphType)) {
                 $morphType = null;
             }
 
@@ -67,7 +69,7 @@ class CloudinaryMediaUploadService
                 'resource_type' => 'auto', // handles images, videos, pdf, etc.
             ];
 
-            $result = (new UploadApi())->upload($file->getRealPath(), $uploadOptions);
+            $result = (new UploadApi)->upload($file->getRealPath(), $uploadOptions);
 
             // $result = Cloudinary::upload($file->getRealPath(), $uploadOptions);
 
@@ -110,9 +112,9 @@ class CloudinaryMediaUploadService
     public function delete(string $publicId): bool
     {
         // return Cloudinary::destroy($publicId)['result'] === 'ok';
-        $response = (new UploadApi())->destroy($publicId, [
+        $response = (new UploadApi)->destroy($publicId, [
             'invalidate' => true,
-            'resource_type' => 'auto'
+            'resource_type' => 'auto',
         ]);
 
         return isset($response['result']) && $response['result'] === 'ok';
@@ -124,11 +126,11 @@ class CloudinaryMediaUploadService
     protected function resolveFolder(string $context): string
     {
         return match ($context) {
-            'user_avatar' => 'users/avatars/' . date('Y/m/d'),
-            'book_cover' => 'books/covers/' . date('Y/m/d'),
-            'book_content' => 'books/content/' . date('Y/m/d'),
-            'stripe_kyc' => 'stripe/kyc/' . date('Y/m/d'),
-            default => 'general/' . date('Y/m/d')
+            'user_avatar' => 'users/avatars/'.date('Y/m/d'),
+            'book_cover' => 'books/covers/'.date('Y/m/d'),
+            'book_content' => 'books/content/'.date('Y/m/d'),
+            'stripe_kyc' => 'stripe/kyc/'.date('Y/m/d'),
+            default => 'general/'.date('Y/m/d')
         };
     }
 }

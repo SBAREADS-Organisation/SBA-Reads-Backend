@@ -10,6 +10,7 @@ class MediaUpload extends Model
 {
     /** @use HasFactory<\Database\Factories\MediaUploadFactory> */
     use HasFactory;
+
     use SoftDeletes;
 
     protected $fillable = [

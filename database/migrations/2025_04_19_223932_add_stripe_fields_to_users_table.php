@@ -31,7 +31,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['kyc_account_id', 'kyc_status', 'kyc_provider, kyc_metadata' /*'profile_picture'*/]);
+            $table->dropColumn(['kyc_account_id', 'kyc_status', 'kyc_provider, kyc_metadata' /* 'profile_picture' */]);
             $table->dropIndex(['kyc_status', 'kyc_account_id', 'kyc_customer_id', 'kyc_provider']);
         });
     }

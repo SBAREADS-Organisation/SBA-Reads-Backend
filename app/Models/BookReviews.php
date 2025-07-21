@@ -21,6 +21,7 @@ class BookReviews extends Model
 
     /**
      * Get the attributes that should be casted
+     *
      * @return array<string, string>
      */
     protected function casts()

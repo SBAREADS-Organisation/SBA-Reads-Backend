@@ -2,13 +2,13 @@
 
 namespace App\Services\Notification;
 
-use Illuminate\Support\Str;
+use App\Mail\Generic\GenericAppNotification;
 use App\Models\Notification;
 use App\Models\User;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\Generic\GenericAppNotification;
-use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
 class NotificationService
 {
@@ -75,7 +75,7 @@ class NotificationService
     protected function sendEmail(Notification $notification, $mailable = null)
     {
         // If a custom mailable is set on the notification, use it; otherwise, use the generic one
-        if (isset($mailable)/* && $notification->mailable instanceof \Illuminate\Mail\Mailable*/) {
+        if (isset($mailable)/* && $notification->mailable instanceof \Illuminate\Mail\Mailable */) {
             Mail::to($notification->user->email)->queue($mailable);
         } else {
             Mail::to($notification->user->email)->queue(
@@ -99,10 +99,9 @@ class NotificationService
         $notification->with('notifiable');
         $notification->update(['read_at' => now()]);
     }
+
     /**
      * Mark all notifications for a user as read.
-     *
-     * @param User $user
      */
     public function markAllAsRead(User $user): void
     {
@@ -114,10 +113,7 @@ class NotificationService
     /**
      * Get all notifications for a user with pagination, filtering, and search.
      *
-     * @param User $user
-     * @param array $filters ['status' => 'sent|pending', 'channel' => 'email|in-app|push', ...]
-     * @param string|null $search
-     * @param int $perPage
+     * @param  array  $filters  ['status' => 'sent|pending', 'channel' => 'email|in-app|push', ...]
      * @return \Illuminate\Contracts\Pagination\LengthAwarePaginator
      */
     public function getUserNotifications(
@@ -128,26 +124,26 @@ class NotificationService
     ) {
         $query = Notification::where('user_id', $user->id);
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('status', $filters['status']);
         }
 
-        if (!empty($filters['read'])) {
+        if (! empty($filters['read'])) {
             $query->where('read', $filters['read'] === 'true');
         }
 
-        if (!empty($filters['channel'])) {
+        if (! empty($filters['channel'])) {
             $query->whereJsonContains('channels', $filters['channel']);
         }
 
-        if (!empty($filters['notifiable_type'])) {
+        if (! empty($filters['notifiable_type'])) {
             $query->where('notifiable_type', $filters['notifiable_type']);
         }
 
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('title', 'like', "%{$search}%")
-                ->orWhere('message', 'like', "%{$search}%");
+                    ->orWhere('message', 'like', "%{$search}%");
             });
         }
 
@@ -158,9 +154,9 @@ class NotificationService
     }
 
     /**
-    * Get morph alias for a given model instance.
-    */
-    protected function getMorphAlias($model): string|null
+     * Get morph alias for a given model instance.
+     */
+    protected function getMorphAlias($model): ?string
     {
         $map = Relation::morphMap();
 
@@ -171,6 +167,7 @@ class NotificationService
 
         // Flip the morphMap to get alias by class
         $reversed = array_flip($map);
+
         return $reversed[get_class($model)] ?? null;
     }
 }

@@ -3,17 +3,18 @@
 namespace App\Http\Controllers\MediaUploader;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-// use App\Traits\ApiResponse;
-use Illuminate\Support\Facades\Validator;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
+// use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class MediaUploadController extends Controller
 {
     // use ApiResponse;
     protected $media_service;
 
-    public function __construct(CloudinaryMediaUploadService $media_service) {
+    public function __construct(CloudinaryMediaUploadService $media_service)
+    {
         $this->media_service = $media_service;
     }
 
@@ -22,7 +23,7 @@ class MediaUploadController extends Controller
         // $cloudinaryImage = $request->file('image')->storeOnCloudinary('products');
         $validator = Validator::make($request->all(), [
             'file' => 'required|file',
-            'context' => 'required|string'
+            'context' => 'required|string',
         ]);
 
         if ($validator->fails()) {

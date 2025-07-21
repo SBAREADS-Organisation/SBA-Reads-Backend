@@ -2,12 +2,11 @@
 
 namespace App\Console\Commands\Analytics;
 
-use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Mail;
 use App\Mail\Generic\GenericAppNotification;
-use App\Models\User;
 use App\Services\Analytics\AnalyticsService;
+use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 
 class GenerateAnalyticsReport extends Command
 {
@@ -26,8 +25,9 @@ class GenerateAnalyticsReport extends Command
         $format = $this->option('format');
         $email = $this->option('email');
 
-        if ($scope === 'user' && !$userId) {
+        if ($scope === 'user' && ! $userId) {
             $this->error('User ID is required for user scope.');
+
             return Command::FAILURE;
         }
 
@@ -39,7 +39,7 @@ class GenerateAnalyticsReport extends Command
         $report = $analyticsService->getAnalytics($user, $scope, $filters);
 
         // Format the report
-        $filePath = "reports/analytics_{$scope}_" . now()->format('Ymd_His') . ".{$format}";
+        $filePath = "reports/analytics_{$scope}_".now()->format('Ymd_His').".{$format}";
         $content = $format === 'csv'
             ? $this->toCsv($report)
             : json_encode($report, JSON_PRETTY_PRINT);
@@ -70,6 +70,6 @@ class GenerateAnalyticsReport extends Command
         $headers = implode(',', $flattened->keys()->all());
         $values = implode(',', $flattened->values()->all());
 
-        return $headers . "\n" . $values;
+        return $headers."\n".$values;
     }
 }

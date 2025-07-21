@@ -36,15 +36,18 @@ class Category extends Model
         ];
     }
 
-    public function parent() {
+    public function parent()
+    {
         return $this->belongsTo(Category::class, 'parent_id');
     }
 
-    public function children() {
+    public function children()
+    {
         return $this->hasMany(Category::class, 'parent_id');
     }
 
-    public function books() {
+    public function books()
+    {
         return $this->belongsToMany(Book::class, 'book_categories');
     }
 }

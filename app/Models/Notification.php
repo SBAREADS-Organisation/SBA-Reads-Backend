@@ -2,15 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\AsArrayObject;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Casts\AsArrayObject;
 
 class Notification extends Model
 {
     /** @use HasFactory<\Database\Factories\NotificationFactory> */
     use HasFactory;
+
     public $incrementing = false;
+
     protected $keyType = 'string';
 
     protected $fillable = [
@@ -26,7 +28,7 @@ class Notification extends Model
         'message',
         'status',
         'sent_at',
-        'read_at'
+        'read_at',
     ];
 
     protected $casts = [

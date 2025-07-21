@@ -12,8 +12,11 @@ class Address extends Model
 
     protected $fillable = [
         'user_id', 'full_name', 'address', 'city',
-        'region', 'country', 'postal_code', 'phone_number', 'is_default'
+        'region', 'country', 'postal_code', 'phone_number', 'is_default',
     ];
 
-    public function user() { return $this->belongsTo(User::class); }
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

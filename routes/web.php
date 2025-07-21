@@ -7,5 +7,5 @@ Route::get('/', function () {
 });
 
 Route::get('/test-form', function () {
-    return view('new');     
+    return view('new');
 });
