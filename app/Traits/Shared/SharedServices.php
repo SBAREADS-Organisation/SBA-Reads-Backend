@@ -9,16 +9,15 @@ trait SharedServices
 {
     //
     protected ?CloudinaryMediaUploadService $cloudinaryService = null;
+
     protected ?NotificationService $notificationService = null;
 
     /**
      * Get the Notification service instance.
-     *
-     * @return NotificationService
      */
     public function notifier(): NotificationService
     {
-        if (!$this->notificationService) {
+        if (! $this->notificationService) {
             $this->notificationService = app(NotificationService::class);
         }
 
@@ -27,12 +26,10 @@ trait SharedServices
 
     /**
      * Get the Cloudinary media upload service instance.
-     *
-     * @return CloudinaryMediaUploadService
      */
     public function mediaUploader(): CloudinaryMediaUploadService
     {
-        if (!$this->cloudinaryService) {
+        if (! $this->cloudinaryService) {
             $this->cloudinaryService = app(CloudinaryMediaUploadService::class);
         }
 

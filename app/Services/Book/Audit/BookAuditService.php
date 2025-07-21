@@ -5,9 +5,6 @@ namespace App\Services\Book\Audit;
 use App\Models\Book;
 use App\Models\BookAudit;
 use App\Models\User;
-use Illuminate\Support\Str;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use App\Traits\ApiResponse;
 
 class BookAuditService
@@ -30,7 +27,6 @@ class BookAuditService
     /**
      * Get all BookAudits for a given book_id, including the book_id.
      *
-     * @param int $bookId
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getAuditsByBookId(int $bookId)
@@ -43,9 +39,6 @@ class BookAuditService
     /**
      * Update the status of a book with role-based restrictions.
      *
-     * @param Book $book
-     * @param User $user
-     * @param string $status
      * @return bool
      */
     public function updateBookStatus(Book $book, User $user, string $status)
@@ -56,12 +49,12 @@ class BookAuditService
 
         if ($user->id === $book->author_id) {
             // Author can only set allowed statuses
-            if (!in_array($status, $authorAllowed)) {
+            if (! in_array($status, $authorAllowed)) {
                 return $this->error('Unauthorized status change.');
             }
         } elseif ($user->is_admin) {
             // Admin can only set allowed statuses
-            if (!in_array($status, $adminAllowed)) {
+            if (! in_array($status, $adminAllowed)) {
                 return $this->error('Unauthorized status change.');
             }
         } else {

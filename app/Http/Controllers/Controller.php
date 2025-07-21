@@ -10,6 +10,7 @@ abstract class Controller
 {
     //
     use ApiResponse, SharedServices, SlackNotifiable;
+
     /**
      * Controller constructor.
      */

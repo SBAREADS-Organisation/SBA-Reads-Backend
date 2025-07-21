@@ -14,14 +14,16 @@ class CategoryController extends Controller
 {
     protected CategoryService $service;
 
-    public function __construct(CategoryService $service) {
+    public function __construct(CategoryService $service)
+    {
         // $this->middleware('auth:sanctum');
         // $this->middleware('role:admin')->except(['index','show']);
         $this->service = $service;
     }
 
     // GET /categories
-    public function index() {
+    public function index()
+    {
         try {
             $tree = $this->service->allTree();
 
@@ -41,9 +43,10 @@ class CategoryController extends Controller
     }
 
     // GET /categories/{id}
-    public function show(Category $category) {
+    public function show(Category $category)
+    {
         try {
-            if (!$category) {
+            if (! $category) {
                 return $this->error('Category not found', 404, null);
             }
 
@@ -62,7 +65,8 @@ class CategoryController extends Controller
     }
 
     // POST /categories
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         try {
             $validator = Validator::make($request->all(), [
                 'categories' => 'required|array',
@@ -100,7 +104,8 @@ class CategoryController extends Controller
     }
 
     // PUT /categories/{id}
-    public function update(Request $request, Category $category) {
+    public function update(Request $request, Category $category)
+    {
         try {
             $validator = Validator::make($request->all(), [
                 'name' => "required|string|unique:categories,name,{$category->id}",
@@ -130,7 +135,8 @@ class CategoryController extends Controller
     }
 
     // DELETE /categories/{id}
-    public function destroy(Category $category) {
+    public function destroy(Category $category)
+    {
         try {
             $category->delete();
 

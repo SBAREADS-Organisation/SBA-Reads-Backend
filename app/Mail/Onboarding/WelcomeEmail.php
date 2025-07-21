@@ -9,11 +9,12 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeEmail extends Mailable //implements ShouldQueue
+class WelcomeEmail extends Mailable // implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
     public string $name;
+
     public string $accountType;
 
     /**

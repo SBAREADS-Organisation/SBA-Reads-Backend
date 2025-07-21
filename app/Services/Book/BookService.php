@@ -4,28 +4,28 @@ namespace App\Services\Book;
 
 use App\Models\Book;
 use App\Models\User;
+use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Str;
-use Illuminate\Support\Arr;
 use Illuminate\Http\UploadedFile;
-use App\Services\Cloudinary\CloudinaryMediaUploadService;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class BookService
 {
     use ApiResponse;
+
     private PaymentService $paymentService;
 
-    public function __construct(protected CloudinaryMediaUploadService $cloudinaryMediaService, PaymentService $paymentService) {
+    public function __construct(protected CloudinaryMediaUploadService $cloudinaryMediaService, PaymentService $paymentService)
+    {
         $this->paymentService = $paymentService;
     }
+
     /**
      * Create multiple books in a transaction.
-     *
-     * @param array $booksData
-     * @return array
      */
     public function createBooks(array $booksData): array
     {
@@ -64,13 +64,13 @@ class BookService
     }
 
     /**
-    * Create multiple books in a transaction.
-    */
+     * Create multiple books in a transaction.
+     */
     public function createMultiple(array $booksData)
     {
         return DB::transaction(function () use ($booksData) {
             return collect($booksData)
-                ->map(fn($data) => $this->createSingle($data))
+                ->map(fn ($data) => $this->createSingle($data))
                 ->all();
         });
     }
@@ -87,8 +87,8 @@ class BookService
         $mediaUploadIds = [];
 
         // Merge pricing fields (if any)
-        if (!empty($data['pricing'])) {
-            $data['actual_price']     = $data['pricing']['actual_price'] ?? null;
+        if (! empty($data['pricing'])) {
+            $data['actual_price'] = $data['pricing']['actual_price'] ?? null;
             $data['discounted_price'] = $data['pricing']['discounted_price'] ?? null;
         }
 
@@ -104,7 +104,7 @@ class BookService
         }
 
         // Upload each file in 'files' array
-        if (!empty($data['files']) && is_array($data['files'])) {
+        if (! empty($data['files']) && is_array($data['files'])) {
             $uploadedFiles = [];
             foreach ($data['files'] as $file) {
                 if ($file instanceof UploadedFile) {
@@ -127,12 +127,12 @@ class BookService
         $book = Book::create($attrs);
 
         // Sync authors pivot
-        if (!empty($data['authors'] ?? null)) {
+        if (! empty($data['authors'] ?? null)) {
             $book->authors()->sync($data['authors']);
         }
 
         // Sync categories pivot
-        if (!empty($data['categories'] ?? null)) {
+        if (! empty($data['categories'] ?? null)) {
             $book->categories()->sync($data['categories']);
         }
 
@@ -165,7 +165,7 @@ class BookService
         $transaction = $this->paymentService->createPayment([
             'amount' => $total,
             'currency' => 'usd',
-            'description' => "Digital books purchase",
+            'description' => 'Digital books purchase',
             'purpose' => 'digital_book_purchase',
             'purpose_id' => 0,
             'meta_data' => [
@@ -176,6 +176,7 @@ class BookService
 
         if ($transaction instanceof JsonResponse) {
             $responseData = $transaction->getData(true);
+
             return $this->error(
                 'An error occurred while initiating the books purchase process.',
                 $transaction->getStatusCode(),
@@ -186,7 +187,7 @@ class BookService
         return $this->success(
             [
                 'transaction' => $transaction,
-                'book_ids' => $bookIds
+                'book_ids' => $bookIds,
             ],
             'Books purchase process initiated successfully.'
         );

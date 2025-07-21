@@ -13,12 +13,12 @@ class Order extends Model
 
     public static function generateTrackingNumber()
     {
-        return 'TRK-' . strtoupper(Str::random(4)) . '-' . time();
+        return 'TRK-'.strtoupper(Str::random(4)).'-'.time();
     }
 
     protected $fillable = [
         'user_id', 'total_amount', 'status', 'transaction_id',
-        'tracking_number', 'delivery_address_id', 'delivered_at'
+        'tracking_number', 'delivery_address_id', 'delivered_at',
     ];
 
     /**
@@ -33,16 +33,28 @@ class Order extends Model
         ];
     }
 
-    public function user() { return $this->belongsTo(User::class); }
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
-    public function items() { return $this->hasMany(OrderItem::class); }
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
 
-    public function transaction() { return $this->belongsTo(Transaction::class, 'transaction_id', 'id'); }
+    public function transaction()
+    {
+        return $this->belongsTo(Transaction::class, 'transaction_id', 'id');
+    }
 
     // public function purpose()
     // {
     //     return $this->morphOne(Transaction::class, 'purpose');
     // }
 
-    public function deliveryAddress() { return $this->belongsTo(Address::class); }
+    public function deliveryAddress()
+    {
+        return $this->belongsTo(Address::class);
+    }
 }

@@ -5,12 +5,14 @@ namespace App\Services\Orders;
 use App\Models\Book;
 use App\Models\Order;
 use App\Models\OrderItem;
-use App\Models\Transaction;
 use App\Services\Payments\PaymentService;
+use App\Traits\ApiResponse;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    use ApiResponse;
     protected $paymentService;
 
     public function __construct(PaymentService $paymentService)
@@ -28,7 +30,7 @@ class OrderService
                 'delivery_address_id' => $payload->delivery_address_id,
                 'total_amount' => 0,
                 'status' => 'pending',
-                'tracking_number' => Order::generateTrackingNumber()
+                'tracking_number' => Order::generateTrackingNumber(),
             ]);
 
             $total = 0;
@@ -55,7 +57,7 @@ class OrderService
             $transaction = $this->paymentService->createPayment([
                 'amount' => $total,
                 'currency' => $book->currency ?? $book->currency[0] ?? 'usd',
-                'description' => "Books purchase",
+                'description' => 'Book order',
                 'purpose' => 'order',
                 'purpose_id' => $order->id,
                 'meta_data' => [
@@ -64,26 +66,26 @@ class OrderService
                 ],
             ], $user);
 
-            if (isset($transaction->error)) {
-                // Rollback the subscription creation if payment fails
-                DB::rollBack();
-                return response()->json([
-                    'data' => null,
-                    'code' => 400,
-                    'message' => $transaction->error,
-                    'error' => $transaction->error,
-                ], 400);
+            if ($transaction instanceof JsonResponse) {
+                $responseData = $transaction->getData(true);
+
+                return $this->error(
+                    'An error occurred while initiating the books order process.',
+                    $transaction->getStatusCode(),
+                    $responseData['error'] ?? 'Unknown error from payment service.'
+                );
             }
 
             $order->update(['transaction_id' => $transaction->id]);
 
-
             DB::commit();
 
-            return ['order' => $order, 'transaction' => $transaction];
+            return $this->success(
+                ['order' => $order, 'transaction' => $transaction],
+                'Order created successfully. Please proceed to payment.');
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new \Exception("An error occurred while creating the order: " . $e->getMessage(), 0, $e);
+            throw new \Exception('An error occurred while creating the order: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -92,7 +94,7 @@ class OrderService
         try {
             return Order::where('tracking_number', $tracking_number)->with('items.book')->firstOrFail();
         } catch (\Exception $e) {
-            throw new \Exception("An error occurred while tracking the order: " . $e->getMessage(), 0, $e);
+            throw new \Exception('An error occurred while tracking the order: '.$e->getMessage(), 0, $e);
             // throw $e;
         }
     }

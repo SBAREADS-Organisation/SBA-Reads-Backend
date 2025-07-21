@@ -10,9 +10,10 @@ class SlackWebhookService
     {
         $webhookUrl = config('logging.channels.slack.webhook_url') ?? config('logging.slack.webhook_url');
 
-        if (!$webhookUrl) {
+        if (! $webhookUrl) {
             // dd('Slack webhook URL is not set. Skipping Slack notification.'.' '.$webhookUrl);
             logger()->warning('Slack webhook URL is not set. Skipping Slack notification.');
+
             return;
         }
 
@@ -28,18 +29,18 @@ class SlackWebhookService
         $icon = config('logging.channels.slack.icon') ?? config('logging.slack.icon', ':ghost:');
 
         $payload = [
-            'channel'    => $channel,
-            'username'   => $username,
+            'channel' => $channel,
+            'username' => $username,
             'icon_emoji' => $icon,
             'attachments' => [[
-                'color'  => $color,
-                'title'  => $title,
+                'color' => $color,
+                'title' => $title,
                 'fields' => array_map(fn ($key, $value) => [
                     'title' => ucfirst($key),
                     'value' => is_string($value) ? $value : json_encode($value, JSON_PRETTY_PRINT),
-                    'short' => false
+                    'short' => false,
                 ], array_keys($data), $data),
-                'ts'     => time(),
+                'ts' => time(),
             ]],
         ];
 

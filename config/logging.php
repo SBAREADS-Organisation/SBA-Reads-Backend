@@ -4,7 +4,6 @@ use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
-use Monolog\Handler\SlackWebhookHandler;
 
 return [
 
@@ -75,7 +74,7 @@ return [
         ],
 
         'slack' => [
-            'driver' => 'custom',//'driver' => 'slack',
+            'driver' => 'custom', // 'driver' => 'slack',
             'via' => App\Services\Slack\SlackWebhookService::class,
             'webhook_url' => env('LOG_SLACK_WEBHOOK_URL'),
             'channel' => env('LOG_SLACK_CHANNEL', '#general'),
@@ -83,7 +82,7 @@ return [
             'username' => env('LOG_SLACK_USERNAME', 'Laravel Log'),
             'emoji' => env('LOG_SLACK_EMOJI', ':boom:'),
             'icon' => env('LOG_SLACK_ICON', ':ghost:'),
-            'level' => 'critical',//env('LOG_LEVEL', 'critical'),
+            'level' => 'critical', // env('LOG_LEVEL', 'critical'),
             'replace_placeholders' => true,
         ],
 

@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Validator;
 class BookController extends Controller
 {
     protected BookService $service;
+
     private $rules;
 
     // use ApiResponse;
@@ -94,9 +95,9 @@ class BookController extends Controller
     {
         try {
             // $cacheKey = 'books_' . md5(json_encode($request->all()));
-            $cacheKey = 'books_' . md5($request->fullUrl());
+            $cacheKey = 'books_'.md5($request->fullUrl());
             $books = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
-                $query = Book::query()->with(['authors', /*'author_id',*/ 'categories', /*'category',*/ 'reviews', 'analytics']);
+                $query = Book::query()->with(['authors', /* 'author_id', */ 'categories', /* 'category', */ 'reviews', 'analytics']);
                 $query->where('status', 'approved');
                 $query->where('visibility', 'public');
                 $query->where('deleted', false);
@@ -165,6 +166,7 @@ class BookController extends Controller
 
                 // 📄 PAGINATION
                 $perPage = $request->input('items_per_page', 20);
+
                 return $query->paginate($perPage);
             });
 
@@ -203,7 +205,7 @@ class BookController extends Controller
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'New Book Created',
-                    'Your book "' . $book->title . '" has been created successfully.',
+                    'Your book "'.$book->title.'" has been created successfully.',
                     ['in-app', 'email'],
                     $book,
                     new BookCreatedNotification(
@@ -211,7 +213,7 @@ class BookController extends Controller
                         User::find($book->author_id)->name ?? 'Author'
                     ),
                 );
-            };
+            }
 
             return $this->success(
                 BookResource::collection($created),
@@ -258,7 +260,7 @@ class BookController extends Controller
             return $this->success(
                 [
                     'book' => new BookResource($book),
-                    'similar_books' => BookResource::collection($similarBooks)
+                    'similar_books' => BookResource::collection($similarBooks),
                 ],
                 'Book details retrieved successfully.',
                 200
@@ -330,7 +332,7 @@ class BookController extends Controller
         // Check if the book exists
         $book = Book::findOrFail($bookId);
 
-        if (!$book) {
+        if (! $book) {
             return $this->error(
                 'Book not found',
                 404
@@ -368,7 +370,7 @@ class BookController extends Controller
                 'bookmarks' => json_encode($validated['bookmarks'] ?? []),
                 'session_duration' => json_encode($validated['session_duration'] ?? []),
                 'last_accessed' => now(),
-                'last_read_at' => now()
+                'last_read_at' => now(),
             ]
         );
 
@@ -389,7 +391,7 @@ class BookController extends Controller
             $key = "milestone_{$milestone}_notified";
             $progressKey = "book_{$book->id}_{$key}";
 
-            if ($progress >= $milestone && !cache()->has($progressKey)) {
+            if ($progress >= $milestone && ! cache()->has($progressKey)) {
                 // TODO: Send notification (Firebase, email, etc.)
                 $this->notifier()->send(
                     $user,
@@ -410,7 +412,7 @@ class BookController extends Controller
     {
         try {
             $user = $request->user();
-            $cacheKey = 'user_reading_progress_' . $user->id . '_' . md5(json_encode($request->all()));
+            $cacheKey = 'user_reading_progress_'.$user->id.'_'.md5(json_encode($request->all()));
 
             $progress = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user, $request) {
                 $query = ReadingProgress::with([
@@ -467,7 +469,7 @@ class BookController extends Controller
         $user_id = $request->user()->id;
         $validation = Validator::make($request->all(), [
             'rating' => 'required|integer|min:1|max:5',
-            'comment' => 'nullable|string'
+            'comment' => 'nullable|string',
         ]);
 
         if ($validation->fails()) {
@@ -480,7 +482,7 @@ class BookController extends Controller
 
         // Check if the book exists
         $book = Book::find($bookId);
-        if (!$book) {
+        if (! $book) {
             return $this->error(
                 'Book not found',
                 404
@@ -521,7 +523,7 @@ class BookController extends Controller
             "Your book '{$book->title}' has received a new review.",
             ['in-app', 'email'], // push notifications can be added later(push)
             $book,
-        // new \App\Notifications\Book\BookReviewed($review)
+            // new \App\Notifications\Book\BookReviewed($review)
         );
 
         return $this->success(
@@ -541,7 +543,7 @@ class BookController extends Controller
 
         // Do not allow use to bookmark their own book
         $book = Book::find($bookId);
-        if (!$book) {
+        if (! $book) {
             return $this->error(
                 'Book not found',
                 404
@@ -598,7 +600,7 @@ class BookController extends Controller
                     'authors:id,name',
                     'categories:id,name',
                     'analytics:id,book_id,views,downloads,likes',
-                    'readingProgress' => fn($q) => $q->where('user_id', $user->id)
+                    'readingProgress' => fn ($q) => $q->where('user_id', $user->id),
                 ]);
 
             if ($search) {
@@ -626,13 +628,13 @@ class BookController extends Controller
                         'current_page' => $books->currentPage(),
                         'last_page' => $books->lastPage(),
                         'total' => $books->total(),
-                    ]
+                    ],
                 ],
                 'Bookmarks retrieved successfully',
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             // Log::error('Error fetching bookmarks: ' . $th->getMessage());
             return $this->error(
@@ -652,7 +654,7 @@ class BookController extends Controller
 
             // Check if the book exists
             $book = Book::find($bookId);
-            if (!$book) {
+            if (! $book) {
                 return $this->error(
                     'Book not found',
                     404
@@ -661,7 +663,7 @@ class BookController extends Controller
 
             // Check if the user has already bookmarked this book
             $existingBookmark = $user->bookmarks()->where('book_id', $bookId)->first();
-            if (!$existingBookmark) {
+            if (! $existingBookmark) {
                 return $this->error(
                     'You have not bookmarked this book',
                     409
@@ -676,7 +678,7 @@ class BookController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // Log::error('Error removing bookmark: ' . $th->getMessage());
             return $this->error(
                 'Failed to remove bookmark',
@@ -702,7 +704,7 @@ class BookController extends Controller
     {
         try {
             $validator = validator($request->all(), [
-                'reason' => 'required|string|max:255'
+                'reason' => 'required|string|max:255',
             ]);
 
             if ($validator->fails()) {
@@ -715,7 +717,7 @@ class BookController extends Controller
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'New Book Created',
-                    'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
+                    'Your book "'.$book->title.'" has been deleted. Reason: '.$request->input('reason'),
                     ['in-app', 'email'],
                     $book,
                     new BookDeleted(
@@ -737,7 +739,6 @@ class BookController extends Controller
     /**
      * Extracts preview details (such as table of contents) from an uploaded PDF book file.
      *
-     * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function extractPreview(Request $request)
@@ -757,7 +758,7 @@ class BookController extends Controller
 
             $absolutePath = storage_path("app/private/{$path}");
 
-            $pdfService = new PdfTocExtractorService();
+            $pdfService = new PdfTocExtractorService;
             $extracted = $pdfService->extractBookDetails(storage_path("app/private/{$path}"));
 
             // Delete temp file after processing
@@ -824,8 +825,7 @@ class BookController extends Controller
     /**
      * Handle book audit actions: request review changes, approve, or decline a book.
      *
-     * @param \Illuminate\Http\Request $request
-     * @param int $bookId
+     * @param  int  $bookId
      * @return \Illuminate\Http\JsonResponse
      */
     public function auditAction(Request $request, $action, $bookId)
@@ -913,7 +913,7 @@ class BookController extends Controller
             }
 
             if ($action === 'decline' || $action === 'decline_with_review') {
-                if (!$reviewNotes) {
+                if (! $reviewNotes) {
                     return $this->error('Review notes are required to decline a book.');
                 }
                 $book->status = 'declined';
@@ -974,7 +974,6 @@ class BookController extends Controller
         }
     }
 
-
     public function purchaseBooks(Request $request)
     {
         try {
@@ -1002,10 +1001,11 @@ class BookController extends Controller
                 }
 
                 $conflictingBooks = Book::whereIn('id', $alreadyOwnedIds)->pluck('title')->implode(', ');
-                return $this->error('You already own the following book(s): ' . $conflictingBooks, 409);
+
+                return $this->error('You already own the following book(s): '.$conflictingBooks, 409);
             }
 
-//            $user->purchasedBooks()->attach($bookIds);
+            //            $user->purchasedBooks()->attach($bookIds);
             return $this->service->purchaseBooks($bookIds, $user);
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {

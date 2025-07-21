@@ -2,19 +2,19 @@
 
 namespace App\Services\Book;
 
-use Smalot\PdfParser\Parser;
-use LanguageDetection\Language;
 use Illuminate\Support\Facades\Cache;
+use LanguageDetection\Language;
+use Smalot\PdfParser\Parser;
 
 class PdfTocExtractorService
 {
     public function extractBookDetails(string $pdfPath): array
     {
         // Use file hash as cache key
-        $cacheKey = 'pdf_table_of_content_' . md5_file($pdfPath);
+        $cacheKey = 'pdf_table_of_content_'.md5_file($pdfPath);
 
         return Cache::remember($cacheKey, now()->addHours(12), function () use ($pdfPath) {
-            $parser = new Parser();
+            $parser = new Parser;
             $pdf = $parser->parseFile($pdfPath);
             $text = $pdf->getText();
             // Get total Number of pages
@@ -83,8 +83,9 @@ class PdfTocExtractorService
     {
         $intro = '';
         foreach (array_slice($pdf->getPages(), 0, 2) as $page) {
-            $intro .= "\n" . $page->getText();
+            $intro .= "\n".$page->getText();
         }
+
         return $intro;
     }
 
@@ -99,6 +100,7 @@ class PdfTocExtractorService
 
         $lines = explode("\n", strip_tags($introText));
         $descriptionLines = array_slice(array_filter(array_map('trim', $lines)), 2, 5);
+
         return implode(' ', $descriptionLines);
     }
 
@@ -107,6 +109,7 @@ class PdfTocExtractorService
         try {
             $languageDetector = new Language;
             $results = $languageDetector->detect($text)->bestResults()->close();
+
             return $results[0] ?? null;
         } catch (\Throwable $e) {
             return null;
@@ -161,12 +164,15 @@ class PdfTocExtractorService
             }
 
             // Start collecting when TOC-like keyword is found
-            if (!$startCollecting) {
-                if ($trimmed === '') continue;
+            if (! $startCollecting) {
+                if ($trimmed === '') {
+                    continue;
+                }
                 foreach ($tocKeywords as $keyword) {
                     if ($normalized === strtolower($keyword)) {
                         // dd('HERE>>>>', true, $trimmed, $normalized, $keyword);
                         $startCollecting = true;
+
                         continue 2;
                     }
                 }
@@ -187,6 +193,7 @@ class PdfTocExtractorService
                     preg_match('/^appendix\s+[A-Z]+\s+.+\d+$/i', $trimmed) // Appendix A Something 120
                 ) {
                     $tocLines[] = $trimmed;
+
                     continue;
                 }
 
@@ -194,18 +201,21 @@ class PdfTocExtractorService
                 if (preg_match('/^(\d+(?:\.\d+)*)(?:\s+|\s*\.{2,}\s*)(.+?)\s+(\d+)$/', $trimmed, $m)) {
                     // m[1]=index, m[2]=title, m[3]=page
                     $tocLines[] = $trimmed;
+
                     continue;
                 }
 
                 // 3b) Appendices (Appendix A, Appendix B3, etc.)
                 if (preg_match('/^(Appendix\s+[A-Z0-9]+)\s+(.+?)\s+(\d+)$/i', $trimmed, $m)) {
                     $tocLines[] = $trimmed;
+
                     continue;
                 }
 
                 // 3c) Roman numeral chapters: I, II, III, etc.
                 if (preg_match('/^([IVXLCDM]+)\s+(.+?)\s+(\d+)$/i', $trimmed, $m)) {
                     $tocLines[] = $trimmed;
+
                     continue;
                 }
             }
@@ -226,7 +236,9 @@ class PdfTocExtractorService
 
         foreach ($lines as $line) {
             $line = trim(preg_replace('/\s+/', ' ', $line)); // normalize spaces
-            if (empty($line) || isset($seen[$line])) continue;
+            if (empty($line) || isset($seen[$line])) {
+                continue;
+            }
             $seen[$line] = true;
 
             // Remove dot leaders (e.g., ". . . . . . .")
@@ -267,49 +279,48 @@ class PdfTocExtractorService
     }
 
     private function buildHierarchy(array $entries): array
-{
-    $tree = [];
-    $stack = [];
+    {
+        $tree = [];
+        $stack = [];
 
-    foreach ($entries as $entry) {
-        // Create the node
-        $node = [
-            'section'  => $entry['section'],
-            'title'    => $entry['title'],
-            'page'     => $entry['page'],
-            'children' => [],
-        ];
+        foreach ($entries as $entry) {
+            // Create the node
+            $node = [
+                'section' => $entry['section'],
+                'title' => $entry['title'],
+                'page' => $entry['page'],
+                'children' => [],
+            ];
 
-        // Compute depth from number of dots in section
-        $depth = substr_count($entry['section'], '.');
+            // Compute depth from number of dots in section
+            $depth = substr_count($entry['section'], '.');
 
-        // Pop any stack entries that are at or deeper than current
-        while (!empty($stack) && $stack[count($stack) - 1]['depth'] >= $depth) {
-            array_pop($stack);
+            // Pop any stack entries that are at or deeper than current
+            while (! empty($stack) && $stack[count($stack) - 1]['depth'] >= $depth) {
+                array_pop($stack);
+            }
+
+            if (empty($stack)) {
+                // No parent → top-level
+                $tree[] = $node;
+                // Push to stack as last top-level node
+                $stack[] = ['depth' => $depth, 'ref' => &$tree[count($tree) - 1]];
+            } else {
+                // The parent is the last item on the stack
+                $parent = &$stack[count($stack) - 1]['ref']['children'];
+                $parent[] = $node;
+                // Push this new node onto the stack
+                $stack[] = ['depth' => $depth, 'ref' => &$parent[count($parent) - 1]];
+            }
+
+            // Unset the temporary reference
+            unset($node);
         }
 
-        if (empty($stack)) {
-            // No parent → top-level
-            $tree[] = $node;
-            // Push to stack as last top-level node
-            $stack[] = ['depth' => $depth, 'ref' => &$tree[count($tree) - 1]];
-        } else {
-            // The parent is the last item on the stack
-            $parent =& $stack[count($stack) - 1]['ref']['children'];
-            $parent[] = $node;
-            // Push this new node onto the stack
-            $stack[] = ['depth' => $depth, 'ref' => &$parent[count($parent) - 1]];
-        }
+        // dd('TREEE>>>>', $tree);
 
-        // Unset the temporary reference
-        unset($node);
+        return $tree;
     }
-
-    // dd('TREEE>>>>', $tree);
-
-    return $tree;
-}
-
 
     private function buildTocTree(array $toc): array
     {
@@ -320,7 +331,7 @@ class PdfTocExtractorService
             $node = $entry;
             $node['children'] = [];
 
-            while (!empty($stack) && $stack[count($stack) - 1]['level'] >= $node['level']) {
+            while (! empty($stack) && $stack[count($stack) - 1]['level'] >= $node['level']) {
                 array_pop($stack);
             }
 

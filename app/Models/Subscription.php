@@ -8,7 +8,7 @@ class Subscription extends Model
 {
     //
     protected $fillable = [
-        'title', 'price', 'duration_in_days', 'perks', 'model', 'currencies'
+        'title', 'price', 'duration_in_days', 'perks', 'model', 'currencies',
     ];
 
     /**

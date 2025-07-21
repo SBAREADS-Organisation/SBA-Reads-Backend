@@ -8,6 +8,7 @@ class Transaction extends Model
 {
     //
     public $incrementing = false;
+
     protected $keyType = 'string';
     // Add transaction_id from Transaction  model
 

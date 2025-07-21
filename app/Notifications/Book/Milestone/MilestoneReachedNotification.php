@@ -3,7 +3,6 @@
 namespace App\Notifications\Book\Milestone;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -12,6 +11,7 @@ class MilestoneReachedNotification extends Notification
     use Queueable;
 
     protected $book;
+
     protected $milestone;
 
     /**
@@ -46,7 +46,6 @@ class MilestoneReachedNotification extends Notification
                 'milestone' => $this->milestone,
             ]);
     }
-
 
     /**
      * Get the array representation of the notification.

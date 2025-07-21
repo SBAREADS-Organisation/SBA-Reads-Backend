@@ -25,6 +25,7 @@ class BookMetaDataAnalytics extends Model
 
     /**
      * Get the attributes that should be casted
+     *
      * @return array<string, string>
      */
     protected function casts()
@@ -37,7 +38,8 @@ class BookMetaDataAnalytics extends Model
         ];
     }
 
-    public function book() {
+    public function book()
+    {
         return $this->belongsTo(Book::class);
     }
 }

@@ -7,9 +7,9 @@ use App\Services\Orders\OrderService;
 use App\Services\Payments\PaymentService;
 use App\Services\Stripe\StripeConnectService;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Support\ServiceProvider;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {

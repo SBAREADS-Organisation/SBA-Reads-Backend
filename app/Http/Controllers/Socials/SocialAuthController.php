@@ -3,18 +3,16 @@
 namespace App\Http\Controllers\Socials;
 
 use App\Http\Controllers\Controller;
+use App\Mail\Login\LoginNotification;
 use App\Models\User;
-use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 /**
  * @method static \Laravel\Socialite\Contracts\Provider stateless()
  */
-use Laravel\Socialite\Facades\Socialite;
-use Spatie\Permission\Models\Role;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\Login\LoginNotification;
+use Illuminate\Support\Str;
+use Laravel\Socialite\Facades\Socialite;
+use Spatie\Permission\Models\Role;
 
 class SocialAuthController extends Controller
 {
@@ -41,16 +39,16 @@ class SocialAuthController extends Controller
      */
     public function redirect($provider)
     {
-        if (!in_array($provider, ['google', 'facebook'])) {
+        if (! in_array($provider, ['google', 'facebook'])) {
             return response()->json([
                 'data' => null,
                 'code' => 400,
-                'message' => 'Invalid provider'
+                'message' => 'Invalid provider',
             ], 400);
         }
 
         return response()->json([
-            'url' => Socialite::driver($provider)->stateless()->redirect()->getTargetUrl()
+            'url' => Socialite::driver($provider)->stateless()->redirect()->getTargetUrl(),
         ]);
     }
 
@@ -69,7 +67,7 @@ class SocialAuthController extends Controller
             // Check if user already exists
             $user = User::where('email', $socialUser->getEmail())->first();
 
-            if (!$user) {
+            if (! $user) {
                 // Create a new user
                 $user = User::create([
                     'name' => $socialUser->getName(),
@@ -107,7 +105,7 @@ class SocialAuthController extends Controller
                 'data' => null,
                 'code' => 500,
                 'message' => 'Authentication failed',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }

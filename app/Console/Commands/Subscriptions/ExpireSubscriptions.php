@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands\Subscriptions;
 
-use Illuminate\Console\Command;
 use App\Models\UserSubscription;
+use Illuminate\Console\Command;
 
 class ExpireSubscriptions extends Command
 {
@@ -25,4 +25,3 @@ class ExpireSubscriptions extends Command
         $this->info('Expired subscriptions processed.');
     }
 }
-

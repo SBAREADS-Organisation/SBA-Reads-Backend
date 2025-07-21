@@ -1,21 +1,20 @@
 <?php
 
+use App\Http\Controllers\Address\AddressController;
 use App\Http\Controllers\Admin\AppVersion\AppVersionController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Book\BookController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\KYC\KYCController;
+use App\Http\Controllers\Notification\NotificationsController;
 use App\Http\Controllers\Order\OrderController;
 use App\Http\Controllers\Socials\SocialAuthController;
 use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
-use App\Http\Controllers\User\UserController;
-use App\Http\Controllers\Notification\NotificationsController;
-use App\Http\Controllers\Address\AddressController;
-use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Transaction\TransactionsController;
-use App\Http\Controllers\Admin\DashboardController;
-use App\Services\Stripe\StripeConnectService;
+use App\Http\Controllers\User\UserController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -24,7 +23,7 @@ use Illuminate\Support\Facades\Route;
 // Auth Routes
 Route::prefix('auth')->group(function () {
     // Login
-    Route::post('login', [AuthController::class, 'login'])->name('login');;
+    Route::post('login', [AuthController::class, 'login'])->name('login');
     // Route::post('/auth/login', [AuthController::class, 'login']);
 
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
@@ -39,7 +38,7 @@ Route::prefix('user')->group(function () {
     Route::get('/', [UserController::class, 'index']);
 
     // Superadmin creation route
-    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']); //->middleware('auth:sanctum');
+    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']); // ->middleware('auth:sanctum');
 
     Route::post('/register', [UserController::class, 'register']);
     Route::post('/verify-email', [UserController::class, 'verifyAuthorEmail'])->name('verify-email');
@@ -48,14 +47,14 @@ Route::prefix('user')->group(function () {
     // ================================================================================================================================================
     //                                                 ADMIN USER MANAGEMENT ROUTES
     // ================================================================================================================================================
-    Route::middleware(['auth:sanctum'])/*->prefix('')*/->group(function () {
+    Route::middleware(['auth:sanctum'])/* ->prefix('') */ ->group(function () {
         Route::middleware(['role:admin,superadmin'])->get('all', [UserController::class, 'allUsers']);
     });
 
     // ================================================================================================================================================
     //                                                  USER MANAGEMENT ROUTES
     // ================================================================================================================================================
-    Route::middleware(['auth:sanctum'])/*->prefix('user')*/->group(function () {
+    Route::middleware(['auth:sanctum'])/* ->prefix('user') */ ->group(function () {
         Route::prefix('profile')->group(function () {
             Route::get('/', [UserController::class, 'profile']);
             Route::post('/', [UserController::class, 'updateProfile']);
@@ -127,7 +126,7 @@ Route::prefix('subscriptions')->group(function () {
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
 // Books
-Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
+Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
     Route::post('books', [BookController::class, 'store']);
     Route::get('books', [BookController::class, 'index']);
@@ -156,9 +155,9 @@ Route::middleware([/*'auth:api', */'auth:sanctum'])->group(function () {
 
     // Categories
     Route::prefix('categories')->group(function () {
-        Route::get('/',    [CategoryController::class, 'index']);
+        Route::get('/', [CategoryController::class, 'index']);
         Route::get('/{category}', [CategoryController::class, 'show']);
-        Route::post('/',   [CategoryController::class, 'store']);
+        Route::post('/', [CategoryController::class, 'store']);
         Route::put('/{category}', [CategoryController::class, 'update']);
         Route::delete('/{category}', [CategoryController::class, 'destroy']);
     });
@@ -180,7 +179,7 @@ Route::middleware(['auth:sanctum'])->prefix('transaction')->group(function () {
     Route::get('/verify', [TransactionsController::class, 'verifyPayment']);
     Route::get('/my-transactions', [TransactionsController::class, 'getMyTransactions'])->name('my-transactions');
     Route::middleware(['role:admin,superadmin'])->get('/all', [TransactionsController::class, 'getAllTransactions']);
-    Route::get('/{id}', [TransactionsController::class, 'getTransaction']);/*->where('id', '[0-9]+');*/
+    Route::get('/{id}', [TransactionsController::class, 'getTransaction']); /* ->where('id', '[0-9]+'); */
 });
 
 // Analytics
@@ -203,7 +202,7 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->g
         Route::get('/', [SubscriptionController::class, 'available'])->name('subscriptions');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscription');
         Route::post('/', [SubscriptionController::class, 'store'])->name('create-subscription');
-        Route::put ('/{id}', [SubscriptionController::class, 'update'])->name('update-subscription');
+        Route::put('/{id}', [SubscriptionController::class, 'update'])->name('update-subscription');
         Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('delete-subscription');
     });
 
@@ -231,7 +230,7 @@ Route::get('migrate', function () {
 
         $connectionStatus = "Connected to host: {$host}, database: {$database}";
     } catch (\Exception $e) {
-        $connectionStatus = 'Could not connect to database: ' . $e->getMessage();
+        $connectionStatus = 'Could not connect to database: '.$e->getMessage();
     }
 
     return response()->json([
@@ -241,25 +240,26 @@ Route::get('migrate', function () {
     ]);
 });
 
-
 Route::get('seed', function () {
     Artisan::call('db:seed');
     $output = Artisan::output();
+
     return response()->json([
         'message' => 'Seeder run successfully',
         'code' => 200,
-        'output' => $output
+        'output' => $output,
     ], 200);
 });
 
 Route::get('clear', function () {
     Artisan::call('optimize:clear');
     $output = Artisan::output();
+
     return response()->json(
         [
             'message' => 'Cache cleared successfully',
             'code' => 200,
-            'output' => $output
+            'output' => $output,
         ],
         200
     );
@@ -269,30 +269,33 @@ Route::get('clear', function () {
 Route::get('routes', function () {
     Artisan::call('route:list');
     $output = Artisan::output();
+
     return response()->json([
         'data' => explode("\n", $output),
         'code' => 200,
-        'message' => 'Routes listed successfully'
+        'message' => 'Routes listed successfully',
     ], 200);
 });
 
 Route::get('storage-link', function () {
     Artisan::call('storage:link');
     $output = Artisan::output();
+
     return response()->json([
         'message' => 'Storage linked successfully',
         'code' => 200,
-        'output' => $output
+        'output' => $output,
     ], 200);
 });
 
 Route::get('optimize', function () {
     Artisan::call('optimize');
     $output = Artisan::output();
+
     return response()->json([
         'message' => 'Optimized successfully',
         'code' => 200,
-        'output' => $output
+        'output' => $output,
     ], 200);
 });
 
@@ -302,17 +305,17 @@ Route::get('key-generate', function () {
 
 Route::get('/debug-db', function () {
     try {
-        $data = DB::select("SELECT * FROM roles");
+        $data = DB::select('SELECT * FROM roles');
 
         return response()->json([
             'status' => 'success',
             'count' => count($data),
-            'data' => $data
+            'data' => $data,
         ], 200);
     } catch (\Throwable $th) {
         return response()->json([
             'status' => 'error',
-            'message' => $th->getMessage()
+            'message' => $th->getMessage(),
         ], 500);
     }
 });

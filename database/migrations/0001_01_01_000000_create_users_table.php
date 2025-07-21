@@ -2,8 +2,8 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -16,7 +16,7 @@ return new class extends Migration
             $table->id();
             $table->string('name')->nullable()->default('NO NAME');
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable()->default(DB::raw('CURRENT_TIMESTAMP'));;
+            $table->timestamp('email_verified_at')->nullable()->default(DB::raw('CURRENT_TIMESTAMP'));
             $table->enum('status', ['active', 'suspended', 'unverified', 'verified', 'pending', 'banned', 'rejected'])->default('active');
             $table->enum('account_type', ['reader', 'author', 'guest', 'superadmin', 'support', 'manager'])->default('guest');
             $table->json('profile_info')->nullable()->default('{}');

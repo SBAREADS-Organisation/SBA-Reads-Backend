@@ -7,12 +7,12 @@ use App\Mail\Login\LoginNotification;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
@@ -32,7 +32,7 @@ class AuthController extends Controller
             // Check if User Exists
             $user = User::where('email', $request->email)->first();
             // dd('User Password', $user->password, Hash::check($request->password, $user->password));
-            if (!$user || !Hash::check($request->password, $user->password)) {
+            if (! $user || ! Hash::check($request->password, $user->password)) {
                 return $this->error('Invalid credentials', 401);
             }
 
@@ -88,7 +88,7 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'role' => $user->getRoleNames()->first(),
                 'token' => $token,
-                'account_type' => $user->account_type,    
+                'account_type' => $user->account_type,
             ], 'Login successful', 200);
         } catch (\Exception $e) {
             // dd($e);
@@ -148,7 +148,7 @@ class AuthController extends Controller
 
             return $this->success(null, 'OTP sent to your email', 200);
         } catch (\Exception $e) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         } catch (\Throwable $th) {
             // Log the exception message
@@ -179,7 +179,7 @@ class AuthController extends Controller
             $storedOtp = Cache::get($key);
             logger($storedOtp);
 
-            if (!$storedOtp || $storedOtp['otp'] != $request->otp) {
+            if (! $storedOtp || $storedOtp['otp'] != $request->otp) {
                 return $this->error('Invalid or expired OTP', 400);
             }
 
@@ -194,7 +194,7 @@ class AuthController extends Controller
 
             return $this->success(null, 'OTP verified successfully', 200);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
@@ -212,14 +212,14 @@ class AuthController extends Controller
         try {
             // Validate Input
             $validator = Validator::make($request->all(), [
-                'email'    => ['required', 'email', 'exists:users,email'],
+                'email' => ['required', 'email', 'exists:users,email'],
                 'password' => [
                     'required',
                     'string',
                     'min:8',
                     'confirmed',
                     // Regex pattern: lookahead for lowercase, uppercase, digit, and special character
-                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/'
+                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/',
                 ],
             ]);
 
@@ -229,7 +229,7 @@ class AuthController extends Controller
 
             // Verify reset password permissions
             $reset_password_key = "reset_password_key:{$request->email}";
-            if (!Cache::get($reset_password_key)) {
+            if (! Cache::get($reset_password_key)) {
                 return $this->error('Invalid or expired password reset request', 400);
             }
 
@@ -249,7 +249,7 @@ class AuthController extends Controller
 
             return $this->success(null, 'Password reset successful', 200);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
             // Log the exception message
@@ -262,9 +262,10 @@ class AuthController extends Controller
     {
         try {
             $request->user()->tokens()->delete();
+
             return $this->success(null, 'Logged out successfully', 200);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
             // Log the exception message
@@ -296,7 +297,7 @@ class AuthController extends Controller
     {
         $details = [
             'subject' => 'Password Reset Successful',
-            'body' => "Your password was successfully reset on " . Carbon::now()->toDateTimeString(),
+            'body' => 'Your password was successfully reset on '.Carbon::now()->toDateTimeString(),
             'name' => $user->name ?? 'User',
         ];
 

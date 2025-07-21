@@ -2,32 +2,32 @@
 
 namespace App\Services\Stripe;
 
-use Stripe\Stripe;
-use Stripe\Account;
-use Stripe\Customer;
-use Stripe\File;
-use Stripe\Exception;
-use Stripe\AccountUpdateParams;
-use Stripe\PaymentMethod;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use App\Models\PaymentMethod as PaymentMethodModel;
 use App\Models\User;
-use Illuminate\Http\Request;
-use Stripe\Webhook;
 use App\Traits\ApiResponse;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Stripe\Account;
+use Stripe\Customer;
+use Stripe\Exception;
+use Stripe\File;
+use Stripe\PaymentMethod;
+use Stripe\Stripe;
+use Stripe\Webhook;
 
 class StripeConnectService
 {
     use ApiResponse;
+
     public function __construct()
     {
         Stripe::setApiKey(config('services.stripe.secret'));
     }
 
-    function arrayToObject($array)
+    public function arrayToObject($array)
     {
         return json_decode(json_encode($array));
     }
@@ -48,7 +48,7 @@ class StripeConnectService
                 //     'state' => $user->address->state,
                 //     'country' => strtoupper($user->address->country),
                 // ],
-                'description' => 'Customer for ' . $user->name || '',
+                'description' => 'Customer for '.$user->name || '',
                 'metadata' => [
                     'user_id' => $user->id,
                 ],
@@ -56,11 +56,12 @@ class StripeConnectService
 
             if ($customer instanceof Exception\InvalidRequestException) {
                 $error = $customer->getMessage();
+
                 return response()->json([
                     'message' => 'Error creating Stripe customer',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
             }
 
@@ -81,6 +82,7 @@ class StripeConnectService
             $payload = json_decode(json_encode($payload));
             $isNigeria = strtoupper($payload->country) === 'NG';
             $email = $user->email;
+
             // Wrap Stripe account creation in a database transaction
             return DB::transaction(function () use ($payload, $user, $email, $isNigeria) {
 
@@ -116,7 +118,7 @@ class StripeConnectService
                         'phone' => $payload->phone,
                         'relationship' => [
                             'owner' => true,
-                            'title' => 'CEO'
+                            'title' => 'CEO',
                         ],
                     ],
                     'tos_acceptance' => [
@@ -138,11 +140,12 @@ class StripeConnectService
                 // check is the response is type of Exception froom stripe
                 if ($account instanceof Exception\InvalidRequestException) {
                     $error = $account->getMessage();
+
                     return response()->json([
                         'message' => 'Error creating Stripe account',
                         'code' => 400,
                         'data' => null,
-                        'error' => $error
+                        'error' => $error,
                     ], 400);
                 }
 
@@ -151,7 +154,7 @@ class StripeConnectService
                     'kyc_account_id' => $account->id,
                     'kyc_status' => 'document-required',
                     'kyc_provider' => 'stripe',
-                    'status' => 'pending'
+                    'status' => 'pending',
                 ]);
 
                 $user->kycInfo()->create([
@@ -183,7 +186,8 @@ class StripeConnectService
             $payload = json_decode(json_encode($payload));
             $isNigeria = strtoupper($payload->country) === 'NG';
             $email = $user->email;
-            return DB::transaction(function () use ($payload, $user, $email, $isNigeria) {
+
+            return DB::transaction(function () use ($payload, $user, $email) {
                 $account = Account::update(
                     $user->kyc_account_id,
                     [
@@ -212,22 +216,22 @@ class StripeConnectService
                 // check is the response is type of Exception froom stripe
                 if ($account instanceof Exception\InvalidRequestException) {
                     $error = $account->getMessage();
+
                     return response()->json([
                         'message' => 'Error updating Stripe account',
                         'code' => 400,
                         'data' => null,
-                        'error' => $error
+                        'error' => $error,
                     ], 400);
                     // return response()->json(['error' => $error], 400);
                 }
-
 
                 $user->update([
                     'name' => "$payload->first_name $payload->last_name",
                     'kyc_account_id' => $account->id,
                     'kyc_status' => 'document-required',
                     'kyc_provider' => 'stripe',
-                    'status' => 'pending'
+                    'status' => 'pending',
                 ]);
 
                 $user->kycInfo()->updateOrCreate(
@@ -266,11 +270,12 @@ class StripeConnectService
 
             if ($file instanceof Exception\InvalidRequestException) {
                 $error = $file->getMessage();
+
                 return response()->json([
                     'message' => 'Error creating Stripe file',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
                 // return response()->json(['error' => $error], 400);
             }
@@ -282,20 +287,21 @@ class StripeConnectService
                         'verification' => [
                             'document' => [
                                 'front' => $file->id,
-                            ]
-                        ]
-                    ]
+                            ],
+                        ],
+                    ],
                 ]
             );
 
             // check is the response is type of Exception froom stripe
             if ($account instanceof Exception\InvalidRequestException) {
                 $error = $account->getMessage();
+
                 return response()->json([
                     'message' => 'Error updating Stripe account',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
                 // return response()->json(['error' => $error], 400);
             }
@@ -309,10 +315,10 @@ class StripeConnectService
 
             return $account;
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th->getMessage());
             // Log::error('Stripe Document Upload Error: ' . $th->getMessage());
-            return $this->error('Error uploading document to Stripe', 500, $th->getMessage() . ' ' . $user->kyc_account_id, $th);
+            return $this->error('Error uploading document to Stripe', 500, $th->getMessage().' '.$user->kyc_account_id, $th);
         }
     }
 
@@ -328,7 +334,7 @@ class StripeConnectService
             Log::info($event);
         } catch (\Exception $e) {
             Log::error($e->getMessage());
-            throw new \Exception("Failed to construct webhook event: " . $e->getMessage(), 0, $e);
+            throw new \Exception('Failed to construct webhook event: '.$e->getMessage(), 0, $e);
         }
 
         if ($event->type === 'account.updated') {
@@ -354,7 +360,7 @@ class StripeConnectService
             $intent_reference = $paymentIntent->metadata->reference ?? null;
 
             if ($intent_purpose === 'order') {
-                //TODO - consider using events later
+                // TODO - consider using events later
                 // Handle updating order status and creating an earnings record for each order item for its author
                 // Find the order by the purpose_id populating the items and book for each item
                 $order = \App\Models\Order::with(['items.book', 'transaction'])->where('id', $intent_purpose_id)->first();
@@ -367,18 +373,18 @@ class StripeConnectService
                     foreach ($order->items as $item) {
                         // Assuming each item has a book and the book has an author
                         if ($item->book && $item->book->authors->isNotEmpty()) {
-                            $earning = new \App\Models\Transaction();
+                            $earning = new \App\Models\Transaction;
                             $earning->user_id = $item->book->authors->first()->id;
                             $earning->amount = $item->total_price; // Assuming price is the earning amount
                             $earning->currency = $paymentIntent->currency;
-                            $earning->description = 'Earning from order #' . $order->id . ' for book ' . $item->book->title;
+                            $earning->description = 'Earning from order #'.$order->id.' for book '.$item->book->title;
                             $earning->purpose_type = 'order';
                             $earning->purpose_id = $order->id;
                             $earning->type = 'earning';
                             $earning->purchased_by = $order->user_id;
                             $earning->direction = 'credit'; // Earning is a credit to the author's account
                             $earning->status = 'processing'; // At this point the order has not been completed yet
-                            $earning->reference = 'ERN_' . $order->id . '_' . $item->book->id . '_' . time();
+                            $earning->reference = 'ERN_'.$order->id.'_'.$item->book->id.'_'.time();
                             $earning->payment_provider = 'app';
                             $earning->payment_intent_id = $transaction->reference;
                             $earning->meta_data = json_encode([
@@ -399,7 +405,7 @@ class StripeConnectService
                             // $bookAnalytics->save();
                             // $bookAnalytics->refresh(); // Refresh the model to get the updated values
 
-                            //NOTE - Add notification to the author about the earning
+                            // NOTE - Add notification to the author about the earning
                         }
                     }
                 }
@@ -413,7 +419,7 @@ class StripeConnectService
             // Handle $intent_purpose === 'subscription'
             if ($intent_purpose === 'subscription') {
                 // Find the user subscription by the purpose_id
-                $userSubscription = \App\Models\UserSubscription::with([/*'user', */'subscription'])->where('id', $intent_purpose_id)->first();
+                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */ 'subscription'])->where('id', $intent_purpose_id)->first();
                 $txn = \App\Models\Transaction::where('payment_intent_id', $paymentIntent->id)->first();
                 if ($userSubscription) {
                     // Update the subscription status to active
@@ -421,7 +427,7 @@ class StripeConnectService
                     $userSubscription->save();
                     $userSubscription->refresh(); // Refresh the model to get the updated values
                 }
-                //NOTE - Update the transaction with the subscription details
+                // NOTE - Update the transaction with the subscription details
                 $txn->update([
                     'status' => 'succeeded',
                     // 'type' => 'subscription',
@@ -452,6 +458,7 @@ class StripeConnectService
             //    dd($existPaymentMethod);
             if ($existPaymentMethod instanceof Exception\InvalidRequestException) {
                 $error = $existPaymentMethod->getMessage();
+
                 return $this->error(
                     'Error retrieving Stripe payment method',
                     404,
@@ -518,17 +525,17 @@ class StripeConnectService
                     'customer_id' => $user->kyc_customer_id,
                     'payment_method_id' => $existPaymentMethod->id,
                 ]),
-                'country_code' => $existPaymentMethod->billing_details->address->country
+                'country_code' => $existPaymentMethod->billing_details->address->country,
             ]);
 
             // Check if the payment method was created successfully
-            if (!$paymentMethod) {
+            if (! $paymentMethod) {
                 // PaymentMethod::delete($existPaymentMethod->id);
                 return response()->json([
                     'message' => 'Error creating payment method in database',
                     'code' => 500,
                     'data' => null,
-                    'error' => 'Database error'
+                    'error' => 'Database error',
                 ], 500);
             }
 
@@ -573,7 +580,7 @@ class StripeConnectService
                         'country' => strtoupper($payload['country'] ?? 'US'),
                         'currency' => $payload['currency'],
                         'account_number' => $payload['account_number'],
-                        'routing_number' => $payload['routing_number']
+                        'routing_number' => $payload['routing_number'],
                     ],
                 ]
             );
@@ -581,11 +588,12 @@ class StripeConnectService
             // check is the response is type of Exception froom stripe
             if ($bankAccount instanceof Exception\InvalidRequestException) {
                 $error = $bankAccount->getMessage();
+
                 return response()->json([
                     'message' => 'Error creating Stripe bank account',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
             }
 
@@ -615,13 +623,13 @@ class StripeConnectService
             ]);
 
             // Check if the payment method was created successfully
-            if (!$paymentMethod) {
+            if (! $paymentMethod) {
                 // PaymentMethod::delete($existPaymentMethod->id);
                 return response()->json([
                     'message' => 'Error creating payment method in database',
                     'code' => 500,
                     'data' => null,
-                    'error' => 'Database error'
+                    'error' => 'Database error',
                 ], 500);
             }
 
@@ -655,7 +663,7 @@ class StripeConnectService
                     'message' => 'No payment methods found',
                     'code' => 404,
                     'data' => null,
-                    'error' => 'No payment methods found'
+                    'error' => 'No payment methods found',
                 ], 404);
             }
 
@@ -663,7 +671,7 @@ class StripeConnectService
                 'message' => 'Payment methods retrieved successfully',
                 'code' => 200,
                 'data' => $paymentMethods,
-                'error' => null
+                'error' => null,
             ], 200);
         } catch (\Throwable $th) {
             // dd($th);
@@ -697,11 +705,12 @@ class StripeConnectService
             // Error Handling
             if ($paymentIntent instanceof Exception\InvalidRequestException) {
                 $error = $paymentIntent->getMessage();
+
                 return response()->json([
                     'message' => 'Error initiating Payment',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
             }
 
@@ -722,11 +731,12 @@ class StripeConnectService
 
             if ($paymentIntent instanceof Exception\InvalidRequestException) {
                 $error = $paymentIntent->getMessage();
+
                 return response()->json([
                     'message' => 'Error retrieving Payment Intent',
                     'code' => 400,
                     'data' => null,
-                    'error' => $error
+                    'error' => $error,
                 ], 400);
             }
 

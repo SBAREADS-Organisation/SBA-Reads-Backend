@@ -5,14 +5,15 @@ namespace App\Mail\Login;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Contracts\Queue\ShouldQueue;
 
 class LoginNotification extends Mailable
 {
     use Queueable, SerializesModels;
 
     public $user;
+
     public $provider;
+
     public $ipAddress;
 
     /**
@@ -31,12 +32,12 @@ class LoginNotification extends Mailable
     public function build()
     {
         return $this->subject('New Login Notification')
-                    ->view('emails.login_notification')
-                    ->with([
-                        'name' => $this->user->name,
-                        'provider' => ucfirst($this->provider),
-                        'time' => now()->toDateTimeString(),
-                        'ipAddress' => $this->ipAddress,
-                    ]);
+            ->view('emails.login_notification')
+            ->with([
+                'name' => $this->user->name,
+                'provider' => ucfirst($this->provider),
+                'time' => now()->toDateTimeString(),
+                'ipAddress' => $this->ipAddress,
+            ]);
     }
 }

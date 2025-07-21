@@ -2,16 +2,17 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AppVersion;
+use App\Traits\ApiResponse;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use App\Models\AppVersion;
 use Symfony\Component\HttpFoundation\Response;
-use App\Traits\ApiResponse;
 
 class CheckAppVersion
 {
     use ApiResponse;
+
     /**
      * Handle an incoming request.
      *
@@ -59,7 +60,7 @@ class CheckAppVersion
                 return $next($request);
             }
 
-            if (!$appVersion || !$deviceId || !$platform || !$appId) {
+            if (! $appVersion || ! $deviceId || ! $platform || ! $appId) {
                 throw new \InvalidArgumentException('Invalid request.');
             }
 
@@ -70,11 +71,11 @@ class CheckAppVersion
 
             // dd('HEADERS FROM DB', $appVersion);
 
-            if (!$appVersion && !$allowGuestAccess) {
+            if (! $appVersion && ! $allowGuestAccess) {
                 throw new \Exception('Unauthorised access.', 401);
             }
 
-            if (!$appVersion && $allowGuestAccess) {
+            if (! $appVersion && $allowGuestAccess) {
                 return $next($request);
             }
 
@@ -141,5 +142,4 @@ class CheckAppVersion
             ], 500);
         }
     }
-
 }

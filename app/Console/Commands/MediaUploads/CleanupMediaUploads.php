@@ -33,7 +33,7 @@ class CleanupMediaUploads extends Command
                 $media->forceDelete();
                 $this->info("Deleted: {$media->public_id}");
             } catch (\Exception $e) {
-                $this->error("Failed to delete {$media->public_id}: " . $e->getMessage());
+                $this->error("Failed to delete {$media->public_id}: ".$e->getMessage());
             }
         }
 

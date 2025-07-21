@@ -10,17 +10,13 @@ class CategoryService
 {
     /**
      * Create or update a category.
-     *
-     * @param array $data
-     * @param Category|null $category
-     * @return Category
      */
     public function save(array $data, ?Category $category = null): Category
     {
         // Validate parent_id to ensure it doesn't create a circular reference
         if (isset($data['parent_id']) && $data['parent_id']) {
             $parentCategory = Category::find($data['parent_id']);
-            if (!$parentCategory) {
+            if (! $parentCategory) {
                 throw new \InvalidArgumentException('Invalid parent_id provided.');
             }
 
@@ -31,7 +27,7 @@ class CategoryService
         }
 
         // Add the current user's ID to the data for the `created_by` field
-        if (!isset($data['created_by'])) {
+        if (! isset($data['created_by'])) {
             $data['created_by'] = Auth::id();
         }
 
@@ -55,9 +51,6 @@ class CategoryService
 
     /**
      * Handle tree reordering when parent_id changes.
-     *
-     * @param Category $category
-     * @return void
      */
     protected function reorderTree(Category $category): void
     {
@@ -74,7 +67,7 @@ class CategoryService
     public function allTree(): Collection
     {
         // handle not found
-        if (!Category::exists()) {
+        if (! Category::exists()) {
             return collect([]);
         }
 

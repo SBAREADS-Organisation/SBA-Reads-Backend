@@ -4,16 +4,18 @@ namespace App\Services\Payments;
 
 use App\Models\Transaction;
 use App\Services\Stripe\StripeConnectService;
+use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
-use Stripe\Stripe;
 use Stripe\PaymentIntent;
-use App\Traits\ApiResponse;
+use Stripe\Stripe;
 
 class PaymentService
 {
     protected $stripe;
+
     use ApiResponse;
+
     public function __construct(StripeConnectService $stripe)
     {
         $this->stripe = $stripe;
@@ -24,7 +26,7 @@ class PaymentService
         try {
             $data = json_decode(json_encode($data));
             $str = Str::of($data->purpose)->take(3);
-            $reference = uniqid("$str" . '_');
+            $reference = uniqid("$str".'_');
 
             $paymentIntentPayload = [
                 'amount' => $this->convertToSubunit($data->amount, $data->currency),
@@ -40,13 +42,14 @@ class PaymentService
             if ($responsePayload instanceof JsonResponse) {
                 $responseData = $responsePayload->getData(true);
                 $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
+
                 return $this->error(
                     'An error occurred while creating the payment intent.',
                     500,
                     config('app.debug') ? $errorMessage : null,
 
                 );
-            } elseif($responsePayload instanceof PaymentIntent) {
+            } elseif ($responsePayload instanceof PaymentIntent) {
                 // Save Payment record
                 return Transaction::create([
                     'id' => Str::uuid(),
@@ -74,7 +77,7 @@ class PaymentService
                 );
             }
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error('An error occurred while creating the payment intent.', 500, $th->getMessage(), $th);
         }
@@ -98,7 +101,7 @@ class PaymentService
             $paymentIntentId = $payload['payment_intent_id'] ?? null;
             $paymentId = $payload['id'] ?? null;
 
-            if (!$paymentIntentId && !$paymentId) {
+            if (! $paymentIntentId && ! $paymentId) {
                 return $this->error('Either payment_intent_id or id must be provided.', 400);
             }
 
@@ -107,7 +110,7 @@ class PaymentService
                 $paymentIntent = $this->stripe->retrievePaymentIntent($paymentIntentId);
             } else {
                 $payment = Transaction::find($paymentId);
-                if (!$payment) {
+                if (! $payment) {
                     return $this->error('Payment not found.', 400);
                 }
                 $paymentIntent = $this->stripe->retrievePaymentIntent($payment->payment_intent_id);
@@ -127,7 +130,7 @@ class PaymentService
             //     $payment->update(['status' => $status]);
             // }
 
-            return $this->success(['status' => $status], 'Transaction status ' . $status, 200);
+            return $this->success(['status' => $status], 'Transaction status '.$status, 200);
         } catch (\Throwable $th) {
             return $this->error('An error occurred while verifying the transaction.', 500, $th->getMessage(), $th);
         }
@@ -162,7 +165,7 @@ class PaymentService
 
             return $payment;
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while storing the transaction.', 500, $th->getMessage(), $th);
         }
     }
@@ -187,14 +190,15 @@ class PaymentService
      * Converts a currency amount from its major unit (e.g., dollars)
      * to its smallest subunit (e.g., cents).
      *
-     * @param float|string $amount The amount in the major currency unit (e.g., 10.50 for $10.50).
-     * @param string $currency The 3-letter ISO currency code (e.g., 'USD', 'EUR', 'JPY').
+     * @param  float|string  $amount  The amount in the major currency unit (e.g., 10.50 for $10.50).
+     * @param  string  $currency  The 3-letter ISO currency code (e.g., 'USD', 'EUR', 'JPY').
      * @return int The amount in the smallest currency subunit (e.g., 1050 for $10.50).
+     *
      * @throws \InvalidArgumentException If the currency is not supported or amount is invalid.
      */
     public function convertToSubunit($amount, string $currency): int
     {
-        if (!is_numeric($amount)) {
+        if (! is_numeric($amount)) {
             throw new \InvalidArgumentException('Amount must be a numeric value.');
         }
 
@@ -217,7 +221,7 @@ class PaymentService
             'VUV',
             'XAF',
             'XOF',
-            'XPF'
+            'XPF',
         ];
 
         if (in_array($currency, $zeroDecimalCurrencies)) {

@@ -3,26 +3,26 @@
 namespace App\Http\Controllers\KYC;
 
 use App\Http\Controllers\Controller;
-use App\Models\KYCVerification;
 use App\Models\User;
+use App\Services\Slack\SlackWebhookService;
 use App\Services\Stripe\StripeConnectService;
+use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
-use Stripe\Webhook;
-use App\Services\Slack\SlackWebhookService;
-use Carbon\Carbon;
-use Illuminate\Http\JsonResponse;
-use Stripe\Account as StripeAccount;
 use Illuminate\Validation\Rule;
+use Stripe\Account as StripeAccount;
+use Stripe\Webhook;
 
 class KYCController extends Controller
 {
     protected $stripe;
+
     protected $kycService;
 
-    public function __construct(StripeConnectService $stripe, /*KYCVerificationService $kycService*/)
+    public function __construct(StripeConnectService $stripe /* KYCVerificationService $kycService */)
     {
         $this->stripe = $stripe;
     }
@@ -53,7 +53,7 @@ class KYCController extends Controller
 
             // Prepare combined DOB for validation
             $request->merge([
-                'dob_combined' => "{$request->input('dob.year')}-{$request->input('dob.month')}-{$request->input('dob.day')}"
+                'dob_combined' => "{$request->input('dob.year')}-{$request->input('dob.month')}-{$request->input('dob.day')}",
             ]);
 
             $validator = Validator::make($request->all(), [
@@ -111,7 +111,7 @@ class KYCController extends Controller
             // --- Call the Stripe Service to Create or Update Account ---
             // The service is responsible for determining create/update and saving to DB.
             $stripeAccountResponse = null;
-            if (!$user->kyc_account_id) {
+            if (! $user->kyc_account_id) {
                 // If user doesn't have an account ID, call the creation method
                 $stripeAccountResponse = $this->stripe->createCustomAccount($request->all(), $user);
             } else {
@@ -141,6 +141,7 @@ class KYCController extends Controller
             } else {
                 // This should ideally not happen if your service returns only StripeAccount or JsonResponse
                 Log::error('Unexpected return type from Stripe service', ['response' => $stripeAccountResponse]);
+
                 return $this->error(
                     'Internal Server Error: Unexpected Stripe service response.',
                     500,
@@ -158,7 +159,7 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            Log::error("KYC initiation error for user " . (Auth::id() ?? 'N/A') . ": " . $th->getMessage(), ['exception' => $th, 'trace' => $th->getTraceAsString()]);
+            Log::error('KYC initiation error for user '.(Auth::id() ?? 'N/A').': '.$th->getMessage(), ['exception' => $th, 'trace' => $th->getTraceAsString()]);
 
             return $this->error(
                 'Error initiating KYC',
@@ -173,7 +174,7 @@ class KYCController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'document' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120'
+                'document' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             ]);
 
             // Only allow if status is document-required
@@ -213,7 +214,7 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error(
                 'Error uploading document',
                 500,
@@ -302,7 +303,7 @@ class KYCController extends Controller
                         'kyc_status' => 'verified',
                         'first_name' => $account->individual->first_name,
                         'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
+                        'name' => $account->individual->first_name.' '.$account->individual->last_name,
                         // 'dob' => $account->individual->dob,
                         // 'address' => $account->individual->address,
                     ]);

@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Transaction;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Services\Payments\PaymentService;
-use Illuminate\Support\Facades\Validator;
 use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class TransactionsController extends Controller
 {
     //
     protected $service;
+
     use ApiResponse;
 
     public function __construct(PaymentService $service)
@@ -19,7 +20,8 @@ class TransactionsController extends Controller
         $this->service = $service;
     }
 
-    public function verifyPayment(Request $request) {
+    public function verifyPayment(Request $request)
+    {
         try {
             $validator = Validator::make($request->all(), [
                 'payment_intent_id' => 'required_without:id|string',
@@ -38,17 +40,18 @@ class TransactionsController extends Controller
         }
     }
 
-    public function getMyTransactions(Request $request) {
+    public function getMyTransactions(Request $request)
+    {
         try {
             $user = $request->user();
             $query = $this->service->getTransactionQuery()->where('user_id', $user->id);
 
             // Apply search filter
-            if ($request->has('search') && !empty($request->search)) {
+            if ($request->has('search') && ! empty($request->search)) {
                 $query->where(function ($q) use ($request) {
-                    $q->where('transaction_id', 'like', '%' . $request->search . '%')
-                    ->orWhere('user_name', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+                    $q->where('transaction_id', 'like', '%'.$request->search.'%')
+                        ->orWhere('user_name', 'like', '%'.$request->search.'%')
+                        ->orWhere('email', 'like', '%'.$request->search.'%');
                 });
             }
 
@@ -58,7 +61,7 @@ class TransactionsController extends Controller
             }
 
             // Apply status filter
-            if ($request->has('status') && !empty($request->status)) {
+            if ($request->has('status') && ! empty($request->status)) {
                 $query->where('status', $request->status);
             }
 
@@ -80,23 +83,24 @@ class TransactionsController extends Controller
         } catch (\Throwable $th) {
             // Handle database errors or other exceptions
             if ($th instanceof \Illuminate\Database\QueryException) {
-                return $this->error('Database error: ' . $th->getMessage(), 500, null, $th);
+                return $this->error('Database error: '.$th->getMessage(), 500, null, $th);
             }
 
             return $this->error($th->getMessage(), 500, null, $th);
         }
     }
 
-    public function getAllTransactions(Request $request) {
+    public function getAllTransactions(Request $request)
+    {
         try {
             $query = $this->service->getTransactionQuery();
 
             // Apply search filter
-            if ($request->has('search') && !empty($request->search)) {
+            if ($request->has('search') && ! empty($request->search)) {
                 $query->where(function ($q) use ($request) {
-                    $q->where('transaction_id', 'like', '%' . $request->search . '%')
-                    ->orWhere('user_name', 'like', '%' . $request->search . '%')
-                    ->orWhere('email', 'like', '%' . $request->search . '%');
+                    $q->where('transaction_id', 'like', '%'.$request->search.'%')
+                        ->orWhere('user_name', 'like', '%'.$request->search.'%')
+                        ->orWhere('email', 'like', '%'.$request->search.'%');
                 });
             }
 
@@ -106,7 +110,7 @@ class TransactionsController extends Controller
             }
 
             // Apply status filter
-            if ($request->has('status') && !empty($request->status)) {
+            if ($request->has('status') && ! empty($request->status)) {
                 $query->where('status', $request->status);
             }
 
@@ -126,11 +130,12 @@ class TransactionsController extends Controller
         }
     }
 
-    public function getTransaction(Request $request, $id) {
+    public function getTransaction(Request $request, $id)
+    {
         try {
             $transaction = $this->service->getTransactionById($id);
 
-            if (!$transaction) {
+            if (! $transaction) {
                 return $this->error('Transaction not found', 404);
             }
 

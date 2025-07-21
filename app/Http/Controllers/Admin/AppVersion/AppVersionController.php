@@ -3,9 +3,8 @@
 namespace App\Http\Controllers\Admin\AppVersion;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\AppVersion;
-use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 
@@ -27,7 +26,7 @@ class AppVersionController extends Controller
 
             return $this->success($appVersions, 'App versions retrieved successfully.');
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, null, $th);
         }
     }
@@ -55,7 +54,7 @@ class AppVersionController extends Controller
 
             return $this->success($appVersion, 'App version created successfully.', 201);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             // dd($th);
             return $this->error('An error occurred while processing your request.', 500, null, $th);
         }
@@ -69,13 +68,13 @@ class AppVersionController extends Controller
         try {
             $appVersion = AppVersion::find($id);
 
-            if (!$appVersion) {
+            if (! $appVersion) {
                 return $this->error('App version not found.', 404);
             }
 
             return $this->success($appVersion, 'App version retrieved successfully.');
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, null, $th);
         }
     }
@@ -88,7 +87,7 @@ class AppVersionController extends Controller
         try {
             $appVersion = AppVersion::find($id);
 
-            if (!$appVersion) {
+            if (! $appVersion) {
                 return $this->error('App version not found.', 404);
             }
 
@@ -109,7 +108,7 @@ class AppVersionController extends Controller
 
             return $this->success($appVersion, 'App version updated successfully.');
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, null, $th);
         }
     }
@@ -122,7 +121,7 @@ class AppVersionController extends Controller
         try {
             $appVersion = AppVersion::find($id);
 
-            if (!$appVersion) {
+            if (! $appVersion) {
                 return $this->error('App version not found.', 404);
             }
 
@@ -130,7 +129,7 @@ class AppVersionController extends Controller
 
             return $this->success(null, 'App version deleted successfully.', 204);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, null, $th);
         }
     }

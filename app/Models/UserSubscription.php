@@ -8,11 +8,11 @@ class UserSubscription extends Model
 {
     //
     protected $fillable = [
-        'user_id', 'subscription_id', /*'stripe_subscription_id',*/ 'starts_at', 'ends_at', 'status'
+        'user_id', 'subscription_id', /* 'stripe_subscription_id', */ 'starts_at', 'ends_at', 'status',
     ];
 
     protected $dates = [
-        'starts_at', 'ends_at'
+        'starts_at', 'ends_at',
     ];
 
     public function subscription()

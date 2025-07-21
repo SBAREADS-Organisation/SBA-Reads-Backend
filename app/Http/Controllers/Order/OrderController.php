@@ -4,27 +4,33 @@ namespace App\Http\Controllers\Order;
 
 use App\Http\Controllers\Controller;
 use App\Services\Orders\OrderService;
+use App\Services\Stripe\StripeConnectService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use App\Services\Stripe\StripeConnectService;
 
 class OrderController extends Controller
 {
     //
     use ApiResponse;
+
     protected OrderService $service;
+
     protected StripeConnectService $stripe;
 
-    public function __construct(OrderService $service, StripeConnectService $stripe) {
+    public function __construct(OrderService $service, StripeConnectService $stripe)
+    {
         $this->service = $service;
         $this->stripe = $stripe;
     }
 
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         try {
             $q = $request->user()->orders()->with('items.book');
-            if ($request->filled('status'))   { $q->where('status', $request->status); }
+            if ($request->filled('status')) {
+                $q->where('status', $request->status);
+            }
 
             // Filter by date range
             if ($request->filled('from_date')) {
@@ -34,21 +40,23 @@ class OrderController extends Controller
                 $q->whereDate('created_at', '<=', $request->to_date);
             }
 
-            if ($request->filled('search'))   {
-                $q->whereHas('items.book', fn($b)=>
-                    $b->where('title','like','%'.$request->search.'%')
+            if ($request->filled('search')) {
+                $q->whereHas('items.book', fn ($b) => $b->where('title', 'like', '%'.$request->search.'%')
                 );
             }
-            if ($request->filled('sort_by'))  { $q->orderBy($request->sort_by, $request->get('order','desc')); }
+            if ($request->filled('sort_by')) {
+                $q->orderBy($request->sort_by, $request->get('order', 'desc'));
+            }
 
-            $pag = $q->paginate($request->get('per_page',15));
+            $pag = $q->paginate($request->get('per_page', 15));
 
             if ($pag->isEmpty()) {
                 return $this->error('No orders found', 404);
             }
+
             return $this->success($pag, 'Orders retrieved');
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             return $this->error('An error occured while, fetching all orders. Try again!', 500, null, $th);
         }
     }
@@ -56,7 +64,8 @@ class OrderController extends Controller
     /**
      * Get all orders for the logged-in user with advanced search and filter options.
      */
-    public function userOrders(Request $request) {
+    public function userOrders(Request $request)
+    {
         try {
             $query = $request->user()->orders()->with(['items.book', 'transaction', 'deliveryAddress']);
 
@@ -76,11 +85,11 @@ class OrderController extends Controller
             // Search by book title or order number
             if ($request->filled('search')) {
                 $search = $request->search;
-                $query->where(function($q) use ($search) {
+                $query->where(function ($q) use ($search) {
                     $q->where('order_number', 'like', "%$search%")
-                    ->orWhereHas('items.book', function($b) use ($search) {
-                        $b->where('title', 'like', "%$search%");
-                    });
+                        ->orWhereHas('items.book', function ($b) use ($search) {
+                            $b->where('title', 'like', "%$search%");
+                        });
                 });
             }
 
@@ -104,7 +113,8 @@ class OrderController extends Controller
         }
     }
 
-    public function store(Request $request) {
+    public function store(Request $request)
+    {
         try {
             $validator = Validator::make($request->all(), [
                 'books' => 'required|array|min:1',
@@ -123,8 +133,9 @@ class OrderController extends Controller
 
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
+
             return $this->error($message, 500, null, $th);
         }
     }
@@ -134,32 +145,37 @@ class OrderController extends Controller
         try {
             // dd($request->user()->orders());
             $order = $request->user()->orders()->with(['items.book', 'transaction', 'deliveryAddress'])->find($id);
-            if (!$order) return $this->error('Not Found',404);
+            if (! $order) {
+                return $this->error('Not Found', 404);
+            }
 
             if (in_array($order->status, ['pending', 'processing'])) {
                 $paymentIntent = $this->stripe->retrievePaymentIntent($order->transaction->payment_intent_id);
                 $order->client_secret = $paymentIntent->client_secret ?? null;
             }
 
-            return $this->success($order,'Order detail');
+            return $this->success($order, 'Order detail');
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             $message = $th->getMessage() ?? 'An error occured while retrieving orders';
+
             return $this->error($message, 500, null, $th);
         }
     }
 
-    public function track(Request $request, $tracking_number) {
+    public function track(Request $request, $tracking_number)
+    {
         try {
             $order = $this->service->trackOrder($request->user(), $tracking_number);
 
-            if (!$order /* || $order->isEmpty()*/) {
+            if (! $order /* || $order->isEmpty() */) {
                 return $this->error('Resource not found.', 404);
             }
 
             return $this->success($order, 'Tracking information retrieved successfully.');
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?: 'An error occurred while tracking your order. Please try again.';
+
             return $this->error($message, 500, null, $th);
         }
     }
@@ -167,7 +183,6 @@ class OrderController extends Controller
     /**
      * Update the status of an order.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @param  int  $id
      * @return \Illuminate\Http\JsonResponse
      */
@@ -184,7 +199,7 @@ class OrderController extends Controller
         try {
             $order = $request->user()->orders()->where('tracking_id', $id)->first();
 
-            if (!$order) {
+            if (! $order) {
                 return $this->error('Order not found', 404);
             }
 

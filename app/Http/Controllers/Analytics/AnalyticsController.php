@@ -17,14 +17,15 @@ class AnalyticsController extends Controller
 
             $analytics = $analyticsService->getAnalytics($user, $scope, $request->all());
 
-            return $this->success($analytics, $scope . ' ' . 'Analytics retrieved successfully.');
+            return $this->success($analytics, $scope.' '.'Analytics retrieved successfully.');
             // return response()->json([
             //     'status' => 'success',
             //     'data' => $analytics,
             // ]);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             dd($th);
+
             return $this->error('Failed to retrieve analytics.', 500, null, $th);
         }
     }

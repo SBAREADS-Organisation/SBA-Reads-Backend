@@ -3,20 +3,18 @@
 namespace App\Http\Controllers\Notification;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Notification;
 use App\Services\Notification\NotificationService;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\Generic\GenericAppNotification;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use App\Traits\ApiResponse;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class NotificationsController extends Controller
 {
-    protected null|NotificationService $notificationService;
+    protected ?NotificationService $notificationService;
+
     use ApiResponse, AuthorizesRequests;
 
     public function __construct(NotificationService $notificationService)
@@ -27,7 +25,8 @@ class NotificationsController extends Controller
     /**
      * Get all notifications for a user, with pagination, filter, and search.
      */
-    public function index(Request $request) {
+    public function index(Request $request)
+    {
         try {
             // Get query params for pagination, filter, and search
             $user = $request->user();
@@ -47,7 +46,7 @@ class NotificationsController extends Controller
                 'Notifications retrieved successfully.'
             );
         } catch (ModelNotFoundException $e) {
-            return $this->error('Notifications not found.', 404,null, $e);
+            return $this->error('Notifications not found.', 404, null, $e);
         } catch (\Exception $e) {
             return $this->error('An error occurred while retrieving notifications.', 500, null, $e);
         }
@@ -75,7 +74,8 @@ class NotificationsController extends Controller
         } catch (ModelNotFoundException $e) {
             return $this->error('Notification not found.', 404, null, $e);
         } catch (\Exception $e) {
-            Log::error('Error marking notification as read: ' . $e->getMessage());
+            Log::error('Error marking notification as read: '.$e->getMessage());
+
             return $this->error('An error occurred while marking notification as read.', 500, null, $e);
         }
     }
@@ -94,7 +94,8 @@ class NotificationsController extends Controller
                 'All notifications marked as read successfully.'
             );
         } catch (\Exception $e) {
-            Log::error('Error marking all notifications as read: ' . $e->getMessage());
+            Log::error('Error marking all notifications as read: '.$e->getMessage());
+
             return $this->error('An error occurred while marking all notifications as read.', 500, null, $e);
         }
     }
