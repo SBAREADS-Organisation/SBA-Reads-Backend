@@ -65,7 +65,7 @@ class BookController extends Controller
             // 'books.*.cover_image.public_id'      => 'nullable|string',
             'books.*.format' => 'nullable|string|max:50',
             'books.*.files' => 'required|array',
-            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:5120',
+            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:20480',
             // 'books.*.files.*.url'                => 'required_with:books.*.files|url',
             // 'books.*.files.*.public_id'          => 'nullable|string',
             'books.*.target_audience' => 'nullable|array',
@@ -313,7 +313,7 @@ class BookController extends Controller
         $user = $request->user();
 
         // Check if user has purchased the book
-        if (!$user->purchasedBooks()->where('book_id', $bookId)->exists()) {
+        if (! $user->purchasedBooks()->where('book_id', $bookId)->exists()) {
             return $this->error(
                 'You must purchase the book before reading it.',
                 403

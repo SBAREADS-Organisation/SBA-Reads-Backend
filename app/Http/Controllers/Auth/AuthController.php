@@ -23,6 +23,7 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
                 'password' => 'required|string|min:8',
+                'account_type' => 'nullable|string|in:author,reader,admin,superadmin',
             ]);
 
             if ($validator->fails()) {
@@ -30,7 +31,13 @@ class AuthController extends Controller
             }
 
             // Check if User Exists
-            $user = User::where('email', $request->email)->first();
+            $userQuery = User::where('email', $request->email);
+
+            if ($request->has('account_type')) {
+                $userQuery->where('account_type', $request->account_type);
+            }
+
+            $user = $userQuery->first();
             // dd('User Password', $user->password, Hash::check($request->password, $user->password));
             if (! $user || ! Hash::check($request->password, $user->password)) {
                 return $this->error('Invalid credentials', 401);

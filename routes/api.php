@@ -132,7 +132,7 @@ Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
     Route::get('books', [BookController::class, 'index']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
-//    Route::get('books/{id}/download', [BookController::class, 'download'])->name('book.download');
+    //    Route::get('books/{id}/download', [BookController::class, 'download'])->name('book.download');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{id}', [BookController::class, 'update']);
     Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);

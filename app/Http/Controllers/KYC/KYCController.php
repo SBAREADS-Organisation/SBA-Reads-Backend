@@ -119,10 +119,6 @@ class KYCController extends Controller
                 $stripeAccountResponse = $this->stripe->updateCustomAccount($request->all(), $user);
             }
 
-            // --- Handle the Stripe Service Response ---
-            $finalAccountId = null;
-            $finalAccountStatus = null;
-
             if ($stripeAccountResponse instanceof JsonResponse) {
                 // This indicates an error response from your Stripe service
                 $responseData = $stripeAccountResponse->getData(true);
