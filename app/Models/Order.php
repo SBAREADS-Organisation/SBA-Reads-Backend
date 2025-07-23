@@ -17,8 +17,13 @@ class Order extends Model
     }
 
     protected $fillable = [
-        'user_id', 'total_amount', 'status', 'transaction_id',
-        'tracking_number', 'delivery_address_id', 'delivered_at',
+        'user_id',
+        'total_amount',
+        'status',
+        'transaction_id',
+        'tracking_number',
+        'delivery_address_id',
+        'delivered_at',
     ];
 
     /**

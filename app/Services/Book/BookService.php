@@ -3,6 +3,8 @@
 namespace App\Services\Book;
 
 use App\Models\Book;
+use App\Models\DigitalBookPurchase;
+use App\Models\DigitalBookPurchaseItem;
 use App\Models\User;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\Payments\PaymentService;
@@ -154,23 +156,50 @@ class BookService
 
     public function purchaseBooks(array $bookIds, User $user)
     {
+
+        // Create a digital book purchase
+        $purchase = DigitalBookPurchase::create(
+            [
+                'user_id' => $user->id,
+                'total_amount' => 0, // This will be updated after calculating total
+                'currency' => 'usd',
+                'status' => 'pending',
+            ]
+        );
         $total = 0;
         foreach ($bookIds as $bookId) {
             $book = Book::findOrFail($bookId);
-            $price = $book->pricing['actual_price'];
+            $authorPayoutAmount = $book->pricing['actual_price'] * 0.8; // 80% payout to author
+            $purchaseItem = DigitalBookPurchaseItem::create(
+                [
+                    'digital_book_purchase_id' => $purchase->id,
+                    'book_id' => $book->id,
+                    'author_id' => $book->authors->first()->id,
+                    'quantity' => 1, // Assuming quantity is always 1 for digital books
+                    'price_at_purchase' => $book->pricing['actual_price'],
+                    'author_payout_amount' => $authorPayoutAmount,
+                    'platform_fee_amount' => $book->pricing['actual_price'] - $authorPayoutAmount, // 20% platform fee
+                    'payout_status' => 'pending',
+                    'stripe_transfer_id' => null, // This will be set after payment processing
+                ]
+            );
 
-            $total += $price;
+            $total += $purchaseItem->price_at_purchase;
         }
+
+        // Update the total amount in the purchase
+        $purchase->update(['total_amount' => $total]);
 
         $transaction = $this->paymentService->createPayment([
             'amount' => $total,
             'currency' => 'usd',
             'description' => 'Digital books purchase',
             'purpose' => 'digital_book_purchase',
-            'purpose_id' => 0,
+            'purpose_id' => $purchase->id,
             'meta_data' => [
                 'book_ids' => $bookIds,
                 'user_id' => $user->id,
+                'purchase_id' => $purchase->id,
             ],
         ], $user);
 

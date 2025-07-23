@@ -2,13 +2,14 @@
 
 namespace App\Services\Payments;
 
+use App\Models\DigitalBookPurchaseItem;
+use App\Models\OrderItem;
 use App\Models\Transaction;
 use App\Services\Stripe\StripeConnectService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
 use Stripe\PaymentIntent;
-use Stripe\Stripe;
 
 class PaymentService
 {
@@ -231,4 +232,18 @@ class PaymentService
         // For all other currencies (typically 2 decimal places), multiply by 100
         return (int) round($amount * 100);
     }
+
+    //    public function processAuthorPayout(mixed $item, \App\Models\User $user, Transaction $transaction)
+    //    {
+    //        try {
+    //            if ($item instanceof DigitalBookPurchaseItem){
+    //                $author = $item->author;
+    //                $payoutAmount = $item->author_payout_amount;
+    //                $platformFeeAmount = $item->platform_fee_amount;
+    //            } elseif ($item instanceof OrderItem) {
+    //                // Handle other item types if necessary
+    //                return $this->error('Invalid item type for author payout.', 400);
+    //            }
+    //        }
+    //    }
 }
