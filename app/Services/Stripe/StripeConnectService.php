@@ -14,6 +14,7 @@ use Stripe\Account;
 use Stripe\Customer;
 use Stripe\Exception;
 use Stripe\File;
+use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
 use Stripe\Stripe;
 use Stripe\Webhook;
@@ -684,7 +685,7 @@ class StripeConnectService
     public function createPaymentIntent($payload, $user)
     {
         try {
-            $paymentIntent = \Stripe\PaymentIntent::create([
+            $paymentIntent = PaymentIntent::create([
                 'amount' => $payload['amount'],
                 'currency' => $payload['currency'],
                 'customer' => $user->kyc_customer_id,
@@ -699,6 +700,7 @@ class StripeConnectService
                 'automatic_payment_methods' => [
                     'enabled' => true,
                 ],
+                'receipt_email' => $user->email,
                 // 'return_url' => config('app.url') . '/api/stripe/webhook'
             ]);
 
@@ -727,7 +729,7 @@ class StripeConnectService
     public function retrievePaymentIntent($paymentIntentId)
     {
         try {
-            $paymentIntent = \Stripe\PaymentIntent::retrieve($paymentIntentId);
+            $paymentIntent = PaymentIntent::retrieve($paymentIntentId);
 
             if ($paymentIntent instanceof Exception\InvalidRequestException) {
                 $error = $paymentIntent->getMessage();

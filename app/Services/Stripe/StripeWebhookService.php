@@ -2,10 +2,15 @@
 
 namespace App\Services\Stripe;
 
+use App\Jobs\ProcessAuthorPayout;
 use App\Models\Book;
+use App\Models\BookMetaDataAnalytics;
+use App\Models\DigitalBookPurchase;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Stripe\Account;
@@ -14,6 +19,13 @@ use Stripe\PaymentIntent;
 class StripeWebhookService
 {
     use ApiResponse;
+
+    protected PaymentService $paymentService;
+
+    public function __construct(PaymentService $paymentService)
+    {
+        $this->paymentService = $paymentService;
+    }
 
     /**
      * Handle the payment intent succeeded event.
@@ -65,28 +77,76 @@ class StripeWebhookService
         }
     }
 
+    /**
+     * Processes a successful digital book purchase transaction.
+     *
+     * @param  Transaction  $transaction  The local transaction record
+     * @param  User  $user  The user associated with the transaction
+     *
+     * @throws \Exception If processing fails.
+     */
     protected function processDigitalBookPurchase(Transaction $transaction, User $user): void
     {
         try {
             $txnMetaData = json_decode($transaction->meta_data);
-            $bookIds = $txnMetaData->book_ids;
             Log::info('Transaction Metadata', ['meta_data' => $txnMetaData]);
-            Log::info('Book IDs from transaction metadata', ['book_ids' => $bookIds]);
-            foreach ($bookIds as $bookId) {
-                $book = Book::findOrFail($bookId);
-                Log::info('Processing book purchase', ['book_id' => $book->id, 'user_id' => $user->id]);
 
-                // Check if book exists in user's purchased books
-                if ($user->purchasedBooks()->where('book_id', $bookId)->exists()) {
-                    Log::info('Book already purchased', ['book' => $book]);
-
-                    continue;
-                }
-                // Attach the book to the user
-                $user->purchasedBooks()->attach($book->id);
+            $purchaseId = $transaction->purpose_id;
+            if (! is_numeric($purchaseId)) {
+                throw new \InvalidArgumentException('Purpose ID is missing or invalid for digital book purchase.');
             }
-        } catch (\Exception $e) {
-            Log::error('Error processing digital book purchase', [$e->getMessage()]);
+            $purchaseId = (int) $purchaseId;
+
+            Log::info('Purchase ID from transaction', ['purchase_id' => $purchaseId]);
+
+            $purchase = DigitalBookPurchase::with(['items.book.author'])
+                ->where('user_id', $user->id)
+                ->findOrFail($purchaseId);
+
+            Log::info('Processing digital book purchase', ['purchase_id' => $purchase->id, 'user_id' => $user->id]);
+
+            if ($purchase->status !== 'paid') {
+                $purchase->update(['status' => 'paid']);
+                Log::info("DigitalBookPurchase ID: {$purchase->id} status updated to 'paid'.");
+            } else {
+                Log::info("DigitalBookPurchase ID: {$purchase->id} already in 'paid' status. Skipping update.");
+            }
+
+            foreach ($purchase->items as $item) {
+                Log::info('Processing purchase item for user access', ['item_id' => $item->id, 'book_id' => $item->book_id]);
+
+                if (! $user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
+                    Log::info('Granting book access to user', ['book_id' => $item->book_id, 'user_id' => $user->id]);
+                    $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
+                    $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
+                        ['book_id' => $item->book_id],
+                        ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                    );
+                    $bookAnalytics->increment('purchases', 1);
+                    $bookAnalytics->save();
+                    $bookAnalytics->refresh();
+                } else {
+                    Log::info('User already has access to book', ['book_id' => $item->book_id, 'user_id' => $user->id]);
+                }
+
+            }
+
+            if (! in_array($purchase->status, ['payout_initiated', 'payout_completed', 'payout_failed'])) {
+                $delayDays = 7; // Funds become available after 1 week so dispatch after 8 days
+
+                // Dispatch the job to run after the specified delay
+                ProcessAuthorPayout::dispatch($purchase->id)->delay(now()->addDays($delayDays));
+                Log::info("ProcessAuthorPayout Job dispatched for DigitalBookPurchase ID: {$purchase->id}");
+            } else {
+                Log::info("Payout job for DigitalBookPurchase ID: {$purchase->id} already dispatched or completed. Skipping.");
+            }
+
+        } catch (ModelNotFoundException $e) {
+            Log::error("DigitalBookPurchase not found for ID: {$purchaseId} (User ID: {$user->id}). Error: ".$e->getMessage());
+            throw new \Exception('Digital book purchase record not found: '.$e->getMessage(), 404, $e);
+        } catch (\Throwable $e) {
+            Log::error('Error processing digital book purchase: '.$e->getMessage(), ['exception' => $e, 'purchase_id' => $purchaseId, 'user_id' => $user->id]);
+            throw new \Exception('Failed to process digital book purchase: '.$e->getMessage(), 500, $e);
         }
     }
 

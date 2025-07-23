@@ -230,6 +230,11 @@ class User extends Authenticatable
         return $this->hasMany(KYCVerification::class);
     }
 
+    public function digitalBookPurchases(): HasMany
+    {
+        return $this->hasMany(DigitalBookPurchase::class);
+    }
+
     public function purchasedBooks(): BelongsToMany
     {
         return $this->belongsToMany(Book::class, 'book_user', 'user_id', 'book_id')->withTimestamps();
