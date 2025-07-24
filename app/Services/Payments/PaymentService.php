@@ -191,13 +191,13 @@ class PaymentService
      * Converts a currency amount from its major unit (e.g., dollars)
      * to its smallest subunit (e.g., cents).
      *
-     * @param  float|string  $amount  The amount in the major currency unit (e.g., 10.50 for $10.50).
+     * @param float|string $amount  The amount in the major currency unit (e.g., 10.50 for $10.50).
      * @param  string  $currency  The 3-letter ISO currency code (e.g., 'USD', 'EUR', 'JPY').
      * @return int The amount in the smallest currency subunit (e.g., 1050 for $10.50).
      *
      * @throws \InvalidArgumentException If the currency is not supported or amount is invalid.
      */
-    public function convertToSubunit($amount, string $currency): int
+    public function convertToSubunit(float|string $amount, string $currency = 'usd'): int
     {
         if (! is_numeric($amount)) {
             throw new \InvalidArgumentException('Amount must be a numeric value.');
@@ -232,18 +232,4 @@ class PaymentService
         // For all other currencies (typically 2 decimal places), multiply by 100
         return (int) round($amount * 100);
     }
-
-    //    public function processAuthorPayout(mixed $item, \App\Models\User $user, Transaction $transaction)
-    //    {
-    //        try {
-    //            if ($item instanceof DigitalBookPurchaseItem){
-    //                $author = $item->author;
-    //                $payoutAmount = $item->author_payout_amount;
-    //                $platformFeeAmount = $item->platform_fee_amount;
-    //            } elseif ($item instanceof OrderItem) {
-    //                // Handle other item types if necessary
-    //                return $this->error('Invalid item type for author payout.', 400);
-    //            }
-    //        }
-    //    }
 }

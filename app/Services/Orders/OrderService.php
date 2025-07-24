@@ -41,16 +41,21 @@ class OrderService
                 // dd($book->pricing['actual_price']);
                 $price = $book->pricing['actual_price'];
                 $quantity = $item['quantity'];
+                $totalPrice = $price * $quantity;
+                $authorPayout = $totalPrice * 0.8;
 
                 OrderItem::create([
                     'order_id' => $order->id,
                     'book_id' => $book->id,
+                    'author_id' => $book->author_id,
                     'quantity' => $quantity,
                     'unit_price' => $price,
-                    'total_price' => $price * $quantity,
+                    'total_price' => $totalPrice,
+                    'author_payout_amount' => $authorPayout,
+                    'platform_fee_amount' => $totalPrice - $authorPayout,
                 ]);
 
-                $total += $price * $quantity;
+                $total += $totalPrice;
             }
 
             $order->update(['total_amount' => $total]);
