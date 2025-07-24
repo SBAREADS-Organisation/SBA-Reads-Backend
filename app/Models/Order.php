@@ -19,7 +19,9 @@ class Order extends Model
     protected $fillable = [
         'user_id',
         'total_amount',
+        'platform_fee_amount',
         'status',
+        'payout_status', // ['initiated', 'completed', 'failed']
         'transaction_id',
         'tracking_number',
         'delivery_address_id',

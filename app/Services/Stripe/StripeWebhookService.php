@@ -3,7 +3,6 @@
 namespace App\Services\Stripe;
 
 use App\Jobs\ProcessAuthorPayout;
-use App\Models\Book;
 use App\Models\BookMetaDataAnalytics;
 use App\Models\DigitalBookPurchase;
 use App\Models\Transaction;
@@ -41,7 +40,7 @@ class StripeWebhookService
             $transaction = Transaction::where('reference', $metadata->reference)->first();
             $user = $transaction->user;
 
-            if (! $transaction) {
+            if (!$transaction) {
                 Log::error('Transaction not found for reference', ['reference' => $metadata->reference]);
             }
 
@@ -55,15 +54,15 @@ class StripeWebhookService
 
             switch ($purpose) {
                 case 'digital_book_purchase':
-                    $this->processDigitalBookPurchase($transaction, $user);
+                    $this->processSuccessfulDigitalBookPurchase($transaction, $user);
                     break;
 
                 case 'order':
-                    $this->processOrder($transaction, $user);
+                    $this->processSuccessfulOrder($transaction, $user);
                     break;
 
                 default:
-                    Log::warning('Stripe Webhook: Unhandled transaction type received: '.$purpose, ['transaction_id' => $transaction->id]);
+                    Log::warning('Stripe Webhook: Unhandled transaction type received: ' . $purpose, ['transaction_id' => $transaction->id]);
                     break;
             }
 
@@ -80,22 +79,22 @@ class StripeWebhookService
     /**
      * Processes a successful digital book purchase transaction.
      *
-     * @param  Transaction  $transaction  The local transaction record
-     * @param  User  $user  The user associated with the transaction
+     * @param Transaction $transaction The local transaction record
+     * @param User $user The user associated with the transaction
      *
      * @throws \Exception If processing fails.
      */
-    protected function processDigitalBookPurchase(Transaction $transaction, User $user): void
+    protected function processSuccessfulDigitalBookPurchase(Transaction $transaction, User $user): void
     {
         try {
             $txnMetaData = json_decode($transaction->meta_data);
             Log::info('Transaction Metadata', ['meta_data' => $txnMetaData]);
 
             $purchaseId = $transaction->purpose_id;
-            if (! is_numeric($purchaseId)) {
+            if (!is_numeric($purchaseId)) {
                 throw new \InvalidArgumentException('Purpose ID is missing or invalid for digital book purchase.');
             }
-            $purchaseId = (int) $purchaseId;
+            $purchaseId = (int)$purchaseId;
 
             Log::info('Purchase ID from transaction', ['purchase_id' => $purchaseId]);
 
@@ -115,7 +114,7 @@ class StripeWebhookService
             foreach ($purchase->items as $item) {
                 Log::info('Processing purchase item for user access', ['item_id' => $item->id, 'book_id' => $item->book_id]);
 
-                if (! $user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
+                if (!$user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
                     Log::info('Granting book access to user', ['book_id' => $item->book_id, 'user_id' => $user->id]);
                     $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
                     $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
@@ -131,43 +130,75 @@ class StripeWebhookService
 
             }
 
-            if (! in_array($purchase->status, ['payout_initiated', 'payout_completed', 'payout_failed'])) {
+            if (!in_array($purchase->status, ['failed', 'payout_initiated', 'payout_completed', 'payout_failed'])) {
                 $delayDays = 7; // Funds become available after 1 week so dispatch after 8 days
 
                 // Dispatch the job to run after the specified delay
-                ProcessAuthorPayout::dispatch($purchase->id)->delay(now()->addDays($delayDays));
+                ProcessAuthorPayout::dispatch(purpose: 'digital_book_purchase', purposeId: $purchase->id)->delay(now()->addDays($delayDays));
                 Log::info("ProcessAuthorPayout Job dispatched for DigitalBookPurchase ID: {$purchase->id}");
             } else {
                 Log::info("Payout job for DigitalBookPurchase ID: {$purchase->id} already dispatched or completed. Skipping.");
             }
 
         } catch (ModelNotFoundException $e) {
-            Log::error("DigitalBookPurchase not found for ID: {$purchaseId} (User ID: {$user->id}). Error: ".$e->getMessage());
-            throw new \Exception('Digital book purchase record not found: '.$e->getMessage(), 404, $e);
+            Log::error("DigitalBookPurchase not found for ID: {$purchaseId} (User ID: {$user->id}). Error: " . $e->getMessage());
+            throw new \Exception('Digital book purchase record not found: ' . $e->getMessage(), 404, $e);
         } catch (\Throwable $e) {
-            Log::error('Error processing digital book purchase: '.$e->getMessage(), ['exception' => $e, 'purchase_id' => $purchaseId, 'user_id' => $user->id]);
-            throw new \Exception('Failed to process digital book purchase: '.$e->getMessage(), 500, $e);
+            Log::error('Error processing digital book purchase: ' . $e->getMessage(), ['exception' => $e, 'purchase_id' => $purchaseId, 'user_id' => $user->id]);
+            throw new \Exception('Failed to process digital book purchase: ' . $e->getMessage(), 500, $e);
         }
     }
 
-    protected function processOrder(Transaction $transaction, User $user): void
+    /**
+     * @throws \Exception
+     */
+    protected function processSuccessfulOrder(Transaction $transaction, User $user): void
     {
         try {
             $txnMetaData = json_decode($transaction->meta_data);
             Log::info('Transaction Metadata', ['meta_data' => $txnMetaData]);
             $orderId = $transaction->purpose_id;
-            Log::info('Order ID from transaction metadata', ['order_id' => $orderId]);
-            $order = $user->orders()->findOrFail($orderId);
-            Log::info('Processing order', ['order_id' => $order->id, 'user_id' => $user->id]);
-            // Update the order status to completed
-            $order->update(['status' => 'paid']);
-            Log::info('Order updated to paid', ['order_id' => $order->id, 'order_status' => $order->status]);
-        } catch (\Exception $e) {
-            Log::error('Error processing order', [
-                'error' => $e->getMessage(),
-                'transaction_id' => $transaction->id,
-                'user_id' => $user->id,
-            ]);
+            if (!is_numeric($orderId)) {
+                throw new \InvalidArgumentException('Purpose ID is missing or invalid for book order.');
+            }
+            $orderId = (int)$orderId;
+            $order = $user->orders()->with('items.book.author')->findOrFail($orderId);
+            Log::info('Processing book order', ['order_id' => $order->id, 'user_id' => $user->id]);
+
+            if ($order->status === 'pending') {
+                $order->update(['status' => 'paid']);
+                Log::info("Order ID: {$order->id} status updated to 'paid'.");
+
+                foreach ($order->items as $item) {
+                    Log::info('Updating book analytics for  order item', ['book_id' => $item->book_id, 'order_item_id' => $item->id]);
+                    $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
+                        ['book_id' => $item->book_id],
+                        ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                    );
+                    $bookAnalytics->increment('purchases',(int) $item->quantity);
+                    $bookAnalytics->save();
+                    $bookAnalytics->refresh();
+                }
+            } else {
+                Log::info("Order ID: {$order->id} not in 'pending' status. Skipping update.");
+            }
+
+            if ($order->payout_status === 'pending') {
+                $delayDays = 7; // Funds become available after 1 week so dispatch after 8 days
+
+                // Dispatch the job to run after the specified delay
+                ProcessAuthorPayout::dispatch(purpose: 'order', purposeId: $order->id)->delay(now()->addDays($delayDays));
+                Log::info("ProcessAuthorPayout Job dispatched for Order ID: {$order->id}");
+            } else {
+                Log::info("Payout job for Order ID: {$order->id} already dispatched or completed. Skipping.");
+            }
+
+        } catch (ModelNotFoundException $e) {
+            Log::error("Order not found for ID: {$orderId} (User ID: {$user->id}). Error: " . $e->getMessage());
+            throw new \Exception('Order record not found: ' . $e->getMessage(), 404, $e);
+        } catch (\Throwable $e) {
+            Log::error('Error processing order: ' . $e->getMessage(), ['exception' => $e, 'order_id' => $orderId, 'user_id' => $user->id]);
+            throw new \Exception('Failed to process order: ' . $e->getMessage(), 500, $e);
         }
     }
 
@@ -191,7 +222,7 @@ class StripeWebhookService
                         'kyc_status' => 'verified',
                         'first_name' => $account->individual->first_name,
                         'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name.' '.$account->individual->last_name,
+                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
                     ]);
 
                     Log::info('Stripe Account Update Processed', ['account' => $account]);
