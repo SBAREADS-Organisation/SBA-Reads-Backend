@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\DigitalBookPurchase;
 use App\Models\Order;
+use App\Models\Transaction;
 use App\Services\Payments\PaymentService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -11,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
 
@@ -173,6 +175,24 @@ class ProcessAuthorPayout implements ShouldQueue
                 continue;
             }
 
+            // create a transaction
+            $reference = uniqid("pay".'_');
+
+            $transaction = Transaction::create([
+                'id' => Str::uuid(),
+                'user_id' => $author->id,
+                'reference' => $reference,
+                'status' => 'pending',
+                'currency' => 'USD',
+                'amount' => $payoutAmountCents / 100,
+                'payment_provider' => 'stripe',
+                'description' => "Author payout for DigitalBookPurchase ID: {$purchase->id}",
+                'type' => 'payout',
+                'direction' => 'credit',
+                'purpose_type' => 'digital_book_purchase',
+                'purpose_id' => $purchase->id,
+            ]);
+
             try {
                 // Create the Stripe Transfer
                 $transfer = $this->stripe->transfers->create([
@@ -186,6 +206,17 @@ class ProcessAuthorPayout implements ShouldQueue
                         'payment_intent_id' => $purchase->stripe_payment_intent_id,
                         'type' => 'author_royalty_batch',
                     ],
+                ]);
+
+                $transaction->update([
+                    'status' => 'succeeded',
+                    'payment_intent_id' => $transfer->id,
+                    'payout_data' => json_encode([
+                        'transfer_id' => $transfer->id,
+                        'amount' => $payoutAmountCents / 100,
+                        'currency' => $purchase->currency,
+                        'destination' => $author->kyc_account_id,
+                    ]),
                 ]);
 
                 Log::info("Stripe Transfer created for Author (User) ID: {$author->id}, Amount: {$payoutAmountCents}, Transfer ID: {$transfer->id}");
@@ -217,6 +248,10 @@ class ProcessAuthorPayout implements ShouldQueue
                         $item->update(['payout_status' => 'failed', 'payout_error' => $e->getMessage()]);
                     }
                 }
+                $transaction->update([
+                    'status' => 'failed',
+                    'payout_data' => json_encode(['error' => $e->getMessage()]),
+                ]);
             } catch (\Throwable $e) {
                 Log::error("General Error during payout for Author (User) ID: {$authorUserId} (Purchase ID: {$purchase->id}): " . $e->getMessage(), [
                     'exception' => $e,
@@ -228,6 +263,11 @@ class ProcessAuthorPayout implements ShouldQueue
                     }
                 }
             }
+
+            $transaction->update([
+                'status' => 'failed',
+                'payout_data' => json_encode(['error' => $e->getMessage()]),
+            ]);
         }
 
         // Update the main DigitalBookPurchase status based on overall payout success
@@ -329,7 +369,27 @@ class ProcessAuthorPayout implements ShouldQueue
                 continue;
             }
 
+            // create a transaction
+            $reference = uniqid("pay".'_');
+
+            $transaction = Transaction::create([
+                'id' => Str::uuid(),
+                'user_id' => $author->id,
+                'reference' => $reference,
+                'status' => 'pending',
+                'currency' => 'USD',
+                'amount' => $payoutAmountCents / 100,
+                'payment_provider' => 'stripe',
+                'description' => "Author payout for Order ID: {$order->id}",
+                'type' => 'payout',
+                'direction' => 'credit',
+                'purpose_type' => 'order',
+                'purpose_id' => $order->id,
+            ]);
+
+
             try {
+
                 // Create the Stripe Transfer
                 $transfer = $this->stripe->transfers->create([
                     'amount' => $payoutAmountCents, // Amount to send to the author (in cents)
@@ -342,6 +402,18 @@ class ProcessAuthorPayout implements ShouldQueue
                         'payment_intent_id' => $order->stripe_payment_intent_id,
                         'type' => 'author_royalty_batch',
                     ],
+                ]);
+
+                // Update the transaction with the transfer ID
+                $transaction->update([
+                    'status' => 'succeeded',
+                    'payment_intent_id' => $transfer->id,
+                    'payout_data' => json_encode([
+                        'transfer_id' => $transfer->id,
+                        'amount' => $payoutAmountCents / 100,
+                        'currency' => 'USD',
+                        'destination' => $author->kyc_account_id,
+                    ]),
                 ]);
 
                 Log::info("Stripe Transfer created for Author (User) ID: {$author->id}, Amount: {$payoutAmountCents}, Transfer ID: {$transfer->id}");
@@ -373,6 +445,11 @@ class ProcessAuthorPayout implements ShouldQueue
                         $item->update(['payout_status' => 'failed', 'payout_error' => $e->getMessage()]);
                     }
                 }
+
+                $transaction->update([
+                    'status' => 'failed',
+                    'payout_data' => json_encode(['error' => $e->getMessage()]),
+                ]);
             } catch (\Throwable $e) {
                 Log::error("General Error during payout for Author (User) ID: {$authorUserId} (Order ID: {$order->id}): " . $e->getMessage(), [
                     'exception' => $e,
@@ -383,6 +460,11 @@ class ProcessAuthorPayout implements ShouldQueue
                         $item->update(['payout_status' => 'failed', 'payout_error' => $e->getMessage()]);
                     }
                 }
+
+                $transaction->update([
+                    'status' => 'failed',
+                    'payout_data' => json_encode(['error' => $e->getMessage()]),
+                ]);
             }
         }
 
