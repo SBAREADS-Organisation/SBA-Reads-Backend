@@ -15,46 +15,45 @@ use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
 use App\Http\Controllers\User\UserController;
+use App\Models\WebhookEvent;
+use Cloudinary\Api\Admin\AdminApi;
+use Cloudinary\Api\Exception\ApiError;
+use Cloudinary\Configuration\Configuration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Storage;
+use Stripe\StripeClient;
 
-// Auth Routes
+// Authentication Routes
 Route::prefix('auth')->group(function () {
-    // Login
     Route::post('login', [AuthController::class, 'login'])->name('login');
-    // Route::post('/auth/login', [AuthController::class, 'login']);
-
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
     Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp']);
 });
 
-// ========================================================
-//                   USERS ROUTES
-// ========================================================
+// User Routes
 Route::prefix('user')->group(function () {
     Route::get('/', [UserController::class, 'index']);
 
     // Superadmin creation route
-    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']); // ->middleware('auth:sanctum');
+    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']);
 
     Route::post('/register', [UserController::class, 'register']);
     Route::post('/verify-email', [UserController::class, 'verifyAuthorEmail'])->name('verify-email');
     Route::post('/resend-email-token', [UserController::class, 'resendVerificationToken'])->name('resend-email-token');
 
-    // ================================================================================================================================================
-    //                                                 ADMIN USER MANAGEMENT ROUTES
-    // ================================================================================================================================================
-    Route::middleware(['auth:sanctum'])/* ->prefix('') */ ->group(function () {
+    // Admin User Management Routes
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::middleware(['role:admin,superadmin'])->get('all', [UserController::class, 'allUsers']);
     });
 
-    // ================================================================================================================================================
-    //                                                  USER MANAGEMENT ROUTES
-    // ================================================================================================================================================
-    Route::middleware(['auth:sanctum'])/* ->prefix('user') */ ->group(function () {
+    // User Management Routes
+    Route::middleware(['auth:sanctum'])->group(function () {
         Route::prefix('profile')->group(function () {
             Route::get('/', [UserController::class, 'profile']);
             Route::post('/', [UserController::class, 'updateProfile']);
@@ -64,26 +63,20 @@ Route::prefix('user')->group(function () {
             Route::patch('/settings', [UserController::class, 'updateSettings']);
         });
 
-        // Add Delivery Address
+        // User Address Routes
         Route::prefix('address')->group(function () {
             Route::post('/', [AddressController::class, 'store']);
             Route::get('/all', [AddressController::class, 'addresses']);
         });
 
-        // Subscriptions prefix
+        // User Subscriptions Routes
         Route::prefix('subscriptions')->group(function () {
             Route::get('history', [SubscriptionController::class, 'history'])->name('subscription-history');
             Route::post('subscribe', [SubscriptionController::class, 'subscribe'])->name('subscribe');
-            // Route::post('cancel', [SubscriptionController::class, 'cancelSubscription'])->name('cancel-subscription');
-        });
-
-        Route::delete('/', function (Request $request) {
-            //
         });
 
         // Refresh Token
         Route::post('token/refresh', function (Request $request) {
-            // dd($request->user());
             return $request->user()->createToken('Personal Access Token');
         });
 
@@ -93,14 +86,14 @@ Route::prefix('user')->group(function () {
         // Forgot Password
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
 
-        // KYC
+        // User KYC Routes
         Route::prefix('kyc')->group(function () {
             Route::post('initiate', [KYCController::class, 'initiate_KYC'])->name('initiate-kyc');
             Route::post('upload-document', [KYCController::class, 'uploadDocument'])->name('upload-document');
             Route::get('status', [KYCController::class, 'kycStatus'])->name('kyc-status');
         });
 
-        // Payment methods
+        // User Payment Method Routes
         Route::prefix('payment_method')->group(function () {
             Route::get('list', [UserController::class, 'listPaymentMethods'])->name('list-payment-methods');
             Route::post('delete', [UserController::class, 'deletePaymentMethod'])->name('delete-payment-method');
@@ -108,7 +101,7 @@ Route::prefix('user')->group(function () {
             Route::post('add-bank-account', [UserController::class, 'addBankAccount'])->name('add-bank-account');
         });
 
-        // Notifications
+        // User Notification Routes
         Route::prefix('notifications')->group(function () {
             Route::get('/', [NotificationsController::class, 'index'])->name('user-notifications');
             Route::post('{notification}/mark-as-read', [NotificationsController::class, 'markNotificationAsRead'])->name('mark-notification-as-read');
@@ -117,22 +110,21 @@ Route::prefix('user')->group(function () {
     });
 });
 
-// Get all available subscriptions
+// Subscription Routes
 Route::prefix('subscriptions')->group(function () {
     Route::get('/', [SubscriptionController::class, 'available'])->name('available-subscriptions');
 });
-// Route::get('subscriptions', [SubscriptionController::class, 'available'])->name('available-subscriptions');
 
+// Stripe Webhook Route
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
-// Books
-Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
+// Book Routes
+Route::middleware(['auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
     Route::post('books', [BookController::class, 'store']);
     Route::get('books', [BookController::class, 'index']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
-    //    Route::get('books/{id}/download', [BookController::class, 'download'])->name('book.download');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{id}', [BookController::class, 'update']);
     Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);
@@ -143,7 +135,6 @@ Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
     Route::post('books/{id}/start-reading', [BookController::class, 'startReading']);
     Route::get('books/user/reading-progress', [BookController::class, 'userProgress']);
     Route::post('books/{id}/reviews', [BookController::class, 'postReview']);
-    // Route::get('books/bookmarks/all', [BookController::class, 'getBookmarks']);
     Route::get('books/bookmarks/all', [BookController::class, 'getAllBookmarks']);
     Route::post('books/{id}/bookmark', [BookController::class, 'bookmark']);
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
@@ -153,7 +144,7 @@ Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
     // Author-specific endpoints (only for account_type = 'author')
     Route::get('author/my-books', [BookController::class, 'myBooks']);
 
-    // Categories
+    // Category Routes
     Route::prefix('categories')->group(function () {
         Route::get('/', [CategoryController::class, 'index']);
         Route::get('/{category}', [CategoryController::class, 'show']);
@@ -163,32 +154,32 @@ Route::middleware([/* 'auth:api', */ 'auth:sanctum'])->group(function () {
     });
 });
 
+// Order Routes
 Route::middleware(['auth:sanctum'])->prefix('order')->group(function () {
-    // Orders
     Route::middleware(['role:admin,superadmin'])->get('/', [OrderController::class, 'index']);
     Route::get('/my-orders', [OrderController::class, 'userOrders'])->name('user-orders');
     Route::post('/', [OrderController::class, 'store']);
     Route::get('/{id}', [OrderController::class, 'show']);
     Route::get('/track/{tracking_id}', [OrderController::class, 'track']);
-    // updateStatus
     Route::put('/{id}/status-update', [OrderController::class, 'updateStatus'])->name('update-order-status');
 });
 
-// Payments
+// Transaction Routes
 Route::middleware(['auth:sanctum'])->prefix('transaction')->group(function () {
     Route::get('/verify', [TransactionsController::class, 'verifyPayment']);
     Route::get('/my-transactions', [TransactionsController::class, 'getMyTransactions'])->name('my-transactions');
     Route::middleware(['role:admin,superadmin'])->get('/all', [TransactionsController::class, 'getAllTransactions']);
-    Route::get('/{id}', [TransactionsController::class, 'getTransaction']); /* ->where('id', '[0-9]+'); */
+    Route::get('/{id}', [TransactionsController::class, 'getTransaction']);
 });
 
-// Analytics
+// Analytics Routes
 Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
     Route::get('/', [AnalyticsController::class, 'index']);
 });
 
-// System Access permissions management routes // ['auth:sanctum'/*, 'role:admin,superadmin'*/]
+// Admin Routes
 Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->group(function () {
+    // App Version Support Routes
     Route::prefix('app-versions-support')->group(function () {
         Route::get('/', [AppVersionController::class, 'index']);
         Route::post('/', [AppVersionController::class, 'store']);
@@ -197,7 +188,7 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->g
         Route::delete('/{id}', [AppVersionController::class, 'destroy']);
     });
 
-    // Handle subscription management
+    // Admin Subscription Management Routes
     Route::prefix('subscriptions')->group(function () {
         Route::get('/', [SubscriptionController::class, 'available'])->name('subscriptions');
         Route::get('/{id}', [SubscriptionController::class, 'show'])->name('subscription');
@@ -206,16 +197,18 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->g
         Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('delete-subscription');
     });
 
+    // Admin Dashboard Route
     Route::get('dashboard', DashboardController::class);
 });
 
+// Social Authentication Routes
 Route::get('/auth/{provider}/redirect', [SocialAuthController::class, 'redirect']);
 Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback']);
-
-/**!SECTION Social Auth */
 Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
+// Utility Routes
+// Database migration route
 Route::get('migrate', function () {
     Artisan::call('migrate', ['--force' => true]);
 
@@ -240,6 +233,7 @@ Route::get('migrate', function () {
     ]);
 });
 
+// Database seeding route
 Route::get('seed', function () {
     Artisan::call('db:seed');
     $output = Artisan::output();
@@ -251,6 +245,7 @@ Route::get('seed', function () {
     ], 200);
 });
 
+// Cache clearing route
 Route::get('clear', function () {
     Artisan::call('optimize:clear');
     $output = Artisan::output();
@@ -265,7 +260,7 @@ Route::get('clear', function () {
     );
 });
 
-// Routes List
+// Routes listing route
 Route::get('routes', function () {
     Artisan::call('route:list');
     $output = Artisan::output();
@@ -277,6 +272,7 @@ Route::get('routes', function () {
     ], 200);
 });
 
+// Storage link creation route
 Route::get('storage-link', function () {
     Artisan::call('storage:link');
     $output = Artisan::output();
@@ -288,6 +284,7 @@ Route::get('storage-link', function () {
     ], 200);
 });
 
+// Application optimization route
 Route::get('optimize', function () {
     Artisan::call('optimize');
     $output = Artisan::output();
@@ -299,10 +296,12 @@ Route::get('optimize', function () {
     ], 200);
 });
 
+// Key generation route
 Route::get('key-generate', function () {
     Artisan::call('key:generate');
 });
 
+// Database debugging route
 Route::get('/debug-db', function () {
     try {
         $data = DB::select('SELECT * FROM roles');
@@ -318,4 +317,236 @@ Route::get('/debug-db', function () {
             'message' => $th->getMessage(),
         ], 500);
     }
+});
+
+// Database information route
+Route::get('/show-db', function() {
+    Artisan::call('db:show');
+    $output = Artisan::output();
+
+    return response()->json([
+        'message' => 'Optimized successfully',
+        'code' => 200,
+        'output' => $output,
+    ], 200);
+});
+
+// Monitor Routes
+Route::middleware(['monitor.auth'])->prefix('monitor')->group(function () {
+
+    // Health check route
+    Route::get('/health', function () {
+        $status = 'ok';
+        $checks = [];
+
+        try {
+            DB::connection()->getPdo();
+            $checks['database'] = 'ok';
+        } catch (\Exception $e) {
+            $checks['database'] = 'error: ' . $e->getMessage();
+            $status = 'degraded';
+        }
+
+        try {
+            Cache::put('monitor_test', 'test', 10);
+            $cacheValue = Cache::get('monitor_test');
+            if ($cacheValue === 'test') {
+                $checks['cache'] = 'ok';
+            } else {
+                $checks['cache'] = 'error: cache not working as expected';
+                $status = 'degraded';
+            }
+        } catch (\Exception $e) {
+            $checks['cache'] = 'error: ' . $e->getMessage();
+            $status = 'degraded';
+        }
+
+        try {
+            Storage::disk('local')->put('monitor_test.txt', 'test content');
+            if (Storage::disk('local')->exists('monitor_test.txt')) {
+                Storage::disk('local')->delete('monitor_test.txt');
+                $checks['storage'] = 'ok';
+            } else {
+                $checks['storage'] = 'error: storage not writable';
+                $status = 'degraded';
+            }
+        } catch (\Exception $e) {
+            $checks['storage'] = 'error: ' . $e->getMessage();
+            $status = 'degraded';
+        }
+
+        $responseCode = ($status === 'ok') ? 200 : 503;
+
+        return response()->json([
+            'status' => $status,
+            'application' => config('app.name'),
+            'environment' => config('app.env'),
+            'checks' => $checks,
+            'timestamp' => now()->toIso8601String(),
+        ], $responseCode);
+    });
+
+    // Queue monitoring route
+    Route::get('/queue', function () {
+        $queueConnection = config('queue.default');
+        $status = 'ok';
+        $queueInfo = [];
+
+        try {
+            if ($queueConnection === 'database') {
+                $pendingJobs = DB::table(config('queue.connections.database.table'))
+                    ->where('queue', config('queue.connections.database.queue'))
+                    ->whereNull('reserved_at')
+                    ->count();
+                $queueInfo['pending_jobs'] = $pendingJobs;
+            } else {
+                $queueInfo['pending_jobs'] = 'N/A (database queue only for direct count)';
+            }
+
+            $failedJobs = DB::table(config('queue.failed.table'))->count();
+            $queueInfo['failed_jobs'] = $failedJobs;
+
+            if ($failedJobs > 0) {
+                $status = 'degraded';
+            }
+
+        } catch (\Exception $e) {
+            $queueInfo['error'] = $e->getMessage();
+            $status = 'error';
+        }
+
+        $responseCode = ($status === 'ok') ? 200 : 503;
+
+        return response()->json([
+            'status' => $status,
+            'queue_connection' => $queueConnection,
+            'queue_info' => $queueInfo,
+            'timestamp' => now()->toIso8601String(),
+        ], $responseCode);
+    });
+
+    // Schedule monitoring route
+    Route::get('/schedule', function (Schedule $schedule) {
+        $events = $schedule->events();
+        $taskCount = count($events);
+        $status = 'ok';
+        $message = 'Scheduler is active and ' . $taskCount . ' tasks are registered.';
+
+        if ($taskCount === 0) {
+            $status = 'warning';
+            $message = 'No scheduled tasks registered. Is scheduler running?';
+        }
+
+        return response()->json([
+            'status' => $status,
+            'message' => $message,
+            'registered_tasks_count' => $taskCount,
+            'timestamp' => now()->toIso8601String(),
+        ], 200);
+    });
+
+    // Recent webhooks monitoring route
+    Route::get('/webhooks/recent', function () {
+        $recentEvents = WebhookEvent::orderByDesc('created_at')
+            ->limit(20)
+            ->get(['stripe_event_id', 'type', 'status', 'created_at', 'error_message']);
+
+        return response()->json([
+            'status' => 'ok',
+            'recent_webhook_events' => $recentEvents,
+            'timestamp' => now()->toIso8601String(),
+        ], 200);
+    });
+
+    // Version information route
+    Route::get('/version', function () {
+        return response()->json([
+            'status' => 'ok',
+            'app_name' => config('app.name'),
+            'app_env' => config('app.env'),
+            'app_version' => config('app.version', '1.0.0'),
+            'laravel_version' => app()->version(),
+            'timestamp' => now()->toIso8601String(),
+        ], 200);
+    });
+
+    // Stripe connection monitoring route
+    Route::get('/stripe', function () {
+        $status = 'ok';
+        $message = 'Stripe API connection successful.';
+        $details = [];
+
+        try {
+            $stripeSecret = config('services.stripe.secret');
+
+            if (empty($stripeSecret)) {
+                $status = 'error';
+                $message = 'Stripe secret key is not configured.';
+            } else {
+                $stripe = new StripeClient(['api_key' => $stripeSecret]);
+                $balance = $stripe->balance->retrieve();
+
+                $details['balance_available'] = $balance->available;
+                $details['balance_pending'] = $balance->pending;
+                $details['default_currency'] = $balance->available[0]->currency ?? 'N/A';
+            }
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            $status = 'error';
+            $message = 'Stripe API Error: ' . $e->getMessage();
+            $details['stripe_code'] = $e->getStripeCode();
+            $details['http_status'] = $e->getHttpStatus();
+        } catch (\Throwable $e) {
+            $status = 'error';
+            $message = 'General error connecting to Stripe: ' . $e->getMessage();
+        }
+
+        $responseCode = ($status === 'ok') ? 200 : 503;
+
+        return response()->json([
+            'status' => $status,
+            'message' => $message,
+            'details' => $details,
+            'timestamp' => now()->toIso8601String(),
+        ], $responseCode);
+    });
+
+    // Cloudinary connection monitoring route
+    Route::get('/cloudinary', function () {
+        $status = 'ok';
+        $message = 'Cloudinary API connection successful.';
+        $details = [];
+
+        try {
+            Configuration::instance([
+                'cloud_name' => config('services.cloud.cloud_name'),
+                'api_key' => config('services.cloud.api_key'),
+                'api_secret' => config('services.cloud.api_secret'),
+            ]);
+
+            $api = new AdminApi();
+            $usage = $api->usage();
+
+            $details['cloud_name'] = config('services.cloud.cloud_name');
+            $details['storage_usage_bytes'] = $usage['usage']['total_storage_bytes'] ?? 'N/A';
+            $details['media_count'] = $usage['usage']['resources'] ?? 'N/A';
+
+        } catch (ApiError $e) {
+            $status = 'error';
+            $message = 'Cloudinary API Error: ' . $e->getMessage();
+            $details['cloudinary_error_code'] = $e->getCode();
+            $details['cloudinary_error_message'] = $e->getMessage();
+        } catch (\Throwable $e) {
+            $status = 'error';
+            $message = 'General error connecting to Cloudinary: ' . $e->getMessage();
+        }
+
+        $responseCode = ($status === 'ok') ? 200 : 503;
+
+        return response()->json([
+            'status' => $status,
+            'message' => $message,
+            'details' => $details,
+            'timestamp' => now()->toIso8601String(),
+        ], $responseCode);
+    });
 });

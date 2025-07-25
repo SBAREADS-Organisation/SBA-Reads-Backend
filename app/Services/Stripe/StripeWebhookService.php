@@ -29,7 +29,7 @@ class StripeWebhookService
     /**
      * Handle the payment intent succeeded event.
      */
-    public function handlePaymentIntentSucceeded(PaymentIntent $paymentIntent): JsonResponse
+    public function handlePaymentIntentSucceeded(PaymentIntent $paymentIntent): void
     {
         try {
             // Log the payment intent for debugging purposes
@@ -202,10 +202,10 @@ class StripeWebhookService
         }
     }
 
-    public function handleAccountUpdated(Account $account): JsonResponse
+    public function handleAccountUpdated(Account $account): void
     {
         try {
-            Log::info('Stripe Account Updated', ['account_id' => $account]);
+            Log::info('Stripe Account Update Event Received', ['account_id' => $account]);
             $user = User::where('kyc_account_id', $account->id)->first();
 
             if ($user) {
@@ -227,6 +227,8 @@ class StripeWebhookService
 
                     Log::info('Stripe Account Update Processed', ['account' => $account]);
                 }
+            } else {
+                Log::warning('Stripe Account Update: User not found for account', ['account_id' => $account->id]);
             }
         } catch (\Exception $e) {
             Log::error('Error handling account updated', [
