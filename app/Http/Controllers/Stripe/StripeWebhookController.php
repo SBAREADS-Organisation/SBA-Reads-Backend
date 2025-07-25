@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Stripe;
 
 use App\Http\Controllers\Controller;
+use App\Models\WebhookEvent;
 use App\Services\Stripe\StripeWebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,34 +33,60 @@ class StripeWebhookController extends Controller
         $sigHeader = $request->header('Stripe-Signature');
         $secret = config('services.stripe.webhook_secret');
 
+        $webhookEvent = null; // Initialize to null
+
         try {
             $event = Webhook::constructEvent($payload, $sigHeader, $secret);
+
+            $webhookEvent = WebhookEvent::updateOrCreate(
+                ['stripe_event_id' => $event->id], // Unique identifier
+                [
+                    'type' => $event->type,
+                    'payload' => $event->toArray(), // Store full payload
+                    'status' => 'received', // Initial status
+                ]
+            );
         } catch (SignatureVerificationException $e) {
             // Invalid signature (e.g., tampered payload, incorrect secret)
-            Log::error('Stripe Webhook Signature Verification Failed: '.$e->getMessage(), [
+            Log::error('Stripe Webhook Signature Verification Failed: ' . $e->getMessage(), [
                 'payload_start' => substr($payload, 0, 200), // Log partial payload for debugging
                 'signature_header' => $sigHeader,
-                'secret_configured' => substr($secret, 0, 10).'...', // Log part of secret for debug (don't log full secret)
+                'secret_configured' => substr($secret, 0, 10) . '...', // Log part of secret for debug (don't log full secret)
+            ]);
+
+            $webhookEvent?->update([
+                'status' => 'failed',
+                'error_message' => 'Signature verification failed: ' . $e->getMessage(),
             ]);
 
             return response()->json(['error' => 'Webhook signature verification failed.'], 403);
         } catch (UnexpectedValueException $e) {
             // Invalid payload (e.g., not valid JSON)
-            Log::error('Stripe Webhook Invalid Payload: '.$e->getMessage(), [
+            Log::error('Stripe Webhook Invalid Payload: ' . $e->getMessage(), [
                 'payload_start' => substr($payload, 0, 200),
+            ]);
+
+            $webhookEvent?->update([
+                'status' => 'failed',
+                'error_message' => 'Invalid payload: ' . $e->getMessage(),
             ]);
 
             return response()->json(['error' => 'Invalid webhook payload.'], 400);
         } catch (\Throwable $e) { // Catch any other unexpected errors during construction
-            Log::error('Stripe Webhook Construction Error: '.$e->getMessage(), [
+            Log::error('Stripe Webhook Construction Error: ' . $e->getMessage(), [
                 'exception' => $e,
                 'payload_start' => substr($payload, 0, 200),
+            ]);
+
+            $webhookEvent?->update([
+                'status' => 'failed',
+                'error_message' => 'Internal error: ' . $e->getMessage(),
             ]);
 
             return response()->json(['error' => 'Internal webhook error.'], 500);
         }
 
-        Log::info('Stripe Webhook Received: '.$event->type, ['event_id' => $event->id]);
+        Log::info('Stripe Webhook Received: ' . $event->type, ['event_id' => $event->id]);
 
         switch ($event->type) {
             case 'payment_intent.succeeded':
@@ -68,24 +95,20 @@ class StripeWebhookController extends Controller
                 $this->service->handlePaymentIntentSucceeded($paymentIntent);
                 break;
 
-            case 'payment_intent.payment_failed':
-                $paymentIntent = $event->data->object;
-                // Example: Notify user of failed payment, update order status
-                $this->handlePaymentIntentFailed($paymentIntent);
-                break;
-
             case 'account.updated':
                 $account = $event->data->object;
                 $this->service->handleAccountUpdated($account);
                 break;
 
             default:
-                Log::warning('Stripe Webhook: Unhandled event type received: '.$event->type, ['event_id' => $event->id]);
+                Log::warning('Stripe Webhook: Unhandled event type received: ' . $event->type, ['event_id' => $event->id]);
                 break;
         }
 
-        // 3. Always return a 200 OK response to Stripe
-        // This indicates that your endpoint successfully received the event.
+        if ($webhookEvent) {
+            $webhookEvent->update(['status' => 'processed']);
+        }
+
         return response()->json(['status' => 'success'], 200);
     }
 }

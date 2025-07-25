@@ -123,4 +123,9 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+     * API Key for monitoring endpoints.
+     */
+    'monitor_api_key' => env('MONITOR_API_KEY'),
+
 ];

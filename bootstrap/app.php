@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckAppVersion;
+use App\Http\Middleware\MonitorAuth;
 use App\Services\Slack\SlackWebhookService;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,11 +18,16 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->append(CheckAppVersion::class);
+        $middleware->append([CheckAppVersion::class,
+             MonitorAuth::class,
+        ]);
+
+        $middleware->alias([
+            'monitor.auth' => MonitorAuth::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         $exceptions->report(function (\Throwable $e) {
-            dd($e);
             app()->instance('last_exception', $e);
         });
         $exceptions->render(function (Throwable $e) {
