@@ -18,9 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: 'api',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->append([CheckAppVersion::class,
-             MonitorAuth::class,
-        ]);
+        $middleware->append(CheckAppVersion::class);
 
         $middleware->alias([
             'monitor.auth' => MonitorAuth::class,
