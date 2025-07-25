@@ -527,8 +527,8 @@ Route::middleware(['monitor.auth'])->prefix('monitor')->group(function () {
             $usage = $api->usage();
 
             $details['cloud_name'] = config('services.cloud.cloud_name');
-            $details['storage_usage_bytes'] = $usage['usage']['total_storage_bytes'] ?? 'N/A';
-            $details['media_count'] = $usage['usage']['resources'] ?? 'N/A';
+            $details['storage_usage_bytes'] = $usage['storage']['usage'] ?? 'N/A';
+            $details['media_count'] = $usage['objects']['usage'] ?? 'N/A';
 
         } catch (ApiError $e) {
             $status = 'error';
