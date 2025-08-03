@@ -26,9 +26,12 @@ class OrderService
         DB::beginTransaction();
 
         try {
+            // Create or find address from string
+            $addressId = $this->handleDeliveryAddress($user, $payload->delivery_address);
+
             $order = Order::create([
                 'user_id' => $user->id,
-                'delivery_address_id' => $payload->delivery_address_id,
+                'delivery_address_id' => $addressId,
                 'total_amount' => 0,
                 'status' => 'pending',
                 'tracking_number' => Order::generateTrackingNumber(),
@@ -38,7 +41,6 @@ class OrderService
 
             foreach ($payload->books as $item) {
                 $book = Book::findOrFail($item['book_id']);
-                // dd($book->pricing['actual_price']);
                 $price = $book->pricing['actual_price'];
                 $quantity = $item['quantity'];
                 $totalPrice = $price * $quantity;
@@ -74,7 +76,6 @@ class OrderService
 
             if ($transaction instanceof JsonResponse) {
                 $responseData = $transaction->getData(true);
-
                 return $this->error(
                     'An error occurred while initiating the books order process.',
                     $transaction->getStatusCode(),
@@ -88,11 +89,30 @@ class OrderService
 
             return $this->success(
                 ['order' => $order, 'transaction' => $transaction],
-                'Order created successfully. Please proceed to payment.');
+                'Order created successfully. Please proceed to payment.'
+            );
         } catch (\Exception $e) {
             DB::rollBack();
-            throw new \Exception('An error occurred while creating the order: '.$e->getMessage(), 0, $e);
+            throw new \Exception('An error occurred while creating the order: ' . $e->getMessage(), 0, $e);
         }
+    }
+
+    /**
+     * Handle delivery address - create new address from string
+     */
+    private function handleDeliveryAddress($user, $addressString)
+    {
+        // Create a new address record from the string
+        $address = \App\Models\Address::create([
+            'user_id' => $user->id,
+            'address' => $addressString,
+            'city' => 'Not specified', // Default values
+            'country' => 'Not specified',
+            'postal_code' => '00000',
+            'is_default' => false,
+        ]);
+
+        return $address->id;
     }
 
     public function trackOrder($user, $tracking_number)
@@ -100,7 +120,7 @@ class OrderService
         try {
             return Order::where('tracking_number', $tracking_number)->with('items.book')->firstOrFail();
         } catch (\Exception $e) {
-            throw new \Exception('An error occurred while tracking the order: '.$e->getMessage(), 0, $e);
+            throw new \Exception('An error occurred while tracking the order: ' . $e->getMessage(), 0, $e);
             // throw $e;
         }
     }
