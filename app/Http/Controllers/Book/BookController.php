@@ -95,7 +95,7 @@ class BookController extends Controller
     {
         try {
             // $cacheKey = 'books_' . md5(json_encode($request->all()));
-            $cacheKey = 'books_'.md5($request->fullUrl());
+            $cacheKey = 'books_' . md5($request->fullUrl());
             $books = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
                 $query = Book::query()->with(['authors', /* 'author_id', */ 'categories', /* 'category', */ 'reviews', 'analytics']);
                 $query->where('status', 'approved');
@@ -205,7 +205,7 @@ class BookController extends Controller
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'New Book Created',
-                    'Your book "'.$book->title.'" has been created successfully.',
+                    'Your book "' . $book->title . '" has been created successfully.',
                     ['in-app', 'email'],
                     $book,
                     new BookCreatedNotification(
@@ -247,7 +247,7 @@ class BookController extends Controller
     public function show($id)
     {
         try {
-            $book = Book::with(['authors', 'categories', 'reviews.user', 'analytics'])->findOrFail($id);
+            $book = Book::with(['authors', 'categories', 'reviews.user', 'analytics', 'bookmarkedBy:id', 'purchasers:id'])->findOrFail($id);
 
             // Fetch similar books (by shared categories)
             $similarBooks = Book::whereHas('categories', function ($q) use ($book) {
@@ -266,7 +266,6 @@ class BookController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            // Log::error('Error fetching book overview: ' . $e->getMessage());
             return $this->error(
                 'Failed to retrieve book details.',
                 500,
@@ -282,14 +281,37 @@ class BookController extends Controller
     public function myBooks(Request $request)
     {
         $user = $request->user();
-        // dd($user);
-        // if ($user->account_type !== 'author') { // NOTE: Uncomment Later
-        //     return response()->json(['message' => 'Unauthorized'], 403);
-        // }
 
-        $books = Book::whereHas('authors', function ($q) use ($user) {
+        $query = Book::whereHas('authors', function ($q) use ($user) {
             $q->where('users.id', $user->id);
-        })->paginate(20);
+        });
+
+        // Search filter
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'ilike', "%{$search}%")
+                    ->orWhere('description', 'ilike', "%{$search}%")
+                    ->orWhere('isbn', 'ilike', "%{$search}%");
+            });
+        }
+
+        // Status filter
+        if ($request->filled('status')) {
+            $query->where('status', $request->input('status'));
+        }
+
+        // Visibility filter
+        if ($request->filled('visibility')) {
+            $query->where('visibility', $request->input('visibility'));
+        }
+
+        // Sorting
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortDir = $request->input('sort_dir', 'desc');
+        $query->orderBy($sortBy, $sortDir);
+
+        $books = $query->paginate($request->input('per_page', 20));
 
         if ($books->isEmpty()) {
             return $this->error(
@@ -420,7 +442,7 @@ class BookController extends Controller
     {
         try {
             $user = $request->user();
-            $cacheKey = 'user_reading_progress_'.$user->id.'_'.md5(json_encode($request->all()));
+            $cacheKey = 'user_reading_progress_' . $user->id . '_' . md5(json_encode($request->all()));
 
             $progress = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($user, $request) {
                 $query = ReadingProgress::with([
@@ -608,7 +630,7 @@ class BookController extends Controller
                     'authors:id,name',
                     'categories:id,name',
                     'analytics:id,book_id,views,downloads,likes',
-                    'readingProgress' => fn ($q) => $q->where('user_id', $user->id),
+                    'readingProgress' => fn($q) => $q->where('user_id', $user->id),
                 ]);
 
             if ($search) {
@@ -725,7 +747,7 @@ class BookController extends Controller
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'New Book Created',
-                    'Your book "'.$book->title.'" has been deleted. Reason: '.$request->input('reason'),
+                    'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
                     ['in-app', 'email'],
                     $book,
                     new BookDeleted(
@@ -1010,17 +1032,60 @@ class BookController extends Controller
 
                 $conflictingBooks = Book::whereIn('id', $alreadyOwnedIds)->pluck('title')->implode(', ');
 
-                return $this->error('You already own the following book(s): '.$conflictingBooks, 409);
+                return $this->error('You already own the following book(s): ' . $conflictingBooks, 409);
             }
 
             //            $user->purchasedBooks()->attach($bookIds);
             return $this->service->purchaseBooks($bookIds, $user);
-
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
             // Log::error('Book purchase error: ' . $e->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Get reviews for a specific book.
+     */
+    public function getReviews(Request $request, $bookId)
+    {
+        try {
+            $book = Book::findOrFail($bookId);
+
+            $query = BookReviews::with('user:id,name,email,profile_picture')
+                ->where('book_id', $bookId);
+
+            // Filter by rating
+            if ($request->filled('rating')) {
+                $query->where('rating', $request->input('rating'));
+            }
+
+            // Search in comments
+            if ($request->filled('search')) {
+                $search = $request->input('search');
+                $query->where('comment', 'ilike', "%{$search}%");
+            }
+
+            // Sorting
+            $sortBy = $request->input('sort_by', 'created_at');
+            $sortDir = $request->input('sort_dir', 'desc');
+            $query->orderBy($sortBy, $sortDir);
+
+            $reviews = $query->paginate($request->input('per_page', 15));
+
+            return $this->success(
+                $reviews,
+                'Reviews retrieved successfully.',
+                200
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to retrieve reviews.',
+                500,
+                null,
+                $e->getMessage()
+            );
         }
     }
 }
