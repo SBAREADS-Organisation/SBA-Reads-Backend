@@ -41,7 +41,9 @@ class OrderController extends Controller
             }
 
             if ($request->filled('search')) {
-                $q->whereHas('items.book', fn ($b) => $b->where('title', 'like', '%'.$request->search.'%')
+                $q->whereHas(
+                    'items.book',
+                    fn($b) => $b->where('title', 'like', '%' . $request->search . '%')
                 );
             }
             if ($request->filled('sort_by')) {
@@ -116,14 +118,18 @@ class OrderController extends Controller
     public function store(Request $request)
     {
         try {
+            // Debug: Log the incoming request
+            // \Log::info('Order request data:', $request->all());
+
             $validator = Validator::make($request->all(), [
                 'books' => 'required|array|min:1',
                 'books.*.book_id' => 'required|exists:books,id',
                 'books.*.quantity' => 'required|integer|min:1',
-                'delivery_address_id' => 'required|exists:addresses,id',
+                'delivery_address' => 'required|string|max:500',
             ]);
 
             if ($validator->fails()) {
+                // \Log::error('Order validation failed:', $validator->errors()->toArray());
                 return $this->error(
                     'Validation failed',
                     400,
@@ -133,9 +139,8 @@ class OrderController extends Controller
 
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
-            // throw $th;
+            \Log::error('Order creation error:', ['message' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
-
             return $this->error($message, 500, null, $th);
         }
     }
