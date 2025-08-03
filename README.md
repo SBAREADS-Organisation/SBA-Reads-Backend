@@ -1,66 +1,82 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SBA Reads Backend Documentation
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+## Overview
 
-## About Laravel
+This repository contains comprehensive documentation for the SBA Reads Backend API, including API documentation, architecture overview, and a Postman collection for testing.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Documentation Files
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+### 1. API_DOCUMENTATION.md
+Comprehensive documentation covering all API endpoints, their request/response formats, authentication requirements, and error handling.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### 2. ARCHITECTURE_OVERVIEW.md
+Detailed overview of the system architecture including:
+- High-level architecture diagram
+- Key components (controllers, services, repositories, models)
+- Authentication and authorization approach
+- Data flow through the system
+- Payment processing workflow
+- File storage strategy
+- Security considerations
+- Database design and relationships
+- Scalability and deployment considerations
 
-## Learning Laravel
+## Using the Postman Collection
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+1. Open Postman
+2. Click "Import" in the top left corner
+3. Select the `SBA_Reads_API.postman_collection.json` file
+4. Create a new environment with the following variables:
+   - `base_url`: The base URL of your API (e.g., https://api.example.com)
+   - `auth_token`: Your authentication token (can be set after login)
+5. Start testing the endpoints
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+## Environment Variables
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+The Postman collection uses the following environment variables:
+- `{{base_url}}` - The base URL of your API
+- `{{auth_token}}` - Authentication token for protected endpoints
 
-## Laravel Sponsors
+## API Endpoints Covered
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+The documentation and Postman collection cover all major API endpoints including:
 
-### Premium Partners
+### Authentication
+- User login, registration, password reset
+- Email verification for authors
 
-- **[Vehikl](https://vehikl.com/)**
-- **[Tighten Co.](https://tighten.co)**
-- **[WebReinvent](https://webreinvent.com/)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel/)**
-- **[Cyber-Duck](https://cyber-duck.co.uk)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Jump24](https://jump24.co.uk)**
-- **[Redberry](https://redberry.international/laravel/)**
-- **[Active Logic](https://activelogic.com)**
-- **[byte5](https://byte5.de)**
-- **[OP.GG](https://op.gg)**
+### User Management
+- Profile management
+- Settings and preferences
+- KYC verification
+- Payment methods
+- Notifications
 
-## Contributing
+### Book Management
+- Book listing, creation, and retrieval
+- Reading progress tracking
+- Bookmarks and reviews
+- Book purchasing
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Order Management
+- Order creation and tracking
+- Order status updates
 
-## Code of Conduct
+### Payment Processing
+- Transaction management
+- Payment verification
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Administrative Functions
+- User management
+- Book audit actions
+- Subscription management
+- Analytics
 
-## Security Vulnerabilities
+## Getting Started
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+1. Review the `ARCHITECTURE_OVERVIEW.md` to understand the system design
+2. Use `API_DOCUMENTATION.md` as a reference for implementing client applications
+3. Import `APIS-SBAREADS.postman_collection.json` into Postman to test endpoints
+4. Set up your Postman environment with the required variables
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Support
