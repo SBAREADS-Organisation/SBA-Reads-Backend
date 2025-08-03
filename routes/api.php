@@ -124,11 +124,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books', [BookController::class, 'store']);
     Route::get('books', [BookController::class, 'index']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
+    Route::get('books/search', [BookController::class, 'search']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
+    Route::get('books/{id}/reviews', [BookController::class, 'getReviews']);
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{id}', [BookController::class, 'update']);
     Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);
-    Route::get('books/search', [BookController::class, 'search']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
 
     // Reader-specific endpoints
@@ -155,13 +156,16 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 // Order Routes
-Route::middleware(['auth:sanctum'])->prefix('order')->group(function () {
-    Route::middleware(['role:admin,superadmin'])->get('/', [OrderController::class, 'index']);
-    Route::get('/my-orders', [OrderController::class, 'userOrders'])->name('user-orders');
-    Route::post('/', [OrderController::class, 'store']);
-    Route::get('/{id}', [OrderController::class, 'show']);
-    Route::get('/track/{tracking_id}', [OrderController::class, 'track']);
-    Route::put('/{id}/status-update', [OrderController::class, 'updateStatus'])->name('update-order-status');
+Route::middleware(['auth:sanctum'])->group(function () {
+    // Admin order management
+    Route::middleware(['role:admin,superadmin'])->get('order', [OrderController::class, 'index']);
+
+    // User order endpoints
+    Route::post('order', [OrderController::class, 'store'])->name('create-order');
+    Route::get('order/my-orders', [OrderController::class, 'userOrders'])->name('user-orders');
+    Route::get('order/{id}', [OrderController::class, 'show'])->name('show-order');
+    Route::get('order/track/{tracking_id}', [OrderController::class, 'track'])->name('track-order');
+    Route::put('order/{id}/status-update', [OrderController::class, 'updateStatus'])->name('update-order-status');
 });
 
 // Transaction Routes
@@ -223,7 +227,7 @@ Route::get('migrate', function () {
 
         $connectionStatus = "Connected to host: {$host}, database: {$database}";
     } catch (\Exception $e) {
-        $connectionStatus = 'Could not connect to database: '.$e->getMessage();
+        $connectionStatus = 'Could not connect to database: ' . $e->getMessage();
     }
 
     return response()->json([
@@ -320,7 +324,7 @@ Route::get('/debug-db', function () {
 });
 
 // Database information route
-Route::get('/show-db', function() {
+Route::get('/show-db', function () {
     Artisan::call('db:show');
     $output = Artisan::output();
 
@@ -409,7 +413,6 @@ Route::middleware(['monitor.auth'])->prefix('monitor')->group(function () {
             if ($failedJobs > 0) {
                 $status = 'degraded';
             }
-
         } catch (\Exception $e) {
             $queueInfo['error'] = $e->getMessage();
             $status = 'error';
@@ -529,7 +532,6 @@ Route::middleware(['monitor.auth'])->prefix('monitor')->group(function () {
             $details['cloud_name'] = config('services.cloud.cloud_name');
             $details['storage_usage_bytes'] = $usage['storage']['usage'] ?? 'N/A';
             $details['media_count'] = $usage['objects']['usage'] ?? 'N/A';
-
         } catch (ApiError $e) {
             $status = 'error';
             $message = 'Cloudinary API Error: ' . $e->getMessage();

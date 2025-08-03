@@ -72,7 +72,7 @@ class BookService
     {
         return DB::transaction(function () use ($booksData) {
             return collect($booksData)
-                ->map(fn ($data) => $this->createSingle($data))
+                ->map(fn($data) => $this->createSingle($data))
                 ->all();
         });
     }

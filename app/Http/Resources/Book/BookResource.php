@@ -95,6 +95,8 @@ class BookResource extends JsonResource
                     'bio' => $author->bio,
                 ];
             }),
+            'bookmarks' => $this->bookmarkedBy->pluck('id')->toArray(),
+            'readers' => $this->purchasers->pluck('id')->toArray(),
         ];
     }
 }
