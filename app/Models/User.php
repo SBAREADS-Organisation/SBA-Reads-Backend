@@ -117,7 +117,7 @@ class User extends Authenticatable
 
     public function authoredBooks()
     {
-        return $this->belongsToMany(Book::class, 'books_authors', 'author_id', 'book_id');
+        return $this->belongsToMany(Book::class, 'book_authors', 'author_id', 'book_id');
     }
 
     public function books()

@@ -19,9 +19,12 @@ class CategoryFactory extends Factory
      */
     public function definition(): array
     {
+        $name = $this->faker->unique()->word();
         return [
-            'name' => $this->faker->unique()->word(),
+            'name' => $name,
+            'slug' => \Illuminate\Support\Str::slug($name),
             'parent_id' => null,
+            'created_by' => \App\Models\User::factory(),
         ];
     }
 }
