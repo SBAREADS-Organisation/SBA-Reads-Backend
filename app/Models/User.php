@@ -174,7 +174,7 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->account_type === 'admin';
+        return in_array($this->account_type, ['admin', 'manager']);
     }
 
     /**
