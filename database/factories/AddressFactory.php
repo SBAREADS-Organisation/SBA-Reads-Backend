@@ -17,11 +17,14 @@ class AddressFactory extends Factory
     public function definition(): array
     {
         return [
+            'user_id' => \App\Models\User::factory(),
+            'full_name' => $this->faker->name(),
             'address' => $this->faker->streetAddress(),
             'city' => $this->faker->city(),
-            'state' => $this->faker->state(),
-            'postal_code' => $this->faker->postcode(),
+            'region' => $this->faker->state(),
             'country' => $this->faker->country(),
+            'postal_code' => $this->faker->postcode(),
+            'phone_number' => $this->faker->phoneNumber(),
             'is_default' => $this->faker->boolean(30),
         ];
     }
