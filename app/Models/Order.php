@@ -13,7 +13,7 @@ class Order extends Model
 
     public static function generateTrackingNumber()
     {
-        return 'TRK-'.strtoupper(Str::random(4)).'-'.time();
+        return 'TRK-' . strtoupper(Str::random(4)) . '-' . strtoupper(Str::random(6));
     }
 
     protected $fillable = [
@@ -21,18 +21,13 @@ class Order extends Model
         'total_amount',
         'platform_fee_amount',
         'status',
-        'payout_status', // ['initiated', 'completed', 'failed']
+        'payout_status',
         'transaction_id',
         'tracking_number',
         'delivery_address_id',
         'delivered_at',
     ];
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
     protected function casts(): array
     {
         return [
@@ -54,11 +49,6 @@ class Order extends Model
     {
         return $this->belongsTo(Transaction::class, 'transaction_id', 'id');
     }
-
-    // public function purpose()
-    // {
-    //     return $this->morphOne(Transaction::class, 'purpose');
-    // }
 
     public function deliveryAddress()
     {
