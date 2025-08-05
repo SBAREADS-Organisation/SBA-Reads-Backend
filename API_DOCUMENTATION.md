@@ -39,6 +39,105 @@ All error responses follow a consistent format:
 
 ## API Endpoints
 
+## Dashboard API Endpoints
+
+### GET /admin/dashboard
+Get comprehensive dashboard analytics and metrics.
+
+**Authentication Required**: Admin or Superadmin role
+
+**Response:**
+```json
+{
+  "data": {
+    "reader_count": 1250,
+    "author_count": 350,
+    "published_books_count": 850,
+    "pending_books_count": 45,
+    "recent_signups": [...],
+    "recent_transactions": [...],
+    "recent_book_uploads": [...],
+    "active_subscription_count": 420,
+    "revenue": 125000.50,
+    "reader_engagement": {
+      "active_readers": 980,
+      "total_reading_sessions": 15420,
+      "average_reading_progress": 0.75,
+      "total_reading_time_minutes": 1250.5
+    },
+    "books_published": 850,
+    "total_sales": 145000.75
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully."
+}
+```
+
+### Dashboard Payload Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `reader_count` | integer | Total number of registered readers |
+| `author_count` | integer | Total number of registered authors |
+| `published_books_count` | integer | Total number of published books |
+| `pending_books_count` | integer | Total number of books pending approval |
+| `recent_signups` | array | List of recent user registrations |
+| `recent_transactions` | array | List of recent financial transactions |
+| `recent_book_uploads` | array | List of recent book uploads |
+| `active_subscription_count` | integer | Total number of active subscriptions |
+| `revenue` | decimal | Total revenue from all successful transactions |
+| `reader_engagement` | object | Reader engagement metrics |
+| `books_published` | integer | Total published books (alias of published_books_count) |
+| `total_sales` | decimal | Total sales amount from all completed orders |
+
+### Reader Engagement Metrics
+
+The `reader_engagement` object contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `active_readers` | integer | Number of users with reading progress |
+| `total_reading_sessions` | integer | Total reading sessions across all users |
+| `average_reading_progress` | float | Average reading progress across all users (0-100) |
+| `total_reading_time_minutes` | float | Total reading time in minutes across all users |
+
+### Usage Example
+
+```bash
+curl -X GET https://your-domain.com/api/admin/dashboard \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Accept: application/json"
+```
+
+### Response Structure
+
+All dashboard endpoints return a consistent JSON response with the following structure:
+
+```json
+{
+  "data": {
+    // Dashboard metrics
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully."
+}
+```
+
+### Error Handling
+
+If an error occurs, the response will include:
+
+```json
+{
+  "data": null,
+  "code": 500,
+  "message": "An error occurred while retrieving dashboard data.",
+  "error": {
+    "details": "Error details"
+  }
+}
+```
+
 ### Authentication
 
 #### POST /auth/login
