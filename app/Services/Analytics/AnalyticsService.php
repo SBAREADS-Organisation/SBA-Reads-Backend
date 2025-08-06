@@ -108,4 +108,65 @@ class AnalyticsService
             ->limit(7)
             ->get();
     }
+
+    /**
+     * Get monthly revenue data for the current year
+     * Returns data in format: { "January": 120, "February": 300, ... }
+     */
+    public function getMonthlyRevenue(?User $user = null): array
+    {
+        $query = Transaction::selectRaw('MONTH(created_at) as month, SUM(amount) as total')
+            ->where('status', 'succeeded')
+            ->whereIn('type', ['purchase', 'earning'])
+            ->whereYear('created_at', Carbon::now()->year)
+            ->groupBy('month')
+            ->orderBy('month');
+
+        // If user is provided, filter by user (for author/user scope)
+        if ($user) {
+            $query->where('user_id', $user->id);
+        }
+
+        $results = $query->get();
+
+        // Initialize all months with 0
+        $monthlyRevenue = [
+            'January' => 0,
+            'February' => 0,
+            'March' => 0,
+            'April' => 0,
+            'May' => 0,
+            'June' => 0,
+            'July' => 0,
+            'August' => 0,
+            'September' => 0,
+            'October' => 0,
+            'November' => 0,
+            'December' => 0,
+        ];
+
+        // Map month numbers to month names
+        $monthNames = [
+            1 => 'January',
+            2 => 'February',
+            3 => 'March',
+            4 => 'April',
+            5 => 'May',
+            6 => 'June',
+            7 => 'July',
+            8 => 'August',
+            9 => 'September',
+            10 => 'October',
+            11 => 'November',
+            12 => 'December'
+        ];
+
+        // Fill in the actual revenue data
+        foreach ($results as $result) {
+            $monthName = $monthNames[$result->month];
+            $monthlyRevenue[$monthName] = (float) $result->total;
+        }
+
+        return $monthlyRevenue;
+    }
 }

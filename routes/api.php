@@ -184,6 +184,7 @@ Route::middleware(['auth:sanctum'])->prefix('transaction')->group(function () {
 // Analytics Routes
 Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
     Route::get('/', [AnalyticsController::class, 'index']);
+    Route::get('/monthly-revenue', [AnalyticsController::class, 'monthlyRevenue']);
 });
 
 // Admin Routes
