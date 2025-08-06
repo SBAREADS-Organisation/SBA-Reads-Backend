@@ -130,6 +130,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('books/{id}/reviews', [BookController::class, 'getReviews']);
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{id}', [BookController::class, 'update']);
+    Route::patch('books/{book}/toggle-visibility', [BookController::class, 'toggleVisibility']);
     Route::middleware(['role:admin,superadmin'])->post('books/{book}/delete', [BookController::class, 'destroy']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
 

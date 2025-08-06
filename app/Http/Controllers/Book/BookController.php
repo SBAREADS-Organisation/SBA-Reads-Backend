@@ -724,7 +724,125 @@ class BookController extends Controller
      */
     public function update(Request $request, Book $book)
     {
-        //
+        try {
+            $user = $request->user();
+
+            // Authorization: Only book authors or admins can update books
+            if ($book->author_id !== $user->id && !$user->hasRole(['admin', 'superadmin'])) {
+                return $this->error('Unauthorized. You can only update your own books.', 403);
+            }
+
+            // Validation rules for updating a book
+            $rules = [
+                'title' => 'sometimes|string|max:255',
+                'sub_title' => 'sometimes|nullable|string|max:255',
+                'description' => 'sometimes|string',
+                'isbn' => 'sometimes|string|unique:books,isbn,' . $book->id,
+                'table_of_contents' => 'sometimes|array',
+                'tags' => 'sometimes|nullable|array',
+                'tags.*' => 'string|max:50',
+                'categories' => 'sometimes|nullable|array',
+                'categories.*' => 'exists:categories,id',
+                'genres' => 'sometimes|nullable|array',
+                'genres.*' => 'string|max:50',
+                'publication_date' => 'sometimes|nullable|date',
+                'language' => 'sometimes|nullable|array',
+                'language.*' => 'string|max:50',
+                'format' => 'sometimes|nullable|string|max:50',
+                'target_audience' => 'sometimes|nullable|array',
+                'target_audience.*' => 'string|max:50',
+                'actual_price' => 'sometimes|nullable|numeric|min:0',
+                'discounted_price' => 'sometimes|nullable|numeric|min:0',
+                'currency' => 'sometimes|nullable|string|size:3',
+                'availability' => 'sometimes|nullable|array',
+                'availability.*' => 'string',
+                'file_size' => 'sometimes|nullable|string|max:50',
+                'publisher' => 'sometimes|nullable|string|max:255',
+                'meta_data' => 'sometimes|nullable|array',
+            ];
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return $this->error('Validation failed', 400, $validator->errors());
+            }
+
+            $validated = $validator->validated();
+
+            // Handle categories relationship separately
+            $categories = null;
+            if (isset($validated['categories'])) {
+                $categories = $validated['categories'];
+                unset($validated['categories']);
+            }
+
+            // Update the book with validated data
+            $book->update($validated);
+
+            // Update categories relationship if provided
+            if ($categories !== null) {
+                $book->categories()->sync($categories);
+            }
+
+            // Reload the book with relationships
+            $book->load(['authors', 'categories', 'reviews', 'analytics']);
+
+            return $this->success(
+                new BookResource($book),
+                'Book updated successfully.'
+            );
+        } catch (\Throwable $th) {
+            return $this->error('Failed to update book', 500, null, $th);
+        }
+    }
+
+    /**
+     * Toggle book visibility between public and private.
+     */
+    public function toggleVisibility(Request $request, Book $book)
+    {
+        try {
+            $user = $request->user();
+
+            // Authorization: Only book authors or admins can toggle visibility
+            if ($book->author_id !== $user->id && !$user->hasRole(['admin', 'superadmin'])) {
+                return $this->error('Unauthorized. You can only toggle visibility of your own books.', 403);
+            }
+
+            // Validation for visibility value
+            $validator = Validator::make($request->all(), [
+                'visibility' => 'sometimes|in:public,private'
+            ]);
+
+            if ($validator->fails()) {
+                return $this->error('Validation failed', 400, $validator->errors());
+            }
+
+            // If visibility is provided in request, use it; otherwise toggle
+            if ($request->has('visibility')) {
+                $newVisibility = $request->input('visibility');
+            } else {
+                // Toggle between public and private
+                $newVisibility = $book->visibility === 'public' ? 'private' : 'public';
+            }
+
+            // Update the book visibility
+            $book->update(['visibility' => $newVisibility]);
+
+            // Reload the book with relationships
+            $book->load(['authors', 'categories', 'reviews', 'analytics']);
+
+            return $this->success(
+                [
+                    'book' => new BookResource($book),
+                    'previous_visibility' => $book->visibility === 'public' ? 'private' : 'public',
+                    'current_visibility' => $newVisibility
+                ],
+                "Book visibility updated to {$newVisibility} successfully."
+            );
+        } catch (\Throwable $th) {
+            return $this->error('Failed to toggle book visibility', 500, null, $th);
+        }
     }
 
     /**
