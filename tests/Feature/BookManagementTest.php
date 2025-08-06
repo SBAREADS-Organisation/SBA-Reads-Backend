@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -147,7 +148,7 @@ class BookManagementTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function book_update_validates_input()
     {
         // Create an author user

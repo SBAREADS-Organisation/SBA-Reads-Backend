@@ -9,13 +9,14 @@ use App\Models\OrderItem;
 use App\Models\Book;
 use App\Models\Transaction;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class OrderTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function it_can_create_an_order()
     {
         $user = User::factory()->create();
@@ -38,7 +39,7 @@ class OrderTest extends TestCase
         $this->assertInstanceOf(Order::class, $order);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_a_user()
     {
         $user = User::factory()->create();
@@ -48,7 +49,7 @@ class OrderTest extends TestCase
         $this->assertEquals($user->id, $order->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_has_many_order_items()
     {
         $order = Order::factory()->create();
@@ -58,7 +59,7 @@ class OrderTest extends TestCase
         $this->assertInstanceOf(OrderItem::class, $order->items->first());
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_a_delivery_address()
     {
         $user = User::factory()->create();
@@ -72,7 +73,7 @@ class OrderTest extends TestCase
         $this->assertEquals($address->id, $order->deliveryAddress->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_a_transaction()
     {
         $transaction = Transaction::factory()->create();
@@ -82,7 +83,7 @@ class OrderTest extends TestCase
         $this->assertEquals($transaction->id, $order->transaction->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_generate_tracking_number()
     {
         $trackingNumber = Order::generateTrackingNumber();
@@ -91,7 +92,7 @@ class OrderTest extends TestCase
         $this->assertEquals(15, strlen($trackingNumber));
     }
 
-    /** @test */
+    #[Test]
     public function it_has_correct_fillable_fields()
     {
         $order = new Order();
@@ -110,7 +111,7 @@ class OrderTest extends TestCase
         $this->assertEquals($expectedFillable, $order->getFillable());
     }
 
-    /** @test */
+    #[Test]
     public function it_has_correct_casts()
     {
         $order = new Order();
@@ -122,7 +123,7 @@ class OrderTest extends TestCase
         $this->assertEquals($expectedCasts, $order->getCasts());
     }
 
-    /** @test */
+    #[Test]
     public function it_can_have_different_statuses()
     {
         $order = Order::factory()->create(['status' => 'pending']);
@@ -138,7 +139,7 @@ class OrderTest extends TestCase
         $this->assertEquals('cancelled', $order->status);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_have_different_payout_statuses()
     {
         $order = Order::factory()->create(['payout_status' => 'initiated']);

@@ -6,13 +6,14 @@ use App\Models\User;
 use App\Models\Book;
 use App\Models\Category;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class UserTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function it_can_create_a_user()
     {
         $user = User::factory()->create([
@@ -30,7 +31,7 @@ class UserTest extends TestCase
         $this->assertInstanceOf(User::class, $user);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_check_if_user_is_author()
     {
         $author = User::factory()->create(['account_type' => 'author']);
@@ -40,7 +41,7 @@ class UserTest extends TestCase
         $this->assertFalse($reader->isAuthor());
     }
 
-    /** @test */
+    #[Test]
     public function it_can_check_if_user_is_admin()
     {
         $admin = User::factory()->create(['account_type' => 'manager']);
@@ -50,7 +51,7 @@ class UserTest extends TestCase
         $this->assertFalse($reader->isAdmin());
     }
 
-    /** @test */
+    #[Test]
     public function it_can_check_if_user_is_super_admin()
     {
         $superAdmin = User::factory()->create(['account_type' => 'superadmin']);
@@ -60,7 +61,7 @@ class UserTest extends TestCase
         $this->assertFalse($reader->isSuperAdmin());
     }
 
-    /** @test */
+    #[Test]
     public function it_can_check_if_user_is_reader()
     {
         $reader = User::factory()->create(['account_type' => 'reader']);
@@ -70,7 +71,7 @@ class UserTest extends TestCase
         $this->assertFalse($author->isReader());
     }
 
-    /** @test */
+    #[Test]
     public function it_has_many_books_as_author()
     {
         $author = User::factory()->create(['account_type' => 'author']);
@@ -81,7 +82,7 @@ class UserTest extends TestCase
         $this->assertInstanceOf(Book::class, $author->authoredBooks->first());
     }
 
-    /** @test */
+    #[Test]
     public function it_has_many_bookmarks()
     {
         $user = User::factory()->create(['account_type' => 'reader']);
@@ -92,7 +93,7 @@ class UserTest extends TestCase
         $this->assertInstanceOf(Book::class, $user->bookmarks->first());
     }
 
-    /** @test */
+    #[Test]
     public function it_can_have_a_default_delivery_address()
     {
         $user = User::factory()->create();

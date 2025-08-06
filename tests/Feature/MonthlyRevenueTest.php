@@ -7,13 +7,14 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class MonthlyRevenueTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function admin_can_access_monthly_revenue_data()
     {
         // Create an admin user
@@ -86,7 +87,7 @@ class MonthlyRevenueTest extends TestCase
         $this->assertEquals(0, $data['April']); // No transactions
     }
 
-    /** @test */
+    #[Test]
     public function regular_user_can_access_their_monthly_revenue_data()
     {
         // Create a regular user
@@ -129,7 +130,7 @@ class MonthlyRevenueTest extends TestCase
         $this->assertEquals(0, $data['February']);
     }
 
-    /** @test */
+    #[Test]
     public function monthly_revenue_returns_all_months_with_zero_for_empty_months()
     {
         // Create an admin user
@@ -155,8 +156,18 @@ class MonthlyRevenueTest extends TestCase
 
         // Assert all 12 months are present
         $expectedMonths = [
-            'January', 'February', 'March', 'April', 'May', 'June',
-            'July', 'August', 'September', 'October', 'November', 'December'
+            'January',
+            'February',
+            'March',
+            'April',
+            'May',
+            'June',
+            'July',
+            'August',
+            'September',
+            'October',
+            'November',
+            'December'
         ];
 
         foreach ($expectedMonths as $month) {

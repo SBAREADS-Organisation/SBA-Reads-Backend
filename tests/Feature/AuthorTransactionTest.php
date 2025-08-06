@@ -6,13 +6,14 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class AuthorTransactionTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function author_can_access_their_transaction_history()
     {
         // Create an author user
@@ -69,7 +70,7 @@ class AuthorTransactionTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function non_author_cannot_access_author_transactions()
     {
         // Create a reader user
@@ -90,7 +91,7 @@ class AuthorTransactionTest extends TestCase
             ]);
     }
 
-    /** @test */
+    #[Test]
     public function unauthenticated_user_cannot_access_author_transactions()
     {
         // Make request without authentication
@@ -100,7 +101,7 @@ class AuthorTransactionTest extends TestCase
         $response->assertStatus(401);
     }
 
-    /** @test */
+    #[Test]
     public function author_can_filter_transactions_by_status()
     {
         // Create an author user
@@ -134,7 +135,7 @@ class AuthorTransactionTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function author_can_filter_transactions_by_type()
     {
         // Create an author user
@@ -168,7 +169,7 @@ class AuthorTransactionTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function author_transactions_are_paginated()
     {
         // Create an author user
@@ -204,7 +205,7 @@ class AuthorTransactionTest extends TestCase
         $this->assertEquals(4, $response->json('data.last_page'));
     }
 
-    /** @test */
+    #[Test]
     public function author_gets_404_when_no_transactions_exist()
     {
         // Create an author user with no transactions
