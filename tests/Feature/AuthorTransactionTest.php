@@ -62,7 +62,7 @@ class AuthorTransactionTest extends TestCase
         // Assert that the response contains the author's transactions
         $responseData = $response->json('data.data');
         $this->assertCount(3, $responseData);
-        
+
         // Verify all transactions belong to the author
         foreach ($responseData as $transaction) {
             $this->assertEquals($author->id, $transaction['user_id']);
@@ -113,7 +113,7 @@ class AuthorTransactionTest extends TestCase
             'user_id' => $author->id,
             'status' => 'succeeded',
         ]);
-        
+
         Transaction::factory()->create([
             'user_id' => $author->id,
             'status' => 'pending',
@@ -127,7 +127,7 @@ class AuthorTransactionTest extends TestCase
 
         $response->assertStatus(200);
         $responseData = $response->json('data.data');
-        
+
         // Assert only succeeded transactions are returned
         foreach ($responseData as $transaction) {
             $this->assertEquals('succeeded', $transaction['status']);
@@ -147,7 +147,7 @@ class AuthorTransactionTest extends TestCase
             'user_id' => $author->id,
             'type' => 'payout',
         ]);
-        
+
         Transaction::factory()->create([
             'user_id' => $author->id,
             'type' => 'purchase',
@@ -161,7 +161,7 @@ class AuthorTransactionTest extends TestCase
 
         $response->assertStatus(200);
         $responseData = $response->json('data.data');
-        
+
         // Assert only payout transactions are returned
         foreach ($responseData as $transaction) {
             $this->assertEquals('payout', $transaction['type']);
