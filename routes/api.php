@@ -147,6 +147,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:author'])->prefix('author')->group(function () {
         Route::get('my-books', [BookController::class, 'myBooks']);
         Route::get('dashboard', AuthorDashboardController::class);
+        Route::get('transactions', [TransactionsController::class, 'getAuthorTransactions'])->name('author-transactions');
     });
 
     // Category Routes
