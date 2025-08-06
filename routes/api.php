@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AppVersion\AppVersionController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Author\AuthorDashboardController;
 use App\Http\Controllers\Book\BookController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\KYC\KYCController;
@@ -143,7 +144,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
 
     // Author-specific endpoints (only for account_type = 'author')
-    Route::get('author/my-books', [BookController::class, 'myBooks']);
+    Route::middleware(['role:author'])->prefix('author')->group(function () {
+        Route::get('my-books', [BookController::class, 'myBooks']);
+        Route::get('dashboard', AuthorDashboardController::class);
+    });
 
     // Category Routes
     Route::prefix('categories')->group(function () {

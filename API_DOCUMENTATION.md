@@ -109,6 +109,64 @@ curl -X GET https://your-domain.com/api/admin/dashboard \
   -H "Accept: application/json"
 ```
 
+### GET /author/dashboard
+Get author-specific dashboard analytics and metrics.
+
+**Authentication Required**: Author role
+
+**Response:**
+```json
+{
+  "data": {
+    "revenue": 15000.75,
+    "reader_engagement": {
+      "active_readers": 120,
+      "total_reading_sessions": 450,
+      "average_reading_progress": 0.68,
+      "total_reading_time_minutes": 2850.5
+    },
+    "books_published": 12,
+    "total_sales": 18500.25,
+    "total_books_count": 15,
+    "pending_books_count": 3,
+    "recent_transactions": [...],
+    "recent_book_uploads": [...]
+  },
+  "code": 200,
+  "message": "Author dashboard data retrieved successfully."
+}
+```
+
+### Author Dashboard Payload Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `revenue` | decimal | Total earnings from successful transactions for this author |
+| `reader_engagement` | object | Reader engagement metrics for author's books |
+| `books_published` | integer | Number of published books by this author |
+| `total_sales` | decimal | Total sales amount from all completed orders for author's books |
+| `total_books_count` | integer | Total number of books created by this author |
+| `pending_books_count` | integer | Number of books pending approval by this author |
+| `recent_transactions` | array | List of recent transactions for this author |
+| `recent_book_uploads` | array | List of recent book uploads by this author |
+
+### Author Reader Engagement Metrics
+
+The `reader_engagement` object for authors contains:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `active_readers` | integer | Number of users reading this author's books |
+| `total_reading_sessions` | integer | Total reading sessions across author's books |
+| `average_reading_progress` | decimal | Average reading progress across author's books |
+| `total_reading_time_minutes` | decimal | Total reading time for author's books |
+
+```bash
+curl -X GET https://your-domain.com/api/author/dashboard \
+  -H "Authorization: Bearer <author-token>" \
+  -H "Accept: application/json"
+```
+
 ### Response Structure
 
 All dashboard endpoints return a consistent JSON response with the following structure:
@@ -642,6 +700,9 @@ Delete app version support
 
 #### GET /admin/dashboard
 Get admin dashboard data
+
+#### GET /author/dashboard
+Get author-specific dashboard data
 
 ### Social Authentication
 
