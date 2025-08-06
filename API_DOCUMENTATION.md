@@ -656,6 +656,21 @@ Get all transactions
 #### GET /transaction/{id}
 Get specific transaction
 
+#### GET /author/transactions (Author Only)
+Get author's transaction history including payouts and earnings
+
+**Query Parameters:**
+- `search` - Search in reference, description, or payment_intent_id
+- `status` - Filter by transaction status (pending, succeeded, failed)
+- `type` - Filter by transaction type (payout, purchase, etc.)
+- `direction` - Filter by direction (credit, debit)
+- `purpose_type` - Filter by purpose type (digital_book_purchase, order, etc.)
+- `start_date` - Filter transactions from this date
+- `end_date` - Filter transactions until this date
+- `sort_by` - Sort by field (default: created_at)
+- `sort_order` - Sort order (asc, desc - default: desc)
+- `per_page` - Number of results per page (default: 15)
+
 ### Subscription Management
 
 #### GET /subscriptions
