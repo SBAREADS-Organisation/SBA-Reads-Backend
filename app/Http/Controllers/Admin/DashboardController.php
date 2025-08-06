@@ -42,14 +42,14 @@ class DashboardController extends Controller
             */
             $reader_count = User::where('account_type', 'reader')->count();
             $author_count = User::where('account_type', 'author')->count();
-            $published_books_count = Book::where('status', 'published')->count();
+            $published_books_count = Book::where('status', 'approved')->count();
             $pending_books_count = Book::where('status', 'pending')->count();
             $recent_signups = User::orderBy('created_at', 'desc')->take(5)->get();
             $recent_transactions = Transaction::orderBy('created_at', 'desc')->take(5)->get();
             $recent_book_uploads = Book::orderBy('created_at', 'desc')->take(5)->get();
             $active_subscription_count = $this->subscriptionService->getActiveSubscriptionCount();
 
-            $revenue = Transaction::where('status', 'success')->sum('amount');
+            $revenue = Transaction::where('status', 'succeeded')->sum('amount');
             $total_sales = Order::where('status', 'completed')->sum('total_amount');
 
             $active_readers = ReadingProgress::distinct('user_id')->count();
