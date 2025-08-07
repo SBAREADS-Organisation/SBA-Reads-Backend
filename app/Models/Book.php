@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Services\Dashboard\DashboardCacheService;
 
 class Book extends Model
 {
@@ -142,5 +143,22 @@ class Book extends Model
     {
         return $this->hasOne(BookMetaDataAnalytics::class);
         // return $this->hasMany(BookMetaDataAnalytics::class);
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($book) {
+            DashboardCacheService::clearAdminDashboard();
+            foreach ($book->authors as $author) {
+                DashboardCacheService::clearAuthorDashboard($author->id);
+            }
+        });
+
+        static::updated(function ($book) {
+            DashboardCacheService::clearAdminDashboard();
+            foreach ($book->authors as $author) {
+                DashboardCacheService::clearAuthorDashboard($author->id);
+            }
+        });
     }
 }

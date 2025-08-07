@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\Dashboard\DashboardCacheService;
+
 
 class Transaction extends Model
 {
@@ -60,5 +62,22 @@ class Transaction extends Model
     public function purpose()
     {
         return $this->morphTo();
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($transaction) {
+            DashboardCacheService::clearAdminDashboard();
+            if ($transaction->user_id) {
+                DashboardCacheService::clearAuthorDashboard($transaction->user_id);
+            }
+        });
+
+        static::updated(function ($transaction) {
+            DashboardCacheService::clearAdminDashboard();
+            if ($transaction->user_id) {
+                DashboardCacheService::clearAuthorDashboard($transaction->user_id);
+            }
+        });
     }
 }

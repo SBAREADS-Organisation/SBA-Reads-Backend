@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Services\Dashboard\DashboardCacheService;
+
 
 class DigitalBookPurchase extends Model
 {
@@ -25,5 +27,22 @@ class DigitalBookPurchase extends Model
     public function items(): HasMany
     {
         return $this->hasMany(DigitalBookPurchaseItem::class);
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($purchase) {
+            DashboardCacheService::clearAdminDashboard();
+        });
+
+        static::updated(function ($purchase) {
+            DashboardCacheService::clearAdminDashboard();
+            // Clear cache for all authors of purchased books
+            foreach ($purchase->items as $item) {
+                foreach ($item->book->authors as $author) {
+                    DashboardCacheService::clearAuthorDashboard($author->id);
+                }
+            }
+        });
     }
 }
