@@ -115,10 +115,10 @@ class AnalyticsService
      */
     public function getMonthlyRevenue(?User $user = null): array
     {
-        $query = Transaction::selectRaw('MONTH(created_at) as month, SUM(amount) as total')
+        $query = Transaction::selectRaw('EXTRACT(MONTH FROM created_at) as month, SUM(amount) as total')
             ->where('status', 'succeeded')
             ->whereIn('type', ['purchase', 'earning'])
-            ->whereYear('created_at', Carbon::now()->year)
+            ->whereRaw('EXTRACT(YEAR FROM created_at) = ?', [Carbon::now()->year])
             ->groupBy('month')
             ->orderBy('month');
 
