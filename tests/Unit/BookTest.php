@@ -5,13 +5,14 @@ namespace Tests\Unit;
 use App\Models\Book;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
 class BookTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function it_can_create_a_book()
     {
         $author = User::factory()->create(['account_type' => 'author']);
@@ -28,7 +29,7 @@ class BookTest extends TestCase
         $this->assertInstanceOf(Book::class, $book);
     }
 
-    /** @test */
+    #[Test]
     public function it_has_an_author()
     {
         $author = User::factory()->create(['account_type' => 'author']);
