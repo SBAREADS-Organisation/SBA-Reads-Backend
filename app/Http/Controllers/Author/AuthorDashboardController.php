@@ -32,7 +32,7 @@ class AuthorDashboardController extends Controller
 
             // Get author's books
             $authorBooks = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('users.id', $author->id);
+                $q->where('author_id', $author->id);
             })->pluck('id');
 
             // Revenue - Total earnings from successful transactions for this author
@@ -43,7 +43,7 @@ class AuthorDashboardController extends Controller
 
             // Books published - Count of approved books by this author
             $books_published = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('users.id', $author->id);
+                $q->where('author_id', $author->id);
             })->where('status', 'approved')->count();
 
             // Total sales - Sum of all completed sales for author's books
@@ -54,11 +54,11 @@ class AuthorDashboardController extends Controller
 
             // Additional author-specific metrics
             $pending_books_count = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('users.id', $author->id);
+                $q->where('author_id', $author->id);
             })->where('status', 'pending')->count();
 
             $total_books_count = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('users.id', $author->id);
+                $q->where('author_id', $author->id);
             })->count();
 
             // Recent transactions for this author
@@ -69,7 +69,7 @@ class AuthorDashboardController extends Controller
 
             // Recent book uploads by this author
             $recent_book_uploads = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('users.id', $author->id);
+                $q->where('author_id', $author->id);
             })->orderBy('created_at', 'desc')->take(5)->get();
 
             return $this->success([
