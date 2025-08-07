@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\Dashboard\DashboardCacheService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -53,5 +54,21 @@ class Order extends Model
     public function deliveryAddress()
     {
         return $this->belongsTo(Address::class);
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($order) {
+            DashboardCacheService::clearAdminDashboard();
+        });
+
+        static::updated(function ($order) {
+            DashboardCacheService::clearAdminDashboard();
+            foreach ($order->items as $item) {
+                foreach ($item->book->authors as $author) {
+                    DashboardCacheService::clearAuthorDashboard($author->id);
+                }
+            }
+        });
     }
 }
