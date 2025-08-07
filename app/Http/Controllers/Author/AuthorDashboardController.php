@@ -47,10 +47,10 @@ class AuthorDashboardController extends Controller
             })->where('status', 'approved')->count();
 
             // Total sales - Sum of all completed sales for author's books
-            $total_sales = $this->calculateTotalSales($authorBooks);
+            $total_sales = $this->calculateTotalSales($authorBooks->toArray());
 
             // Reader engagement for author's books
-            $reader_engagement = $this->calculateReaderEngagement($authorBooks);
+            $reader_engagement = $this->calculateReaderEngagement($authorBooks->toArray());
 
             // Additional author-specific metrics
             $pending_books_count = Book::whereHas('authors', function ($q) use ($author) {
