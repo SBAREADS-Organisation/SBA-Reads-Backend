@@ -61,6 +61,20 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->count();
 
+            // Books sold - Count of unique books that have been purchased
+            $books_sold = $this->calculateBooksSold($authorBooks->toArray());
+
+            // Books uploaded - Total number of books created by this author (same as total_books_count)
+            $books_uploaded = $total_books_count;
+
+            // Books rejected - Count of declined books by this author
+            $books_rejected = Book::whereHas('authors', function ($q) use ($author) {
+                $q->where('author_id', $author->id);
+            })->where('status', 'declined')->count();
+
+            // Books approved - Count of approved books by this author (same as books_published)
+            $books_approved = $books_published;
+
             // Recent transactions for this author
             $recent_transactions = Transaction::where('user_id', $author->id)
                 ->orderBy('created_at', 'desc')
@@ -77,8 +91,10 @@ class AuthorDashboardController extends Controller
                 'reader_engagement' => $reader_engagement,
                 'books_published' => $books_published,
                 'total_sales' => round($total_sales, 2),
-
-                // Additional useful metrics for authors
+                'books_sold' => $books_sold,
+                'books_uploaded' => $books_uploaded,
+                'books_rejected' => $books_rejected,
+                'books_approved' => $books_approved,
                 'total_books_count' => $total_books_count,
                 'pending_books_count' => $pending_books_count,
                 'recent_transactions' => $recent_transactions,
@@ -149,5 +165,33 @@ class AuthorDashboardController extends Controller
             'average_reading_progress' => round($average_reading_progress, 2),
             'total_reading_time_minutes' => round($total_reading_time, 2),
         ];
+    }
+
+    /**
+     * Calculate number of unique books sold (books that have been purchased).
+     */
+    private function calculateBooksSold(array $authorBookIds): int
+    {
+        if (empty($authorBookIds)) {
+            return 0;
+        }
+
+        // Get unique book IDs from digital purchases
+        $digitalSoldBookIds = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+            $q->whereIn('book_id', $authorBookIds);
+        })->where('status', 'paid')
+            ->join('digital_book_purchase_items', 'digital_book_purchases.id', '=', 'digital_book_purchase_items.digital_book_purchase_id')
+            ->whereIn('digital_book_purchase_items.book_id', $authorBookIds)
+            ->pluck('digital_book_purchase_items.book_id');
+
+        // Get unique book IDs from physical orders
+        $physicalSoldBookIds = OrderItem::whereIn('book_id', $authorBookIds)
+            ->whereHas('order', function ($q) {
+                $q->where('status', 'completed');
+            })
+            ->pluck('book_id');
+
+        // Return count of unique books sold across both channels
+        return $digitalSoldBookIds->merge($physicalSoldBookIds)->unique()->count();
     }
 }
