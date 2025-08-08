@@ -10,6 +10,8 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
+use App\Services\Dashboard\DashboardCacheService;
+
 
 class User extends Authenticatable
 {
@@ -238,5 +240,19 @@ class User extends Authenticatable
     public function purchasedBooks(): BelongsToMany
     {
         return $this->belongsToMany(Book::class, 'book_user', 'user_id', 'book_id')->withTimestamps();
+    }
+
+    protected static function booted()
+    {
+        static::created(function ($user) {
+            DashboardCacheService::clearAdminDashboard();
+        });
+
+        static::updated(function ($user) {
+            DashboardCacheService::clearAdminDashboard();
+            if ($user->account_type === 'author') {
+                DashboardCacheService::clearAuthorDashboard($user->id);
+            }
+        });
     }
 }
