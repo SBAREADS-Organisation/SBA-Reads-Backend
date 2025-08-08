@@ -247,7 +247,14 @@ class BookController extends Controller
     public function show($id)
     {
         try {
-            $book = Book::with(['authors', 'categories', 'reviews.user', 'analytics', 'bookmarkedBy:id', 'purchasers:id'])->findOrFail($id);
+            $book = Book::with([
+                'authors:id,name,email,profile_picture,bio',
+                'categories',
+                'reviews.user:id,name,email,profile_picture',
+                'analytics',
+                'bookmarkedBy:id',
+                'purchasers:id'
+            ])->findOrFail($id);
 
             // Fetch similar books (by shared categories)
             $similarBooks = Book::whereHas('categories', function ($q) use ($book) {
@@ -311,7 +318,11 @@ class BookController extends Controller
         $sortDir = $request->input('sort_dir', 'desc');
         $query->orderBy($sortBy, $sortDir);
 
-        $books = $query->paginate($request->input('per_page', 20));
+        $books = $query->with([
+            'authors:id,name,email,profile_picture,bio',
+            'categories:id,name',
+            'analytics'
+        ])->paginate($request->input('per_page', 20));
 
         if ($books->isEmpty()) {
             return $this->error(

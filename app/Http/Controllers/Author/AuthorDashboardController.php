@@ -73,7 +73,10 @@ class AuthorDashboardController extends Controller
 
             $recent_book_uploads = Book::whereHas('authors', function ($q) use ($author) {
                 $q->where('author_id', $author->id);
-            })->orderBy('created_at', 'desc')->take(5)->get();
+            })->with([
+                'authors:id,name,email,profile_picture,bio',
+                'categories:id,name'
+            ])->orderBy('created_at', 'desc')->take(5)->get();
 
             // Monthly trends
             $monthly_revenue = $this->getMonthlyRevenue($author->id);
