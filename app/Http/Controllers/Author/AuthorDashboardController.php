@@ -35,9 +35,9 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->pluck('id');
 
-            // Revenue - Total earnings from successful transactions
+            // Revenue - Total earnings from successful payout transactions
             $revenue = Transaction::where('user_id', $author->id)
-                ->where('type', 'earning')
+                ->whereIn('type', ['payout', 'earning'])
                 ->where('status', 'succeeded')
                 ->sum('amount');
 
@@ -58,7 +58,7 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->where('status', 'declined')->count();
 
-            // Sales calculations
+            // Sales calculations - FIXED
             $total_sales = $this->calculateTotalSales($authorBooks->toArray());
             $books_sold = $this->calculateBooksSold($authorBooks->toArray());
 
@@ -78,7 +78,7 @@ class AuthorDashboardController extends Controller
                 'categories:id,name'
             ])->orderBy('created_at', 'desc')->take(5)->get();
 
-            // Monthly trends
+            // Monthly trends - FIXED
             $monthly_revenue = $this->getMonthlyRevenue($author->id);
             $monthly_sales = $this->getMonthlySales($authorBooks->toArray());
 
@@ -178,7 +178,7 @@ class AuthorDashboardController extends Controller
     private function getMonthlyRevenue(int $authorId)
     {
         return Transaction::where('user_id', $authorId)
-            ->where('type', 'earning')
+            ->whereIn('type', ['payout', 'earning'])
             ->where('status', 'succeeded')
             ->where('created_at', '>=', now()->subDays(30))
             ->sum('amount');
@@ -188,9 +188,10 @@ class AuthorDashboardController extends Controller
     {
         if (empty($authorBookIds)) return 0;
 
+        // FIXED: Use correct status values
         $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
-        })->where('status', 'completed')
+        })->where('status', 'paid')
             ->where('created_at', '>=', now()->subDays(30))
             ->count();
 
