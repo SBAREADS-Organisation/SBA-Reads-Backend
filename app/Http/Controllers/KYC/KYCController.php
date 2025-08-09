@@ -10,7 +10,6 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Stripe\Account as StripeAccount;
@@ -136,7 +135,6 @@ class KYCController extends Controller
                 $finalAccountStatus = $user->kyc_status;
             } else {
                 // This should ideally not happen if your service returns only StripeAccount or JsonResponse
-                Log::error('Unexpected return type from Stripe service', ['response' => $stripeAccountResponse]);
 
                 return $this->error(
                     'Internal Server Error: Unexpected Stripe service response.',
@@ -155,8 +153,6 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            Log::error('KYC initiation error for user '.(Auth::id() ?? 'N/A').': '.$th->getMessage(), ['exception' => $th, 'trace' => $th->getTraceAsString()]);
-
             return $this->error(
                 'Error initiating KYC',
                 500,
@@ -210,7 +206,6 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            // throw $th;
             return $this->error(
                 'Error uploading document',
                 500,
@@ -250,16 +245,9 @@ class KYCController extends Controller
             'success'
         );
 
-        // Log::info('┏━━━━ ⭐ Stripe Webhook Debug ⭐ ━━━━┓');
-        // Log::info('Payload RAW:',   [ 'payload'   => $payload ]);
-        // Log::info('Sig Header:',    [ 'header'    => $sigHeader ]);
-        // Log::info('Secret (len):',  [ 'secret'    => $secret, 'length' => strlen($secret) ]);
-        // Log::info('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
-
         try {
             $event = Webhook::constructEvent($payload, $sigHeader, $secret);
         } catch (\UnexpectedValueException $e) {
-            // Log::error('Stripe Webhook payload invalid', ['error' => $e->getMessage()]);
             return $this->error(
                 'Invalid payload',
                 400,
@@ -267,16 +255,11 @@ class KYCController extends Controller
             );
             // return response('Invalid payload', 400);
         } catch (\Stripe\Exception\SignatureVerificationException $e) {
-            // Log::error('Stripe Webhook payload invalid JSON', [
-            //     'error'    => $e->getMessage(),
-            //     'payload'  => $payload,
-            // ]);
             return $this->error(
                 'Invalid payload',
                 400,
                 null
             );
-            // return response()->json(['error' => 'Invalid payload'], 400);
         }
 
         if ($event->type === 'account.updated') {
@@ -299,7 +282,7 @@ class KYCController extends Controller
                         'kyc_status' => 'verified',
                         'first_name' => $account->individual->first_name,
                         'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name.' '.$account->individual->last_name,
+                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
                         // 'dob' => $account->individual->dob,
                         // 'address' => $account->individual->address,
                     ]);

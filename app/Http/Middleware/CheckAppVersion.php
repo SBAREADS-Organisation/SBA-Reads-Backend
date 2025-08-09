@@ -51,12 +51,7 @@ class CheckAppVersion
 
             // allow webhook requests to pass without any headers check
             if ($is_webhook) {
-                // Log::info('Webhook request detected. Skipping app version check.');
-                // return response()->json([
-                //     'data' => null,
-                //     'message' => 'Webhook request detected. Skipping app version check.',
-                //     'code' => 200
-                // ], 200);
+
                 return $next($request);
             }
 

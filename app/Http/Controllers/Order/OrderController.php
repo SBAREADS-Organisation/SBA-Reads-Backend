@@ -118,9 +118,6 @@ class OrderController extends Controller
     public function store(Request $request)
     {
         try {
-            // Debug: Log the incoming request
-            // \Log::info('Order request data:', $request->all());
-
             $validator = Validator::make($request->all(), [
                 'books' => 'required|array|min:1',
                 'books.*.book_id' => 'required|exists:books,id',
@@ -129,7 +126,6 @@ class OrderController extends Controller
             ]);
 
             if ($validator->fails()) {
-                // \Log::error('Order validation failed:', $validator->errors()->toArray());
                 return $this->error(
                     'Validation failed',
                     400,
@@ -139,7 +135,6 @@ class OrderController extends Controller
 
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
-            \Log::error('Order creation error:', ['message' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
             return $this->error($message, 500, null, $th);
         }

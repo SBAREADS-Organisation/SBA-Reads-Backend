@@ -50,7 +50,6 @@ class AppVersionSeeder extends Seeder
         if (app()->runningInConsole()) {
             $this->command->info('App versions seeded successfully.');
         } else {
-            Log::info('App versions seeded successfully.');
         }
     }
 }

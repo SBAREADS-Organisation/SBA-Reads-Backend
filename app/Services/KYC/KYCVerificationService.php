@@ -20,7 +20,7 @@ class KYCVerificationService
     public function __construct(StripeConnectService $stripe)
     {
         $this->client = new Client([
-            'headers' => ['Authorization' => 'Bearer '.env('KYC_API_KEY')],
+            'headers' => ['Authorization' => 'Bearer ' . env('KYC_API_KEY')],
         ]);
         $this->provider = env('KYC_PROVIDER');
 
@@ -97,8 +97,7 @@ class KYCVerificationService
                 'data' => $data,
             ]);
         } catch (\Exception $e) {
-            // Log::error("KYC initiation failed: " . $e->getMessage());
-            throw new \Exception('KYC initiation failed: '.$e->getMessage(), 0, $e);
+            throw new \Exception('KYC initiation failed: ' . $e->getMessage(), 0, $e);
         }
     }
 

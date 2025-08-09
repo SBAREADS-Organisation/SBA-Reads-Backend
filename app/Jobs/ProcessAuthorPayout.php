@@ -11,7 +11,6 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
@@ -70,11 +69,6 @@ class ProcessAuthorPayout implements ShouldQueue
     {
         switch ($this->purpose) {
             case 'digital_book_purchase':
-                Log::critical("ProcessAuthorPayout Job failed for DigitalBookPurchase ID:  {
-                $this->purposeId
-                }
-                . Reason: " .
-                    $exception->getMessage());
                 $purchase = DigitalBookPurchase::where('id', $this->purposeId)->first();
                 if ($purchase) {
                     $purchase->update(['status' => 'payout_failed']);
@@ -84,7 +78,6 @@ class ProcessAuthorPayout implements ShouldQueue
                 break;
 
             case 'order':
-                Log::critical("ProcessAuthorPayout Job failed for Order ID: {$this->purposeId}. Reason: " . $exception->getMessage());
                 $order = Order::where('id', $this->purposeId)->first();
                 if ($order) {
                     $order->update(['payout_status' => 'failed']);
