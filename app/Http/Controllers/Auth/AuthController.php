@@ -72,13 +72,6 @@ class AuthController extends Controller
             // Send Login Notification Email
             $this->sendLoginNotification($user, $request->ip()); // NOTE: Uncomment
 
-            // // Log::info('User Login', [
-            //     'user_id' => $user->id,
-            //     'email' => $user->email,
-            //     'ip_address' => $request->ip(),
-            //     'timestamp' => now()->toDateTimeString(),
-            // ]);
-
             $this->notifySlack(
                 '🔐 User Login Detected',
                 [
@@ -98,13 +91,9 @@ class AuthController extends Controller
                 'account_type' => $user->account_type,
             ], 'Login successful', 200);
         } catch (\Exception $e) {
-            // dd($e);
-            // dd($e->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         } catch (\Throwable $th) {
-            // dd($th);
-            // Log the exception message
-            // Log::error('Error in login: ' . $th->getMessage());
+
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         }
     }
@@ -158,8 +147,6 @@ class AuthController extends Controller
             // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         } catch (\Throwable $th) {
-            // Log the exception message
-            // Log::error('Error in forgotPassword: ' . $th->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         }
     }
@@ -205,8 +192,6 @@ class AuthController extends Controller
             // dd($th->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
-            // Log the exception message
-            // Log::error('Error in verifyOtp: ' . $e->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
@@ -259,8 +244,7 @@ class AuthController extends Controller
             // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
-            // Log the exception message
-            // Log::error('Error in resetPassword: ' . $e->getMessage());
+
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
@@ -275,8 +259,6 @@ class AuthController extends Controller
             // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         } catch (\Exception $e) {
-            // Log the exception message
-            // Log::error('Error in logout: ' . $e->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
@@ -304,7 +286,7 @@ class AuthController extends Controller
     {
         $details = [
             'subject' => 'Password Reset Successful',
-            'body' => 'Your password was successfully reset on '.Carbon::now()->toDateTimeString(),
+            'body' => 'Your password was successfully reset on ' . Carbon::now()->toDateTimeString(),
             'name' => $user->name ?? 'User',
         ];
 

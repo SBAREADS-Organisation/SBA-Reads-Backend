@@ -177,8 +177,6 @@ class BookController extends Controller
                     'error' => null,
                 ]);
         } catch (\Exception $e) {
-            // dd($e);
-            // Log::error('Error fetching books: ' . $e->getMessage());
             return $this->error('Failed to retrieve books', 500, null, $e);
         }
     }
@@ -221,8 +219,6 @@ class BookController extends Controller
                 201
             );
         } catch (\Illuminate\Database\QueryException $e) {
-            // dd($e);
-            // Log::error('Database error while creating books: ' . $e->getMessage());
             return $this->error(
                 'An error occurred while creating books.',
                 500,
@@ -230,8 +226,6 @@ class BookController extends Controller
                 $e
             );
         } catch (\Exception $e) {
-            // dd('EXCEPTION>>', $e);
-            // Log::error('Error creating books: ' . $e->getMessage());
             return $this->error(
                 'An error occurred while creating books.',
                 500,
@@ -627,7 +621,6 @@ class BookController extends Controller
     public function getAllBookmarks(Request $request)
     {
         try {
-            // dd($request->all());
             $user = $request->user();
             $perPage = $request->input('items_per_page', 10);
             $search = $request->input('search');
@@ -675,9 +668,6 @@ class BookController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            // throw $th;
-            // dd($th);
-            // Log::error('Error fetching bookmarks: ' . $th->getMessage());
             return $this->error(
                 'Failed to fetch bookmarks',
                 500,
@@ -719,8 +709,6 @@ class BookController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            // throw $th;
-            // Log::error('Error removing bookmark: ' . $th->getMessage());
             return $this->error(
                 'Failed to remove bookmark',
                 500,
@@ -972,8 +960,6 @@ class BookController extends Controller
                     'error' => null,
                 ]);
         } catch (\Exception $e) {
-            // dd($e);
-            // Log::error('Error fetching all books: ' . $e->getMessage());
             return $this->error('Failed to retrieve books', 500, null, $e);
         }
     }
@@ -1128,7 +1114,6 @@ class BookController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Book not found.', 400, $e->getMessage(), $e);
         } catch (\Exception $e) {
-            // Log::error('Book audit action error: ' . $e->getMessage());
             return $this->error('An error occurred while processing the audit action.', 400, $e->getMessage(), $e);
         }
     }
@@ -1169,7 +1154,6 @@ class BookController extends Controller
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
-            // Log::error('Book purchase error: ' . $e->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
