@@ -87,29 +87,49 @@ class StripeWebhookService
 
             if ($purchase->status !== 'paid') {
                 $purchase->update(['status' => 'paid']);
-            } else {
             }
 
             foreach ($purchase->items as $item) {
                 if (!$user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
                     $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
+
+                    // Update analytics
                     $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
                         ['book_id' => $item->book_id],
                         ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
                     );
                     $bookAnalytics->increment('purchases', 1);
                     $bookAnalytics->save();
-                    $bookAnalytics->refresh();
-                } else {
+
+                    // Immediately update author wallet balance
+                    $author = $item->book->author;
+                    if ($author) {
+                        $authorPayoutAmount = $item->author_payout_amount;
+                        $author->increment('wallet_balance', $authorPayoutAmount);
+
+                        // Create immediate payout transaction record
+                        Transaction::create([
+                            'id' => \Illuminate\Support\Str::uuid(),
+                            'user_id' => $author->id,
+                            'reference' => uniqid('pay_immediate_'),
+                            'status' => 'succeeded',
+                            'currency' => $purchase->currency ?? 'USD',
+                            'amount' => $authorPayoutAmount,
+                            'payment_provider' => 'app',
+                            'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
+                            'type' => 'payout',
+                            'direction' => 'credit',
+                            'purpose_type' => 'digital_book_purchase',
+                            'purpose_id' => $purchase->id,
+                        ]);
+                    }
                 }
             }
 
+            // Still dispatch the delayed job for Stripe transfers, but mark as immediate payout
             if (!in_array($purchase->status, ['failed', 'payout_initiated', 'payout_completed', 'payout_failed'])) {
-                $delayDays = 7; // Funds become available after 1 week so dispatch after 8 days
-
-                // Dispatch the job to run after the specified delay
+                $delayDays = 7;
                 ProcessAuthorPayout::dispatch(purpose: 'digital_book_purchase', purposeId: $purchase->id)->delay(now()->addDays($delayDays));
-            } else {
             }
         } catch (ModelNotFoundException $e) {
             throw new \Exception('Digital book purchase record not found: ' . $e->getMessage(), 404, $e);
@@ -136,23 +156,42 @@ class StripeWebhookService
                 $order->update(['status' => 'paid']);
 
                 foreach ($order->items as $item) {
+                    // Update analytics
                     $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
                         ['book_id' => $item->book_id],
                         ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
                     );
                     $bookAnalytics->increment('purchases', (int) $item->quantity);
                     $bookAnalytics->save();
-                    $bookAnalytics->refresh();
+
+                    // Immediately update author wallet balance
+                    $author = $item->book->author;
+                    if ($author && isset($item->author_payout_amount)) {
+                        $authorPayoutAmount = $item->author_payout_amount * $item->quantity;
+                        $author->increment('wallet_balance', $authorPayoutAmount);
+
+                        // Create immediate payout transaction record
+                        Transaction::create([
+                            'id' => \Illuminate\Support\Str::uuid(),
+                            'user_id' => $author->id,
+                            'reference' => uniqid('pay_immediate_'),
+                            'status' => 'succeeded',
+                            'currency' => 'USD',
+                            'amount' => $authorPayoutAmount,
+                            'payment_provider' => 'app',
+                            'description' => "Immediate author payout for Order ID: {$order->id}",
+                            'type' => 'payout',
+                            'direction' => 'credit',
+                            'purpose_type' => 'order',
+                            'purpose_id' => $order->id,
+                        ]);
+                    }
                 }
-            } else {
             }
 
             if ($order->payout_status === 'pending') {
-                $delayDays = 7; // Funds become available after 1 week so dispatch after 8 days
-
-                // Dispatch the job to run after the specified delay
+                $delayDays = 7;
                 ProcessAuthorPayout::dispatch(purpose: 'order', purposeId: $order->id)->delay(now()->addDays($delayDays));
-            } else {
             }
         } catch (ModelNotFoundException $e) {
             throw new \Exception('Order record not found: ' . $e->getMessage(), 404, $e);

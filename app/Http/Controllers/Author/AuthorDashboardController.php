@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Author;
 
 use App\Http\Controllers\Controller;
 use App\Models\Book;
-use App\Models\BookMetaDataAnalytics;
 use App\Models\DigitalBookPurchase;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -111,7 +110,7 @@ class AuthorDashboardController extends Controller
 
         $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
-        })->where('status', 'completed')->sum('total_amount');
+        })->where('status', 'paid')->sum('total_amount');
 
         $physicalSales = Order::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
@@ -170,7 +169,17 @@ class AuthorDashboardController extends Controller
     {
         if (empty($authorBookIds)) return 0;
 
-        return BookMetaDataAnalytics::whereIn('book_id', $authorBookIds)->sum('purchases');
+        // Count from digital purchases
+        $digitalBooksSold = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+            $q->whereIn('book_id', $authorBookIds);
+        })->where('status', 'paid')->count();
+
+        // Count from physical orders
+        $physicalBooksSold = Order::whereHas('items', function ($q) use ($authorBookIds) {
+            $q->whereIn('book_id', $authorBookIds);
+        })->where('status', 'completed')->count();
+
+        return $digitalBooksSold + $physicalBooksSold;
     }
 
     private function getMonthlyRevenue(int $authorId)
