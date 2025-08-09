@@ -79,7 +79,6 @@ class AuthorDashboardController extends Controller
             ])->orderBy('created_at', 'desc')->take(5)->get();
 
             // Monthly trends - FIXED
-            $monthly_revenue = $this->getMonthlyRevenue($author->id);
             $monthly_sales = $this->getMonthlySales($authorBooks->toArray());
 
             return $this->success([
@@ -95,7 +94,6 @@ class AuthorDashboardController extends Controller
                 'pending_books_count' => $pending_books_count,
                 'recent_transactions' => $recent_transactions,
                 'recent_book_uploads' => $recent_book_uploads,
-                'monthly_revenue' => $monthly_revenue,
                 'monthly_sales' => $monthly_sales,
                 'wallet_balance' => $author->wallet_balance ?? 0,
             ], 'Author dashboard data retrieved successfully.');
