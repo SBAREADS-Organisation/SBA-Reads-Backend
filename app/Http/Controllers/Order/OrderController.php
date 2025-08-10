@@ -7,7 +7,9 @@ use App\Services\Orders\OrderService;
 use App\Services\Stripe\StripeConnectService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Resources\Order\OrderResource;
 
 class OrderController extends Controller
 {
@@ -27,7 +29,8 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $q = $request->user()->orders()->with('items.book');
+            $q = \App\Models\Order::query()->with(['items.book', 'user:id,name,email']);
+
             if ($request->filled('status')) {
                 $q->where('status', $request->status);
             }
@@ -41,11 +44,10 @@ class OrderController extends Controller
             }
 
             if ($request->filled('search')) {
-                $q->whereHas(
-                    'items.book',
-                    fn($b) => $b->where('title', 'like', '%' . $request->search . '%')
-                );
+                $q->whereHas('items.book', fn($b) => $b->where('title', 'like', '%' . $request->search . '%'))
+                    ->orWhere('order_number', 'like', '%' . $request->search . '%');
             }
+
             if ($request->filled('sort_by')) {
                 $q->orderBy($request->sort_by, $request->get('order', 'desc'));
             }
@@ -56,10 +58,9 @@ class OrderController extends Controller
                 return $this->error('No orders found', 404);
             }
 
-            return $this->success($pag, 'Orders retrieved');
+            return $this->success($pag, 'All orders retrieved');
         } catch (\Throwable $th) {
-            // throw $th;
-            return $this->error('An error occured while, fetching all orders. Try again!', 500, null, $th);
+            return $this->error('An error occurred while fetching all orders. Try again!', 500, null, $th);
         }
     }
 
@@ -69,7 +70,7 @@ class OrderController extends Controller
     public function userOrders(Request $request)
     {
         try {
-            $query = $request->user()->orders()->with(['items.book', 'transaction', 'deliveryAddress']);
+            $query = $request->user()->orders()->with(['items.book:id,title,cover_image,actual_price,discounted_price', 'deliveryAddress:id,address']);
 
             // Filter by status
             if ($request->filled('status')) {
@@ -109,7 +110,7 @@ class OrderController extends Controller
                 return $this->error('No orders found', 404);
             }
 
-            return $this->success($orders, 'User orders retrieved successfully');
+            return $this->success(OrderResource::collection($orders), 'User orders retrieved successfully');
         } catch (\Throwable $th) {
             return $this->error('An error occurred while fetching user orders. Try again!', 500, null, $th);
         }
@@ -139,7 +140,7 @@ class OrderController extends Controller
 
             return $this->service->create($request->user(), $request);
         } catch (\Throwable $th) {
-            \Log::error('Order creation error:', ['message' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
+            Log::error('Order creation error:', ['message' => $th->getMessage(), 'trace' => $th->getTraceAsString()]);
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
             return $this->error($message, 500, null, $th);
         }
