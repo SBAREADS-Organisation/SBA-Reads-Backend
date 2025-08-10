@@ -49,7 +49,7 @@ class StripeConnectService
                 //     'state' => $user->address->state,
                 //     'country' => strtoupper($user->address->country),
                 // ],
-                'description' => 'Customer for '.$user->name || '',
+                'description' => 'Customer for ' . $user->name || '',
                 'metadata' => [
                     'user_id' => $user->id,
                 ],
@@ -71,8 +71,6 @@ class StripeConnectService
 
             return $customer;
         } catch (\Throwable $th) {
-            // dd($th);
-            // Log::error('Stripe Customer Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe customer', 500, $th->getMessage(), $th);
         }
     }
@@ -175,7 +173,6 @@ class StripeConnectService
                 return $account;
             });
         } catch (\Throwable $th) {
-            // Log::error('Stripe Account Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe account', 500, $th->getMessage(), $th);
         }
     }
@@ -255,7 +252,6 @@ class StripeConnectService
                 return $account;
             });
         } catch (\Throwable $th) {
-            // Log::error('Stripe Account Update Error: ' . $th->getMessage());
             return $this->error('Error updating Stripe account', 500, $th->getMessage(), $th);
         }
     }
@@ -263,7 +259,6 @@ class StripeConnectService
     public function uploadIdentityDocument($user, $filePath)
     {
         try {
-            // dd($filePath);
             $file = File::create([
                 'file' => fopen($filePath, 'r'),
                 'purpose' => 'identity_document',
@@ -316,10 +311,7 @@ class StripeConnectService
 
             return $account;
         } catch (\Throwable $th) {
-            // throw $th;
-            // dd($th->getMessage());
-            // Log::error('Stripe Document Upload Error: ' . $th->getMessage());
-            return $this->error('Error uploading document to Stripe', 500, $th->getMessage().' '.$user->kyc_account_id, $th);
+            return $this->error('Error uploading document to Stripe', 500, $th->getMessage() . ' ' . $user->kyc_account_id, $th);
         }
     }
 
@@ -332,10 +324,8 @@ class StripeConnectService
 
         try {
             $event = Webhook::constructEvent($payload, $sigHeader, $secret);
-            Log::info($event);
         } catch (\Exception $e) {
-            Log::error($e->getMessage());
-            throw new \Exception('Failed to construct webhook event: '.$e->getMessage(), 0, $e);
+            throw new \Exception('Failed to construct webhook event: ' . $e->getMessage(), 0, $e);
         }
 
         if ($event->type === 'account.updated') {
@@ -378,14 +368,14 @@ class StripeConnectService
                             $earning->user_id = $item->book->authors->first()->id;
                             $earning->amount = $item->total_price; // Assuming price is the earning amount
                             $earning->currency = $paymentIntent->currency;
-                            $earning->description = 'Earning from order #'.$order->id.' for book '.$item->book->title;
+                            $earning->description = 'Earning from order #' . $order->id . ' for book ' . $item->book->title;
                             $earning->purpose_type = 'order';
                             $earning->purpose_id = $order->id;
                             $earning->type = 'earning';
                             $earning->purchased_by = $order->user_id;
                             $earning->direction = 'credit'; // Earning is a credit to the author's account
                             $earning->status = 'processing'; // At this point the order has not been completed yet
-                            $earning->reference = 'ERN_'.$order->id.'_'.$item->book->id.'_'.time();
+                            $earning->reference = 'ERN_' . $order->id . '_' . $item->book->id . '_' . time();
                             $earning->payment_provider = 'app';
                             $earning->payment_intent_id = $transaction->reference;
                             $earning->meta_data = json_encode([
@@ -420,7 +410,7 @@ class StripeConnectService
             // Handle $intent_purpose === 'subscription'
             if ($intent_purpose === 'subscription') {
                 // Find the user subscription by the purpose_id
-                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */ 'subscription'])->where('id', $intent_purpose_id)->first();
+                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */'subscription'])->where('id', $intent_purpose_id)->first();
                 $txn = \App\Models\Transaction::where('payment_intent_id', $paymentIntent->id)->first();
                 if ($userSubscription) {
                     // Update the subscription status to active
@@ -542,8 +532,6 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-            // dd($th);
-            // Log::error('Stripe Payment Method Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe payment method', 500, $th->getMessage(), $th);
         }
     }
@@ -636,8 +624,6 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-            //            throw $th;
-            // Log::error('Stripe Bank Account Creation Error: ' . $th->getMessage());
             return $this->error('Error creating Stripe bank account', 500, $th->getMessage(), $th);
         }
     }
@@ -675,8 +661,6 @@ class StripeConnectService
                 'error' => null,
             ], 200);
         } catch (\Throwable $th) {
-            // dd($th);
-            // Log::error('Stripe List Payment Methods Error: ' . $th->getMessage());
             return $this->error('Error retrieving payment methods', 500, $th->getMessage(), $th);
         }
     }
@@ -718,9 +702,6 @@ class StripeConnectService
 
             return $paymentIntent;
         } catch (\Throwable $th) {
-            // dd($th);
-            // dd($th);
-            // Log::error('Stripe Payment Intent Creation Error: ' . $th->getMessage());
             return $this->error('Error creating payment intent', 500, $th->getMessage(), $th);
         }
     }

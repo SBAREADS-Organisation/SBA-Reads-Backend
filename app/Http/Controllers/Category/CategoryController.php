@@ -37,7 +37,6 @@ class CategoryController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            // Log::error('Error fetching categories: ' . $e->getMessage());
             return $this->error('Failed to retrieve categories', 500, null, $e);
         }
     }
@@ -59,7 +58,6 @@ class CategoryController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            // Log::error('Error fetching category: ' . $e->getMessage());
             return $this->error('Failed to retrieve category', 500, null, $e);
         }
     }
@@ -98,7 +96,6 @@ class CategoryController extends Controller
                 201
             );
         } catch (\Exception $e) {
-            // Log::error('Error creating categories: ' . $e->getMessage());
             return $this->error('Failed to create categories', 500, null, $e);
         }
     }
@@ -129,7 +126,6 @@ class CategoryController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            // Log::error('Error updating category: ' . $e->getMessage());
             return $this->error('Failed to update category', 500, null, $e);
         }
     }
@@ -146,7 +142,6 @@ class CategoryController extends Controller
                 204
             );
         } catch (\Exception $e) {
-            // Log::error('Error deleting category: ' . $e->getMessage());
             return $this->error('Failed to delete category', 500, null, $e);
         }
     }

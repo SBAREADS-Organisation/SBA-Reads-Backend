@@ -74,8 +74,6 @@ class NotificationsController extends Controller
         } catch (ModelNotFoundException $e) {
             return $this->error('Notification not found.', 404, null, $e);
         } catch (\Exception $e) {
-            Log::error('Error marking notification as read: '.$e->getMessage());
-
             return $this->error('An error occurred while marking notification as read.', 500, null, $e);
         }
     }
@@ -94,8 +92,6 @@ class NotificationsController extends Controller
                 'All notifications marked as read successfully.'
             );
         } catch (\Exception $e) {
-            Log::error('Error marking all notifications as read: '.$e->getMessage());
-
             return $this->error('An error occurred while marking all notifications as read.', 500, null, $e);
         }
     }

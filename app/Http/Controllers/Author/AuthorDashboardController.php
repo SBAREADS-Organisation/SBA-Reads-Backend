@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Author;
 
 use App\Http\Controllers\Controller;
 use App\Models\Book;
-use App\Models\BookMetaDataAnalytics;
 use App\Models\DigitalBookPurchase;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -35,9 +34,9 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->pluck('id');
 
-            // Revenue - Total earnings from successful transactions
+            // Revenue - Total earnings from successful payout transactions
             $revenue = Transaction::where('user_id', $author->id)
-                ->where('type', 'earning')
+                ->whereIn('type', ['payout', 'earning'])
                 ->where('status', 'succeeded')
                 ->sum('amount');
 
@@ -58,7 +57,7 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->where('status', 'declined')->count();
 
-            // Sales calculations
+            // Sales calculations - FIXED
             $total_sales = $this->calculateTotalSales($authorBooks->toArray());
             $books_sold = $this->calculateBooksSold($authorBooks->toArray());
 
@@ -78,8 +77,7 @@ class AuthorDashboardController extends Controller
                 'categories:id,name'
             ])->orderBy('created_at', 'desc')->take(5)->get();
 
-            // Monthly trends
-            $monthly_revenue = $this->getMonthlyRevenue($author->id);
+            // Monthly trends - FIXED
             $monthly_sales = $this->getMonthlySales($authorBooks->toArray());
 
             return $this->success([
@@ -95,7 +93,6 @@ class AuthorDashboardController extends Controller
                 'pending_books_count' => $pending_books_count,
                 'recent_transactions' => $recent_transactions,
                 'recent_book_uploads' => $recent_book_uploads,
-                'monthly_revenue' => $monthly_revenue,
                 'monthly_sales' => $monthly_sales,
                 'wallet_balance' => $author->wallet_balance ?? 0,
             ], 'Author dashboard data retrieved successfully.');
@@ -113,7 +110,7 @@ class AuthorDashboardController extends Controller
 
         $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
-        })->where('status', 'completed')->sum('total_amount');
+        })->where('status', 'paid')->sum('total_amount');
 
         $physicalSales = Order::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
@@ -172,13 +169,23 @@ class AuthorDashboardController extends Controller
     {
         if (empty($authorBookIds)) return 0;
 
-        return BookMetaDataAnalytics::whereIn('book_id', $authorBookIds)->sum('purchases');
+        // Count from digital purchases
+        $digitalBooksSold = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+            $q->whereIn('book_id', $authorBookIds);
+        })->where('status', 'paid')->count();
+
+        // Count from physical orders
+        $physicalBooksSold = Order::whereHas('items', function ($q) use ($authorBookIds) {
+            $q->whereIn('book_id', $authorBookIds);
+        })->where('status', 'completed')->count();
+
+        return $digitalBooksSold + $physicalBooksSold;
     }
 
     private function getMonthlyRevenue(int $authorId)
     {
         return Transaction::where('user_id', $authorId)
-            ->where('type', 'earning')
+            ->whereIn('type', ['payout', 'earning'])
             ->where('status', 'succeeded')
             ->where('created_at', '>=', now()->subDays(30))
             ->sum('amount');
@@ -188,9 +195,10 @@ class AuthorDashboardController extends Controller
     {
         if (empty($authorBookIds)) return 0;
 
+        // FIXED: Use correct status values
         $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
             $q->whereIn('book_id', $authorBookIds);
-        })->where('status', 'completed')
+        })->where('status', 'paid')
             ->where('created_at', '>=', now()->subDays(30))
             ->count();
 
