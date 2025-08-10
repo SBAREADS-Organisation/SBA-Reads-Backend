@@ -29,36 +29,51 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         try {
-            $q = \App\Models\Order::query()->with(['items.book', 'user:id,name,email']);
+            $query = \App\Models\Order::query()
+                ->with([
+                    'items.book:id,title,cover_image,actual_price,discounted_price',
+                    'user:id,name,email',
+                    'deliveryAddress:id,address'
+                ]);
 
+            // Filter by status
             if ($request->filled('status')) {
-                $q->where('status', $request->status);
+                $query->where('status', $request->status);
             }
 
             // Filter by date range
             if ($request->filled('from_date')) {
-                $q->whereDate('created_at', '>=', $request->from_date);
+                $query->whereDate('created_at', '>=', $request->from_date);
             }
             if ($request->filled('to_date')) {
-                $q->whereDate('created_at', '<=', $request->to_date);
+                $query->whereDate('created_at', '<=', $request->to_date);
             }
 
+            // Search by book title or order number
             if ($request->filled('search')) {
-                $q->whereHas('items.book', fn($b) => $b->where('title', 'like', '%' . $request->search . '%'))
-                    ->orWhere('order_number', 'like', '%' . $request->search . '%');
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('order_number', 'like', "%$search%")
+                        ->orWhereHas('items.book', function ($b) use ($search) {
+                            $b->where('title', 'like', "%$search%");
+                        });
+                });
             }
 
+            // Sort
             if ($request->filled('sort_by')) {
-                $q->orderBy($request->sort_by, $request->get('order', 'desc'));
+                $query->orderBy($request->sort_by, $request->get('order', 'desc'));
+            } else {
+                $query->orderBy('created_at', 'desc');
             }
 
-            $pag = $q->paginate($request->get('per_page', 15));
+            $orders = $query->paginate($request->get('per_page', 15));
 
-            if ($pag->isEmpty()) {
+            if ($orders->isEmpty()) {
                 return $this->error('No orders found', 404);
             }
 
-            return $this->success($pag, 'All orders retrieved');
+            return $this->success(OrderResource::collection($orders), 'All orders retrieved');
         } catch (\Throwable $th) {
             return $this->error('An error occurred while fetching all orders. Try again!', 500, null, $th);
         }
