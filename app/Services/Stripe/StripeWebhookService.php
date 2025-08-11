@@ -73,68 +73,54 @@ class StripeWebhookService
     protected function processSuccessfulDigitalBookPurchase(Transaction $transaction, User $user): void
     {
         try {
-            $txnMetaData = json_decode($transaction->meta_data);
-
             $purchaseId = $transaction->purpose_id;
-            if (!is_numeric($purchaseId)) {
-                throw new \InvalidArgumentException('Purpose ID is missing or invalid for digital book purchase.');
-            }
-            $purchaseId = (int)$purchaseId;
-
             $purchase = DigitalBookPurchase::with(['items.book.author'])
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
+            // Only update if payment actually succeeded
             if ($purchase->status !== 'paid') {
                 $purchase->update(['status' => 'paid']);
             }
 
             foreach ($purchase->items as $item) {
+                // NOW add to user's purchased books (only after successful payment)
                 if (!$user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
                     $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
-
-                    // Update analytics
-                    $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
-                        ['book_id' => $item->book_id],
-                        ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-                    );
-                    $bookAnalytics->increment('purchases', 1);
-                    $bookAnalytics->save();
-
-                    // Immediately update author wallet balance
-                    $author = $item->book->author;
-                    if ($author) {
-                        $authorPayoutAmount = $item->author_payout_amount;
-                        $author->increment('wallet_balance', $authorPayoutAmount);
-
-                        // Create immediate payout transaction record
-                        Transaction::create([
-                            'id' => \Illuminate\Support\Str::uuid(),
-                            'user_id' => $author->id,
-                            'reference' => uniqid('pay_immediate_'),
-                            'status' => 'succeeded',
-                            'currency' => $purchase->currency ?? 'USD',
-                            'amount' => $authorPayoutAmount,
-                            'payment_provider' => 'app',
-                            'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
-                            'type' => 'payout',
-                            'direction' => 'credit',
-                            'purpose_type' => 'digital_book_purchase',
-                            'purpose_id' => $purchase->id,
-                        ]);
-                    }
                 }
-            }
 
-            // Still dispatch the delayed job for Stripe transfers, but mark as immediate payout
-            if (!in_array($purchase->status, ['failed', 'payout_initiated', 'payout_completed', 'payout_failed'])) {
-                $delayDays = 7;
-                ProcessAuthorPayout::dispatch(purpose: 'digital_book_purchase', purposeId: $purchase->id)->delay(now()->addDays($delayDays));
+                // NOW update author wallet (only after successful payment)
+                $author = $item->book->author;
+                if ($author) {
+                    $author->increment('wallet_balance', $item->author_payout_amount);
+
+                    // Create payout transaction record
+                    Transaction::create([
+                        'id' => \Illuminate\Support\Str::uuid(),
+                        'user_id' => $author->id,
+                        'reference' => uniqid('pay_immediate_'),
+                        'status' => 'succeeded',
+                        'currency' => $purchase->currency ?? 'USD',
+                        'amount' => $item->author_payout_amount,
+                        'payment_provider' => 'app',
+                        'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
+                        'type' => 'payout',
+                        'direction' => 'credit',
+                        'purpose_type' => 'digital_book_purchase',
+                        'purpose_id' => $purchase->id,
+                    ]);
+                }
+
+                // Update analytics
+                $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
+                    ['book_id' => $item->book_id],
+                    ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                );
+                $bookAnalytics->increment('purchases', 1);
+                $bookAnalytics->save();
             }
-        } catch (ModelNotFoundException $e) {
-            throw new \Exception('Digital book purchase record not found: ' . $e->getMessage(), 404, $e);
-        } catch (\Throwable $e) {
-            throw new \Exception('Failed to process digital book purchase: ' . $e->getMessage(), 500, $e);
+        } catch (\Exception $e) {
+            throw $e;
         }
     }
 

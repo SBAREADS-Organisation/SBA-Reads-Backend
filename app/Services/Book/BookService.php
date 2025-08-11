@@ -157,33 +157,29 @@ class BookService
 
     public function purchaseBooks(array $bookIds, User $user)
     {
-
         // Create a digital book purchase
-        $purchase = DigitalBookPurchase::create(
-            [
-                'user_id' => $user->id,
-                'total_amount' => 0, // This will be updated after calculating total
-                'currency' => 'usd',
-                'status' => 'pending',
-            ]
-        );
+        $purchase = DigitalBookPurchase::create([
+            'user_id' => $user->id,
+            'total_amount' => 0,
+            'currency' => 'usd',
+            'status' => 'pending',
+        ]);
+
         $total = 0;
         foreach ($bookIds as $bookId) {
             $book = Book::findOrFail($bookId);
             $authorPayoutAmount = $book->pricing['actual_price'] * 0.7;
-            $purchaseItem = DigitalBookPurchaseItem::create(
-                [
-                    'digital_book_purchase_id' => $purchase->id,
-                    'book_id' => $book->id,
-                    'author_id' => $book->authors->first()->id,
-                    'quantity' => 1, // Assuming quantity is always 1 for digital books
-                    'price_at_purchase' => $book->pricing['actual_price'],
-                    'author_payout_amount' => $authorPayoutAmount,
-                    'platform_fee_amount' => $book->pricing['actual_price'] - $authorPayoutAmount,
-                    'payout_status' => 'pending',
-                    'stripe_transfer_id' => null, // This will be set after payment processing
-                ]
-            );
+            $purchaseItem = DigitalBookPurchaseItem::create([
+                'digital_book_purchase_id' => $purchase->id,
+                'book_id' => $book->id,
+                'author_id' => $book->authors->first()->id,
+                'quantity' => 1,
+                'price_at_purchase' => $book->pricing['actual_price'],
+                'author_payout_amount' => $authorPayoutAmount,
+                'platform_fee_amount' => $book->pricing['actual_price'] - $authorPayoutAmount,
+                'payout_status' => 'pending',
+                'stripe_transfer_id' => null,
+            ]);
 
             $total += $purchaseItem->price_at_purchase;
         }
@@ -204,53 +200,11 @@ class BookService
             ],
         ], $user);
 
-        // If payment is successful, immediately update everything
-        if (!($transaction instanceof JsonResponse)) {
-            // Mark purchase as paid
-            $purchase->update(['status' => 'paid']);
-
-            // Add books to user's purchased books and update author wallets
-            foreach ($purchase->items as $item) {
-                // Add to user's purchased books
-                if (!$user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
-                    $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
-                }
-
-                // Update author wallet immediately
-                $author = $item->book->author;
-                if ($author) {
-                    $author->increment('wallet_balance', $item->author_payout_amount);
-
-                    // Create payout transaction record
-                    Transaction::create([
-                        'id' => \Illuminate\Support\Str::uuid(),
-                        'user_id' => $author->id,
-                        'reference' => uniqid('pay_immediate_'),
-                        'status' => 'succeeded',
-                        'currency' => $purchase->currency ?? 'USD',
-                        'amount' => $item->author_payout_amount,
-                        'payment_provider' => 'app',
-                        'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
-                        'type' => 'payout',
-                        'direction' => 'credit',
-                        'purpose_type' => 'digital_book_purchase',
-                        'purpose_id' => $purchase->id,
-                    ]);
-                }
-
-                // Update analytics
-                $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
-                    ['book_id' => $item->book_id],
-                    ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-                );
-                $bookAnalytics->increment('purchases', 1);
-                $bookAnalytics->save();
-            }
-        }
+        // DO NOT add books to purchased list here - wait for successful payment
+        // DO NOT update author wallets here - wait for successful payment
 
         if ($transaction instanceof JsonResponse) {
             $responseData = $transaction->getData(true);
-
             return $this->error(
                 'An error occurred while initiating the books purchase process.',
                 $transaction->getStatusCode(),
@@ -258,12 +212,10 @@ class BookService
             );
         }
 
-        return $this->success(
-            [
-                'transaction' => $transaction,
-                'book_ids' => $bookIds,
-            ],
-            'Books purchase process initiated successfully.'
-        );
+        return $this->success([
+            'purchase' => $purchase->load('items.book'),
+            'transaction' => $transaction,
+            'client_secret' => $transaction->payment_client_secret,
+        ], 'Purchase initiated successfully. Complete payment to access books.');
     }
 }
