@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Services\Dashboard\DashboardCacheService;
-
+use App\Services\Stripe\StripeWebhookService;
 
 class Transaction extends Model
 {
@@ -79,5 +79,51 @@ class Transaction extends Model
                 DashboardCacheService::clearAuthorDashboard($transaction->user_id);
             }
         });
+    }
+
+    public function checkStripeStatus()
+    {
+        if (!$this->payment_intent_id) {
+            return false;
+        }
+
+        try {
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
+            $paymentIntent = $stripe->paymentIntents->retrieve($this->payment_intent_id);
+
+
+
+            $isSuccessful = $paymentIntent->status === 'succeeded';
+
+            if ($isSuccessful && $this->status !== 'succeeded') {
+
+
+                $this->update(['status' => 'succeeded']);
+                $this->processSuccessfulPayment();
+            }
+
+            return $isSuccessful;
+        } catch (\Exception $e) {
+
+            return false;
+        }
+    }
+
+    protected function processSuccessfulPayment()
+    {
+        try {
+            $webhookService = app(\App\Services\Stripe\StripeWebhookService::class);
+
+
+
+            if ($this->purpose_type === 'digital_book_purchase') {
+                $webhookService->processSuccessfulDigitalBookPurchase($this, $this->user);
+            } elseif ($this->purpose_type === 'order') {
+                $webhookService->processSuccessfulOrder($this, $this->user);
+            }
+        } catch (\Exception $e) {
+
+            throw $e;
+        }
     }
 }
