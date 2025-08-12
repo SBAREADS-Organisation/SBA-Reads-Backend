@@ -84,10 +84,9 @@ class StripeWebhookService
             }
 
             foreach ($purchase->items as $item) {
-                // NOW add to user's purchased books (only after successful payment)
-                if (!$user->purchasedBooks()->where('book_id', $item->book_id)->exists()) {
-                    $user->purchasedBooks()->syncWithoutDetaching($item->book_id);
-                }
+                // Add to user's purchased books using dedicated service
+                app(\App\Services\Book\BookPurchaseService::class)
+                    ->addBooksToUserLibrary($user, [$item->book_id]);
 
                 // NOW update author wallet (only after successful payment)
                 $author = $item->book->author;
