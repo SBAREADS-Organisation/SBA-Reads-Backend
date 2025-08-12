@@ -11,6 +11,7 @@ use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\KYC\KYCController;
 use App\Http\Controllers\Notification\NotificationsController;
 use App\Http\Controllers\Order\OrderController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\Socials\SocialAuthController;
 use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
@@ -180,6 +181,7 @@ Route::middleware(['auth:sanctum'])->prefix('transaction')->group(function () {
     Route::get('/my-transactions', [TransactionsController::class, 'getMyTransactions'])->name('my-transactions');
     Route::middleware(['role:admin,superadmin'])->get('/all', [TransactionsController::class, 'getAllTransactions']);
     Route::get('/{id}', [TransactionsController::class, 'getTransaction']);
+    Route::post('/payment/status', [PaymentController::class, 'checkPaymentStatus']);
 });
 
 // Analytics Routes
