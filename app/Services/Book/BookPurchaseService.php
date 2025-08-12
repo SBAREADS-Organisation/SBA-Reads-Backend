@@ -25,22 +25,11 @@ class BookPurchaseService
 
                 if (!empty($newBooks)) {
                     $user->purchasedBooks()->syncWithoutDetaching($newBooks);
-
-                    Log::info('Books added to user library', [
-                        'user_id' => $user->id,
-                        'books_added' => $newBooks,
-                        'total_books' => count($newBooks)
-                    ]);
                 }
 
                 return true;
             });
         } catch (\Exception $e) {
-            Log::error('Failed to add books to user library', [
-                'user_id' => $user->id,
-                'book_ids' => $bookIds,
-                'error' => $e->getMessage()
-            ]);
             return false;
         }
     }
