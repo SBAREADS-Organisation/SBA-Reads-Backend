@@ -12,7 +12,6 @@ use App\Models\Transaction;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 
 class AuthorDashboardController extends Controller
 {
@@ -30,22 +29,10 @@ class AuthorDashboardController extends Controller
                 return $this->error('Access denied. Only authors can access this dashboard.', 403);
             }
 
-            // Log the request for debugging
-            Log::info('Author dashboard request', [
-                'author_id' => $author->id,
-                'author_email' => $author->email
-            ]);
-
             // Get author's books with proper error handling
             $authorBooks = Book::whereHas('authors', function ($q) use ($author) {
                 $q->where('author_id', $author->id);
             })->pluck('id');
-
-            Log::info('Author books retrieved', [
-                'author_id' => $author->id,
-                'book_count' => $authorBooks->count(),
-                'book_ids' => $authorBooks->toArray()
-            ]);
 
             // Revenue - Total earnings from successful payout transactions
             $revenue = Transaction::where('user_id', $author->id)
@@ -122,18 +109,8 @@ class AuthorDashboardController extends Controller
                 ]
             ];
 
-            Log::info('Author dashboard data retrieved successfully', [
-                'author_id' => $author->id,
-                'response_data' => $response_data
-            ]);
-
             return $this->success($response_data, 'Author dashboard data retrieved successfully.');
         } catch (\Throwable $th) {
-            Log::error('Error retrieving author dashboard data', [
-                'author_id' => $request->user()->id ?? null,
-                'error' => $th->getMessage(),
-                'trace' => $th->getTraceAsString()
-            ]);
 
             return $this->error('An error occurred while retrieving author dashboard data.', 500, null, $th);
         }
@@ -145,7 +122,6 @@ class AuthorDashboardController extends Controller
     private function calculateTotalSales(array $authorBookIds): float
     {
         if (empty($authorBookIds)) {
-            Log::warning('No author book IDs provided for total sales calculation');
             return 0;
         }
 
@@ -160,19 +136,8 @@ class AuthorDashboardController extends Controller
 
             $total = $digitalSales + $physicalSales;
 
-            Log::info('Total sales calculated', [
-                'book_ids' => $authorBookIds,
-                'digital_sales' => $digitalSales,
-                'physical_sales' => $physicalSales,
-                'total_sales' => $total
-            ]);
-
             return $total;
         } catch (\Throwable $th) {
-            Log::error('Error calculating total sales', [
-                'book_ids' => $authorBookIds,
-                'error' => $th->getMessage()
-            ]);
             return 0;
         }
     }
@@ -220,10 +185,6 @@ class AuthorDashboardController extends Controller
                 'total_reading_time_minutes' => round($total_reading_time, 2),
             ];
         } catch (\Throwable $th) {
-            Log::error('Error calculating reader engagement', [
-                'book_ids' => $authorBookIds,
-                'error' => $th->getMessage()
-            ]);
             return [
                 'active_readers' => 0,
                 'total_reading_sessions' => 0,
@@ -239,7 +200,6 @@ class AuthorDashboardController extends Controller
     private function calculateBooksSold(array $authorBookIds): int
     {
         if (empty($authorBookIds)) {
-            Log::warning('No author book IDs provided for books sold calculation');
             return 0;
         }
 
@@ -260,19 +220,9 @@ class AuthorDashboardController extends Controller
 
             $total = $digitalBooksSold + $physicalBooksSold;
 
-            Log::info('Books sold calculated', [
-                'book_ids' => $authorBookIds,
-                'digital_books_sold' => $digitalBooksSold,
-                'physical_books_sold' => $physicalBooksSold,
-                'total_books_sold' => $total
-            ]);
-
             return $total;
         } catch (\Throwable $th) {
-            Log::error('Error calculating books sold', [
-                'book_ids' => $authorBookIds,
-                'error' => $th->getMessage()
-            ]);
+
             return 0;
         }
     }
@@ -289,10 +239,7 @@ class AuthorDashboardController extends Controller
                 ->where('created_at', '>=', now()->subDays(30))
                 ->sum('amount');
         } catch (\Throwable $th) {
-            Log::error('Error calculating monthly revenue', [
-                'author_id' => $authorId,
-                'error' => $th->getMessage()
-            ]);
+
             return 0;
         }
     }
@@ -321,19 +268,9 @@ class AuthorDashboardController extends Controller
 
             $total = $digitalSales + $physicalSales;
 
-            Log::info('Monthly sales calculated', [
-                'book_ids' => $authorBookIds,
-                'digital_sales' => $digitalSales,
-                'physical_sales' => $physicalSales,
-                'total_monthly_sales' => $total
-            ]);
-
             return $total;
         } catch (\Throwable $th) {
-            Log::error('Error calculating monthly sales', [
-                'book_ids' => $authorBookIds,
-                'error' => $th->getMessage()
-            ]);
+
             return 0;
         }
     }
@@ -381,11 +318,7 @@ class AuthorDashboardController extends Controller
                 }))
             ];
         } catch (\Throwable $th) {
-            Log::error('Error calculating additional metrics', [
-                'author_id' => $authorId,
-                'book_ids' => $authorBookIds,
-                'error' => $th->getMessage()
-            ]);
+
             return [];
         }
     }
