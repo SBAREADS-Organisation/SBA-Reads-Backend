@@ -255,8 +255,25 @@ Verify OTP for password reset
 **Request Body:**
 ```json
 {
-  "email": "user@example.com",
-  "token": "otp_token"
+  "otp": "123456"
+}
+```
+
+**Response:**
+```json
+{
+  "data": null,
+  "code": 200,
+  "message": "OTP verified successfully"
+}
+```
+
+**Error Response:**
+```json
+{
+  "data": null,
+  "code": 400,
+  "message": "Invalid or expired OTP"
 }
 ```
 
@@ -853,3 +870,4 @@ All endpoints validate input data according to defined rules. Validation errors 
     ]
   }
 }
+
