@@ -432,7 +432,7 @@ class UserController extends Controller
             // Common validation rules
             $rules = [
                 'name' => 'nullable|string|max:255',
-                'profile_info.username' => 'required|string|max:255|unique:users,username,'.$user->id,
+                'profile_info.username' => 'nullable|string|max:255|unique:users,username,'.$user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 // 'profile_picture' => 'nullable|array',
@@ -443,11 +443,11 @@ class UserController extends Controller
             if ($user->account_type === 'author') {
                 // Add author-specific required fields
                 $rules = array_merge($rules, [
-                    'socials' => 'required|array|min:1',
-                    'socials.*.platform' => 'required|string|max:50',
-                    'socials.*.url' => 'required|url|max:255',
-                    'preferences.genres' => 'required|array|min:1',
-                    'preferences.genres.*' => 'required|string|max:50',
+                    'socials' => 'nullable|array|min:1',
+                    'socials.*.platform' => 'nullable|string|max:50',
+                    'socials.*.url' => 'nullable|url|max:255',
+                    'preferences.genres' => 'nullable|array|min:1',
+                    'preferences.genres.*' => 'nullable|string|max:50',
                     // 'first_name' => 'required|string|max:255',
                 ]);
             } /*else {
