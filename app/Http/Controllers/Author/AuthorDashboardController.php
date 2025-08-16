@@ -36,7 +36,7 @@ class AuthorDashboardController extends Controller
 
             // Revenue - Total earnings from successful payout transactions
             $revenue = Transaction::where('user_id', $author->id)
-                ->whereIn('type', ['payout', 'earning'])
+                ->whereIn('type', ['payout', 'earning', 'purchase'])
                 ->where('status', 'succeeded')
                 ->sum('amount');
 
