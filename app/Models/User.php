@@ -50,6 +50,7 @@ class User extends Authenticatable
         'mfa_secret',
         'deleted',
         'archived',
+        'wallet_balance'
     ];
 
     /**
