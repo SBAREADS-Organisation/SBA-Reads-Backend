@@ -48,6 +48,7 @@ class Book extends Model
         'approved_at',
         'approved_by',
         'review_notes',
+        'rejection_note',
         'expired_at',
     ];
 

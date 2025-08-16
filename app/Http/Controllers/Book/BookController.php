@@ -980,6 +980,7 @@ class BookController extends Controller
             // $action = $request->input('action'); // 'request_changes', 'approve', 'decline', 'decline_with_review'
             $note = $request->input('note');
             $reviewNotes = $request->input('review_notes');
+            $rejectionNote = $request->input('rejection_note');
 
             // Correct way:
             $book = Book::with(['authors', 'categories'])->findOrFail($bookId);
@@ -1058,11 +1059,12 @@ class BookController extends Controller
             }
 
             if ($action === 'decline' || $action === 'decline_with_review') {
-                if (! $reviewNotes) {
-                    return $this->error('Review notes are required to decline a book.');
+                if (! $reviewNotes && !$rejectionNote) {
+                    return $this->error('Review notes or rejection note are required to decline a book.');
                 }
                 $book->status = 'declined';
                 $book->review_notes = $reviewNotes;
+                $book->rejection_note = $rejectionNote;
                 $book->save();
 
                 if ($action === 'decline_with_review') {
