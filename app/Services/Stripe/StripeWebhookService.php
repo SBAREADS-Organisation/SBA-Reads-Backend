@@ -92,6 +92,7 @@ class StripeWebhookService
                 $author = $item->book->author;
                 if ($author) {
                     $author->increment('wallet_balance', $item->author_payout_amount);
+                    $author->save();
 
                     // Create payout transaction record
                     Transaction::create([
@@ -154,6 +155,7 @@ class StripeWebhookService
                     if ($author && isset($item->author_payout_amount)) {
                         $authorPayoutAmount = $item->author_payout_amount * $item->quantity;
                         $author->increment('wallet_balance', $authorPayoutAmount);
+                        $author->save();
 
                         // Create immediate payout transaction record
                         Transaction::create([
