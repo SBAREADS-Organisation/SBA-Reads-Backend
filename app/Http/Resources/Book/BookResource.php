@@ -7,47 +7,65 @@ use Illuminate\Http\Resources\Json\JsonResource;
 
 class BookResource extends JsonResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @return array<string, mixed>
-     */
-    // public function toArray(Request $request): array
-    // {
-    //     return parent::toArray($request);
-    // }
+    protected $isListing = false;
+
+    public function __construct($resource, $isListing = false)
+    {
+        parent::__construct($resource);
+        $this->isListing = $isListing;
+    }
+
+    public static function collection($resource, $isListing = false)
+    {
+        return parent::collection($resource)->map(function ($item) use ($isListing) {
+            return new static($item->resource, $isListing);
+        });
+    }
 
     public function toArray($request)
     {
-        return [
+        $baseData = [
             'id' => $this->id,
             'title' => $this->title,
             'slug' => $this->slug,
-            'sub_title' => $this->sub_title,
-            'description' => $this->description,
-            'isbn' => $this->isbn,
             'cover_image' => $this->cover_image,
-            'language' => $this->language,
-            'tags' => $this->tags,
-            'genres' => $this->genres,
-            'table_of_contents' => $this->table_of_contents,
-            'publication_date' => $this->publication_date,
             'actual_price' => $this->actual_price,
             'discounted_price' => $this->discounted_price,
             'currency' => $this->currency,
             'format' => $this->format,
+            'publisher' => $this->publisher,
+            'publication_date' => $this->publication_date,
+            'status' => $this->status,
+            'created_at' => $this->created_at,
+        ];
+
+        if ($this->isListing) {
+            return array_merge($baseData, [
+                'rating' => $this->reviews->avg('rating'),
+                'reviews_count' => $this->reviews->count(),
+                'authors' => $this->authors->pluck('name'),
+                'categories' => $this->categories->pluck('name'),
+            ]);
+        }
+
+        // Full detail view - existing code
+        return array_merge($baseData, [
+            'sub_title' => $this->sub_title,
+            'description' => $this->description,
+            'isbn' => $this->isbn,
+            'language' => $this->language,
+            'tags' => $this->tags,
+            'genres' => $this->genres,
+            'table_of_contents' => $this->table_of_contents,
             'availability' => $this->availability,
             'drm_info' => $this->drm_info,
-            'publisher' => $this->publisher,
             'target_audience' => $this->target_audience,
             'meta_data' => $this->meta_data,
             'visibility' => $this->visibility,
-            'status' => $this->status,
             'approved_at' => $this->approved_at,
             'approved_by' => $this->approved_by,
             'review_notes' => $this->review_notes,
             'expired_at' => $this->expired_at,
-            'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'deleted_at' => $this->deleted_at,
             'archived' => $this->archived,
@@ -60,7 +78,6 @@ class BookResource extends JsonResource
                     'name' => $cat->name,
                 ];
             }),
-            // Return all reviews and populate user_id with user information
             'reviews' => $this->reviews->map(function ($review) {
                 return [
                     'id' => $review->id,
@@ -76,24 +93,10 @@ class BookResource extends JsonResource
                     ],
                 ];
             }),
-            // // Return all reviews and populate user_id with user information
-            // 'reviews'         => $this->reviews->map(function ($review) {
-            //     return [
-            //         'id'      => $review->id,
-            //         'user_id' => $review->user_id,
-            //         'rating'  => $review->rating,
-            //         'comment' => $review->comment,
-            //         'created_at' => $review->created_at,
-            //     ];
-            // }),
             'authors' => $this->authors->map(function ($author) {
                 $profilePicture = $author->profile_picture ?? [];
-
-                // Ensure correct mapping of public_id and public_url
                 $publicId = $profilePicture['public_url'] ?? ($profilePicture['public_id'] ?? null);
                 $publicUrl = $profilePicture['public_id'] ?? ($profilePicture['public_url'] ?? null);
-
-                // Ensure public_id is a number and public_url is a string
                 $publicId = is_numeric($publicId) ? (int) $publicId : null;
                 $publicUrl = is_string($publicUrl) ? $publicUrl : null;
 
@@ -110,6 +113,6 @@ class BookResource extends JsonResource
             }),
             'bookmarks' => $this->bookmarkedBy->pluck('id')->toArray(),
             'readers' => $this->purchasers->pluck('id')->toArray(),
-        ];
+        ]);
     }
 }
