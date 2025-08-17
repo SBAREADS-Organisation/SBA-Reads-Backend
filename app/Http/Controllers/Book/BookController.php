@@ -566,16 +566,15 @@ class BookController extends Controller
 
         $user->bookmarks()->syncWithoutDetaching([$bookId]);
 
-        return $this->success(
-            null,
-            'Book bookmarked successfully',
-            200
-        );
-        // return response()->json([
-        //     'data' => null,
-        //     'code' => 200,
-        //     'message' => 'Book bookmarked'
-        // ], 200);
+        return response()->json([
+            'data' => [
+                'book_id' => (int) $bookId,
+                'user_id' => $user->id,
+                'bookmarked' => true
+            ],
+            'code' => 200,
+            'message' => 'Book bookmarked successfully'
+        ]);
     }
 
     /**
@@ -666,11 +665,15 @@ class BookController extends Controller
 
             $user->bookmarks()->detach($bookId);
 
-            return $this->success(
-                null,
-                'Book removed from bookmarks',
-                200
-            );
+            return response()->json([
+                'data' => [
+                    'book_id' => (int) $bookId,
+                    'user_id' => $user->id,
+                    'bookmarked' => false
+                ],
+                'code' => 200,
+                'message' => 'Bookmark removed successfully'
+            ]);
         } catch (\Throwable $th) {
             return $this->error(
                 'Failed to remove bookmark',
