@@ -418,9 +418,11 @@ class UserController extends Controller
         $user = $request->user()->load('bookmarks', 'kycInfo', 'purchasedBooks'); // ->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
-        return $this->success(new UserResource($user),
+        return $this->success(
+            new UserResource($user),
             'Profile retrieved successfully!',
-            200);
+            200
+        );
     }
 
     public function updateProfile(Request $request)
@@ -432,7 +434,7 @@ class UserController extends Controller
             // Common validation rules
             $rules = [
                 'name' => 'nullable|string|max:255',
-                'profile_info.username' => 'nullable|string|max:255|unique:users,username,'.$user->id,
+                'profile_info.username' => 'nullable|string|max:255|unique:users,username,' . $user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 // 'profile_picture' => 'nullable|array',
@@ -1034,7 +1036,7 @@ class UserController extends Controller
 
         // Validate action
         if (! in_array($action, $allowedActions)) {
-            return $this->error('Invalid action. Allowed actions: '.implode(', ', $allowedActions), 400);
+            return $this->error('Invalid action. Allowed actions: ' . implode(', ', $allowedActions), 400);
         }
 
         // Validate user
@@ -1076,5 +1078,71 @@ class UserController extends Controller
             "User status updated to '{$action}' successfully.",
             200
         );
+    }
+
+    /**
+     * Super admin invites another admin
+     */
+    public function inviteAdmin(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|unique:users,email',
+            'name' => 'required|string|max:255',
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
+                'regex:/[\W_]/',
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error(
+                'Validation failed',
+                400,
+                $validator->errors()
+            );
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $user = new User;
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->password = Hash::make($request->password);
+            $user->account_type = 'manager';
+            $user->default_login = 'email';
+            $user->status = 'active';
+            $user->save();
+
+            // Assign admin role
+            $role = Role::firstOrCreate(['name' => 'admin']);
+            $user->assignRole($role);
+
+            // Send welcome email
+            Mail::to($user->email)->queue(new WelcomeEmail($user->name, $user->account_type));
+
+            DB::commit();
+
+            return $this->success([
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->getRoleNames()->first(),
+                'account_type' => $user->account_type,
+            ], 'Admin invited successfully', 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error(
+                'An error occurred while inviting the admin.',
+                500,
+                config('app.debug') ? $e->getMessage() : 'An error occurred while inviting the admin.',
+                $e
+            );
+        }
     }
 }

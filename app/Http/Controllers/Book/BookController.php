@@ -11,6 +11,8 @@ use App\Mail\Book\BookDeleted;
 use App\Mail\Books\BookCreatedNotification;
 use App\Models\Book;
 use App\Models\BookReviews;
+use App\Models\DigitalBookPurchase;
+use App\Models\DigitalBookPurchaseItem;
 use App\Models\ReadingProgress;
 use App\Models\User;
 use App\Notifications\Book\Milestone\MilestoneReachedNotification;
@@ -93,91 +95,54 @@ class BookController extends Controller
      */
     public function index(Request $request)
     {
-        try {
-            // $cacheKey = 'books_' . md5(json_encode($request->all()));
-            $cacheKey = 'books_' . md5($request->fullUrl());
-            $books = Cache::remember($cacheKey, now()->addMinutes(5), function () use ($request) {
-                $query = Book::query()->with(['authors', /* 'author_id', */ 'categories', /* 'category', */ 'reviews', 'analytics']);
-                $query->where('status', 'approved');
-                $query->where('visibility', 'public');
-                $query->where('deleted', false);
+        // Filter for visible books (public visibility and any status except rejected)
+        $query = Book::query()
+            ->where('visibility', 'public')
+            ->whereIn('status', ['pending', 'approved', 'published']);
 
-                // 🔍 SEARCH
-                if ($request->filled('search')) {
-                    $search = $request->input('search');
-                    // $search = strtolower($request->input('search'));
-                    $query->where(function ($q) use ($search) {
-                        // $q->where('title', 'like', "%{$search}%")
-                        //     ->orWhere('description', 'like', "%{$search}%");
-                        $q->where('title', 'ilike', "%{$search}%")
-                            ->orWhere('sub_title', 'ilike', "%{$search}%")
-                            ->orWhere('description', 'ilike', "%{$search}%")
-                            ->orWhere('isbn', 'ilike', "%{$search}%")
-                            ->orWhereHas('authors', function ($qa) use ($search) {
-                                $qa->where('name', 'ilike', "%{$search}%");
-                            });
-                    });
-                }
+        if ($request->filled('category_id')) {
+            $query->where('category_id', $request->category_id);
+        }
 
-                // 🗂️ FILTER BY CATEGORIES (JSONB)
-                if ($request->filled('interests')) {
-                    $interests = $request->input('interests'); // expect array of category names
-                    $query->whereHas('categories', function ($q) use ($interests) {
-                        $q->whereIn('name', $interests);
-                    });
-                }
+        // Handle classification parameter
+        if ($request->filled('classification')) {
+            $query = $this->applyClassification($query, $request->classification);
+        }
 
-                // 📊 CLASSIFICATIONS
-                if ($request->filled('classification')) {
-                    switch ($request->input('classification')) {
-                        case 'new_arrivals':
-                            $query->orderBy('publication_date', 'desc');
-                            break;
+        if ($request->filled('search')) {
+            $query->where('title', 'like', "%{$request->search}%");
+        }
 
-                        case 'trending':
-                            $query->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
-                                ->orderByDesc('a.views')
-                                ->orderByDesc('a.purchases')
-                                ->select('books.*');
-                            break;
+        $books = $query->with([
+            'categories:id,name',
+            'authors:id,name',
+            'reviews:id,book_id,rating'
+        ])->paginate($request->get('items_per_page', 10));
 
-                        case 'top_picks':
-                            $query->withAvg('reviews', 'rating')->orderByDesc('reviews_avg_rating');
-                            break;
-                    }
-                }
+        return BookResource::collection($books, true); // true = listing mode
+    }
 
-                // 🔢 SORTING
-                if ($request->input('sort_by') === 'popularity') {
-                    // Join analytics for view count
-                    $query->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
-                        ->orderByDesc('a.views')
-                        ->select('books.*');
-                } else {
-                    // Whitelist sortable fields
-                    $allowed = ['title', 'publication_date', 'actual_price', 'discounted_price', 'created_at'];
-                    $sortBy = in_array($request->input('sort_by'), $allowed)
-                        ? $request->input('sort_by')
-                        : 'created_at';
+    private function applyClassification($query, $classification)
+    {
+        switch ($classification) {
+            case 'new_arrivals':
+                return $query->where('created_at', '>=', now()->subDays(30))
+                    ->orderBy('created_at', 'desc');
 
-                    $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
-                    $query->orderBy($sortBy, $sortDir);
-                }
+            case 'trending':
+                return $query->orderByDesc('views_count');
 
-                // 📄 PAGINATION
-                $perPage = $request->input('items_per_page', 20);
+            case 'top_picks':
+                return $query->whereIn('id', function ($subquery) {
+                    $subquery->select('book_id')
+                        ->from('book_reviews')
+                        ->where('rating', '>=', 4.0)
+                        ->groupBy('book_id')
+                        ->havingRaw('AVG(rating) >= 4.0');
+                })->orderBy('id');
 
-                return $query->paginate($perPage);
-            });
-
-            return BookResource::collection($books)
-                ->additional([
-                    'code' => 200,
-                    'message' => 'Books retrieved successfully!',
-                    'error' => null,
-                ]);
-        } catch (\Exception $e) {
-            return $this->error('Failed to retrieve books', 500, null, $e);
+            default:
+                return $query->inRandomOrder();
         }
     }
 
@@ -603,16 +568,15 @@ class BookController extends Controller
 
         $user->bookmarks()->syncWithoutDetaching([$bookId]);
 
-        return $this->success(
-            null,
-            'Book bookmarked successfully',
-            200
-        );
-        // return response()->json([
-        //     'data' => null,
-        //     'code' => 200,
-        //     'message' => 'Book bookmarked'
-        // ], 200);
+        return response()->json([
+            'data' => [
+                'book_id' => (int) $bookId,
+                'user_id' => $user->id,
+                'bookmarked' => true
+            ],
+            'code' => 200,
+            'message' => 'Book bookmarked successfully'
+        ]);
     }
 
     /**
@@ -703,11 +667,15 @@ class BookController extends Controller
 
             $user->bookmarks()->detach($bookId);
 
-            return $this->success(
-                null,
-                'Book removed from bookmarks',
-                200
-            );
+            return response()->json([
+                'data' => [
+                    'book_id' => (int) $bookId,
+                    'user_id' => $user->id,
+                    'bookmarked' => false
+                ],
+                'code' => 200,
+                'message' => 'Bookmark removed successfully'
+            ]);
         } catch (\Throwable $th) {
             return $this->error(
                 'Failed to remove bookmark',
@@ -1151,8 +1119,22 @@ class BookController extends Controller
                 return $this->error('You already own the following book(s): ' . $conflictingBooks, 409);
             }
 
-            //            $user->purchasedBooks()->attach($bookIds);
-            return $this->service->purchaseBooks($bookIds, $user);
+            // Fetch books data
+            $books = Book::whereIn('id', $bookIds)->get();
+
+            // Create digital book purchase records
+            foreach ($bookIds as $bookId) {
+                DigitalBookPurchase::create([
+                    'user_id' => $user->id,
+                    'book_id' => $bookId,
+                    'purchase_price' => $books->find($bookId)->actual_price ?? 0,
+                    'currency' => 'USD',
+                    'status' => 'completed',
+                ]);
+            }
+
+            // Add books to user's purchased books relationship
+            $user->purchasedBooks()->syncWithoutDetaching($bookIds);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {

@@ -550,9 +550,46 @@ Update user profile
     "username": "johnupdated",
     "bio": "An updated book lover",
     "pronouns": "he/him"
+  },
+  "profile_picture": "file_upload",
+  "preferences": {
+    "genres": ["fiction", "mystery"],
+    "notifications": true
+  },
+  "settings": {
+    "theme": "dark",
+    "language": "en"
   }
 }
 ```
+
+**Response:**
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Updated",
+    "email": "user@example.com",
+    "account_type": "reader",
+    "status": "active",
+    "profile_picture": "https://example.com/profile.jpg",
+    "bio": "An updated book lover",
+    "preferences": {
+      "genres": ["fiction", "mystery"]
+    },
+    "settings": {
+      "theme": "dark"
+    }
+  },
+  "code": 200,
+  "message": "Profile updated successfully!"
+}
+```
+
+**Notes:**
+- `profile_picture` accepts file upload
+- `preferences` and `settings` are merged with existing data (for authors)
+- Only provided fields are updated
 
 #### PATCH /user/profile/preference
 Update user preferences
@@ -681,11 +718,106 @@ Add bank account (authors only)
 #### GET /user/notifications
 Get user notifications
 
+**Query Parameters:**
+- `page`: Page number (default: 1)
+- `per_page`: Items per page (default: 15)
+- `status`: Filter by read status (read, unread)
+- `type`: Filter by notification type
+
+**Response:**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "type": "book_approved",
+      "title": "Book Approved",
+      "message": "Your book 'The Great Novel' has been approved and is now live.",
+      "data": {
+        "book_id": 123,
+        "book_title": "The Great Novel"
+      },
+      "read_at": null,
+      "created_at": "2025-01-15T10:30:00.000000Z"
+    },
+    {
+      "id": 2,
+      "type": "new_review",
+      "title": "New Review",
+      "message": "You received a new 5-star review on 'The Great Novel'.",
+      "data": {
+        "book_id": 123,
+        "review_id": 456,
+        "rating": 5
+      },
+      "read_at": "2025-01-15T11:00:00.000000Z",
+      "created_at": "2025-01-15T10:45:00.000000Z"
+    }
+  ],
+  "links": {
+    "first": "http://api.example.com/user/notifications?page=1",
+    "last": "http://api.example.com/user/notifications?page=3",
+    "prev": null,
+    "next": "http://api.example.com/user/notifications?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 3,
+    "per_page": 15,
+    "to": 15,
+    "total": 42,
+    "unread_count": 5
+  }
+}
+```
+
 #### POST /user/notifications/{notification}/mark-as-read
 Mark notification as read
 
+**Response:**
+```json
+{
+  "data": {
+    "id": 1,
+    "type": "book_approved",
+    "title": "Book Approved",
+    "message": "Your book 'The Great Novel' has been approved and is now live.",
+    "data": {
+      "book_id": 123,
+      "book_title": "The Great Novel"
+    },
+    "read_at": "2025-01-15T12:00:00.000000Z",
+    "created_at": "2025-01-15T10:30:00.000000Z"
+  },
+  "code": 200,
+  "message": "Notification marked as read successfully"
+}
+```
+
 #### POST /user/notifications/mark-all-as-read
 Mark all notifications as read
+
+**Response:**
+```json
+{
+  "data": {
+    "marked_count": 5
+  },
+  "code": 200,
+  "message": "All notifications marked as read successfully"
+}
+```
+
+**Notification Types:**
+- `book_approved`: Book has been approved by admin
+- `book_rejected`: Book has been rejected by admin
+- `new_review`: New review received on user's book
+- `order_status`: Order status update
+- `payment_success`: Payment processed successfully
+- `payment_failed`: Payment processing failed
+- `subscription_expiring`: Subscription expiring soon
+- `new_book_release`: New book from followed author
 
 ### Book Management
 
@@ -699,6 +831,55 @@ Get all books with filtering and search
 - `sort_by`: Sort field (title, publication_date, etc.)
 - `sort_dir`: Sort direction (asc, desc)
 - `items_per_page`: Items per page
+
+**Response (Listing - Optimized):**
+```json
+{
+  "data": [
+    {
+      "id": 1,
+      "title": "The Hitchhiker's Guide to the Galaxy",
+      "slug": "the-hitchhikers-guide-to-the-galaxy",
+      "cover_image": {
+        "public_url": "https://res.cloudinary.com/example/image/upload/v1754163793/books/covers/book.png",
+        "public_id": 1
+      },
+      "actual_price": 9.99,
+      "discounted_price": 39.99,
+      "currency": "USD",
+      "format": "ebook",
+      "publisher": "Pan Books",
+      "publication_date": "1979-10-12T00:00:00.000000Z",
+      "status": "pending",
+      "created_at": "2025-08-02T19:43:18.000000Z",
+      "average_rating": 4.2,
+      "reviews_count": 15,
+      "authors": ["Douglas Adams"],
+      "categories": ["Fiction", "Science Fiction"]
+    }
+  ],
+  "links": {
+    "first": "http://api.example.com/books?page=1",
+    "last": "http://api.example.com/books?page=5",
+    "prev": null,
+    "next": "http://api.example.com/books?page=2"
+  },
+  "meta": {
+    "current_page": 1,
+    "from": 1,
+    "last_page": 5,
+    "per_page": 10,
+    "to": 10,
+    "total": 50
+  }
+}
+```
+
+**Classification Types:**
+- `new_arrivals`: Books created in the last 30 days, ordered by newest first
+- `trending`: Books ordered by view count (most viewed first)
+- `top_picks`: Books with average rating >= 4.0, ordered by highest rating
+- No classification: Random order
 
 #### POST /books
 Create new book (authenticated users)
@@ -768,8 +949,34 @@ Get all bookmarked books
 #### POST /books/{id}/bookmark
 Bookmark a book
 
+**Response:**
+```json
+{
+  "data": {
+    "book_id": 1,
+    "user_id": 3,
+    "bookmarked": true
+  },
+  "code": 200,
+  "message": "Book bookmarked successfully"
+}
+```
+
 #### DELETE /books/{id}/bookmark
 Remove bookmark from a book
+
+**Response:**
+```json
+{
+  "data": {
+    "book_id": 1,
+    "user_id": 3,
+    "bookmarked": false
+  },
+  "code": 200,
+  "message": "Bookmark removed successfully"
+}
+```
 
 #### POST /books/purchase
 Purchase books
@@ -850,6 +1057,19 @@ Update order status
 ```json
 {
   "status": "completed"
+}
+```
+
+#### POST /admin/invite-admin
+SuperAdmin invite other Admin
+
+**Request Body:**
+```json
+{
+  "name": "Admin Invite",
+  "email": "admininvite@example.com",
+  "password": "Password123.",
+  "account_type": "manager"
 }
 ```
 
@@ -1032,6 +1252,8 @@ For paginated responses:
 }
 ```
 
+
+
 ## HTTP Status Codes
 
 - `200` - Success
@@ -1064,4 +1286,8 @@ All endpoints validate input data according to defined rules. Validation errors 
     ]
   }
 }
+
+
+
+
 
