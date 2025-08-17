@@ -1079,4 +1079,70 @@ class UserController extends Controller
             200
         );
     }
+
+    /**
+     * Super admin invites another admin
+     */
+    public function inviteAdmin(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|unique:users,email',
+            'name' => 'required|string|max:255',
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'regex:/[A-Z]/',
+                'regex:/[a-z]/',
+                'regex:/[0-9]/',
+                'regex:/[\W_]/',
+            ],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error(
+                'Validation failed',
+                400,
+                $validator->errors()
+            );
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $user = new User;
+            $user->name = $request->name;
+            $user->email = $request->email;
+            $user->password = Hash::make($request->password);
+            $user->account_type = 'manager';
+            $user->default_login = 'email';
+            $user->status = 'active';
+            $user->save();
+
+            // Assign admin role
+            $role = Role::firstOrCreate(['name' => 'admin']);
+            $user->assignRole($role);
+
+            // Send welcome email
+            Mail::to($user->email)->queue(new WelcomeEmail($user->name, $user->account_type));
+
+            DB::commit();
+
+            return $this->success([
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->getRoleNames()->first(),
+                'account_type' => $user->account_type,
+            ], 'Admin invited successfully', 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->error(
+                'An error occurred while inviting the admin.',
+                500,
+                config('app.debug') ? $e->getMessage() : 'An error occurred while inviting the admin.',
+                $e
+            );
+        }
+    }
 }

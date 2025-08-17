@@ -550,9 +550,46 @@ Update user profile
     "username": "johnupdated",
     "bio": "An updated book lover",
     "pronouns": "he/him"
+  },
+  "profile_picture": "file_upload",
+  "preferences": {
+    "genres": ["fiction", "mystery"],
+    "notifications": true
+  },
+  "settings": {
+    "theme": "dark",
+    "language": "en"
   }
 }
 ```
+
+**Response:**
+```json
+{
+  "data": {
+    "id": 1,
+    "name": "John Updated",
+    "email": "user@example.com",
+    "account_type": "reader",
+    "status": "active",
+    "profile_picture": "https://example.com/profile.jpg",
+    "bio": "An updated book lover",
+    "preferences": {
+      "genres": ["fiction", "mystery"]
+    },
+    "settings": {
+      "theme": "dark"
+    }
+  },
+  "code": 200,
+  "message": "Profile updated successfully!"
+}
+```
+
+**Notes:**
+- `profile_picture` accepts file upload
+- `preferences` and `settings` are merged with existing data (for authors)
+- Only provided fields are updated
 
 #### PATCH /user/profile/preference
 Update user preferences
@@ -1234,6 +1271,7 @@ All endpoints validate input data according to defined rules. Validation errors 
     ]
   }
 }
+
 
 
 
