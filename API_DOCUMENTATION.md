@@ -815,8 +815,8 @@ Get all books with filtering and search
       "publication_date": "1979-10-12T00:00:00.000000Z",
       "status": "pending",
       "created_at": "2025-08-02T19:43:18.000000Z",
-      "rating": 4,
-      "reviews_count": 1,
+      "average_rating": 4.2,
+      "reviews_count": 15,
       "authors": ["Douglas Adams"],
       "categories": ["Fiction", "Science Fiction"]
     }
@@ -1234,6 +1234,7 @@ All endpoints validate input data according to defined rules. Validation errors 
     ]
   }
 }
+
 
 
 

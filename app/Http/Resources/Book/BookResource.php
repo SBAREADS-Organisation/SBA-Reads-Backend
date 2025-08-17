@@ -41,7 +41,7 @@ class BookResource extends JsonResource
 
         if ($this->isListing) {
             return array_merge($baseData, [
-                'rating' => $this->reviews->avg('rating'),
+                'average_rating' => round($this->reviews->avg('rating'), 1),
                 'reviews_count' => $this->reviews->count(),
                 'authors' => $this->authors->pluck('name'),
                 'categories' => $this->categories->pluck('name'),
