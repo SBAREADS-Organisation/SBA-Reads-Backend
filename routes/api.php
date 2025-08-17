@@ -199,8 +199,8 @@ Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
 });
 
 // Admin Routes
-Route::middleware(['auth:sanctum', 'role:admin,superadmin'])->prefix('admin')->group(function () {
-    // Super admin only - invite other admins
+Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')->group(function () {
+    // Super admin only - invite other managers
     Route::middleware(['role:superadmin'])->post('invite-admin', [UserController::class, 'inviteAdmin']);
 
     // App Version Support Routes

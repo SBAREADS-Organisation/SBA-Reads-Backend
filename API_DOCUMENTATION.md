@@ -1068,8 +1068,7 @@ SuperAdmin invite other Admin
 {
   "name": "Admin Invite",
   "email": "admininvite@example.com",
-  "password": "Password123.",
-  "account_type": "manager"
+  "password": "Password123."
 }
 ```
 
