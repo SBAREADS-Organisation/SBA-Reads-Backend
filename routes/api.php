@@ -16,6 +16,7 @@ use App\Http\Controllers\Socials\SocialAuthController;
 use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
+use App\Http\Controllers\Withdrawal\WithdrawalController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
 use Cloudinary\Api\Admin\AdminApi;
@@ -36,6 +37,13 @@ Route::prefix('auth')->group(function () {
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
     Route::post('reset-password', [AuthController::class, 'resetPassword']);
     Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp']);
+});
+
+// Withdrawal Routes
+Route::middleware(['auth:sanctum'])->prefix('withdrawals')->group(function () {
+    Route::post('/initiate', [WithdrawalController::class, 'initiate'])->name('withdrawals.initiate');
+    Route::get('/history', [WithdrawalController::class, 'history'])->name('withdrawals.history');
+    Route::get('/{id}', [WithdrawalController::class, 'show'])->name('withdrawals.show');
 });
 
 // User Routes
