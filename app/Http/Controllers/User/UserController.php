@@ -418,9 +418,11 @@ class UserController extends Controller
         $user = $request->user()->load('bookmarks', 'kycInfo', 'purchasedBooks'); // ->only(['id', 'name', 'email', 'status', 'account_type', 'last_login_at']);
         // dd($user);
 
-        return $this->success(new UserResource($user),
+        return $this->success(
+            new UserResource($user),
             'Profile retrieved successfully!',
-            200);
+            200
+        );
     }
 
     public function updateProfile(Request $request)
@@ -432,7 +434,7 @@ class UserController extends Controller
             // Common validation rules
             $rules = [
                 'name' => 'nullable|string|max:255',
-                'profile_info.username' => 'nullable|string|max:255|unique:users,username,'.$user->id,
+                'profile_info.username' => 'nullable|string|max:255|unique:users,username,' . $user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 // 'profile_picture' => 'nullable|array',
@@ -1034,7 +1036,7 @@ class UserController extends Controller
 
         // Validate action
         if (! in_array($action, $allowedActions)) {
-            return $this->error('Invalid action. Allowed actions: '.implode(', ', $allowedActions), 400);
+            return $this->error('Invalid action. Allowed actions: ' . implode(', ', $allowedActions), 400);
         }
 
         // Validate user

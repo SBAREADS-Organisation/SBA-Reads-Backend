@@ -11,6 +11,8 @@ use App\Mail\Book\BookDeleted;
 use App\Mail\Books\BookCreatedNotification;
 use App\Models\Book;
 use App\Models\BookReviews;
+use App\Models\DigitalBookPurchase;
+use App\Models\DigitalBookPurchaseItem;
 use App\Models\ReadingProgress;
 use App\Models\User;
 use App\Notifications\Book\Milestone\MilestoneReachedNotification;
@@ -1117,8 +1119,22 @@ class BookController extends Controller
                 return $this->error('You already own the following book(s): ' . $conflictingBooks, 409);
             }
 
-            //            $user->purchasedBooks()->attach($bookIds);
-            return $this->service->purchaseBooks($bookIds, $user);
+            // Fetch books data
+            $books = Book::whereIn('id', $bookIds)->get();
+
+            // Create digital book purchase records
+            foreach ($bookIds as $bookId) {
+                DigitalBookPurchase::create([
+                    'user_id' => $user->id,
+                    'book_id' => $bookId,
+                    'purchase_price' => $books->find($bookId)->actual_price ?? 0,
+                    'currency' => 'USD',
+                    'status' => 'completed',
+                ]);
+            }
+
+            // Add books to user's purchased books relationship
+            $user->purchasedBooks()->syncWithoutDetaching($bookIds);
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
