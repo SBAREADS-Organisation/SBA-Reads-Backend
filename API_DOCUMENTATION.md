@@ -1060,6 +1060,19 @@ Update order status
 }
 ```
 
+#### POST /admin/invite-admin
+SuperAdmin invite other Admin
+
+**Request Body:**
+```json
+{
+  "name": "Admin Invite",
+  "email": "admininvite@example.com",
+  "password": "Password123.",
+  "account_type": "manager"
+}
+```
+
 ### Transaction Management
 
 #### GET /transaction/verify
@@ -1238,6 +1251,8 @@ For paginated responses:
   "message": "Success message"
 }
 ```
+
+
 
 ## HTTP Status Codes
 
