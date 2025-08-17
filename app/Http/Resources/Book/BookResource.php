@@ -87,11 +87,24 @@ class BookResource extends JsonResource
             //     ];
             // }),
             'authors' => $this->authors->map(function ($author) {
+                $profilePicture = $author->profile_picture ?? [];
+
+                // Ensure correct mapping of public_id and public_url
+                $publicId = $profilePicture['public_url'] ?? ($profilePicture['public_id'] ?? null);
+                $publicUrl = $profilePicture['public_id'] ?? ($profilePicture['public_url'] ?? null);
+
+                // Ensure public_id is a number and public_url is a string
+                $publicId = is_numeric($publicId) ? (int) $publicId : null;
+                $publicUrl = is_string($publicUrl) ? $publicUrl : null;
+
                 return [
                     'id' => $author->id,
                     'name' => $author->name,
                     'email' => $author->email,
-                    'profile_picture' => $author->profile_picture,
+                    'profile_picture' => [
+                        'public_id' => $publicId,
+                        'public_url' => $publicUrl,
+                    ],
                     'bio' => $author->bio,
                 ];
             }),
