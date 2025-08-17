@@ -39,6 +39,200 @@ All error responses follow a consistent format:
 
 ## API Endpoints
 
+# Withdrawal Endpoint Documentation
+
+## Overview
+The withdrawal endpoint allows users to withdraw funds from their wallet balance to their connected bank accounts via Stripe Connect.
+
+## Endpoints
+
+### 1. Initiate Withdrawal
+**POST** `/api/withdrawals/initiate`
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+    "amount": 50.00,
+    "currency": "usd",
+    "description": "Monthly earnings withdrawal",
+    "withdrawal_method": "bank_transfer",
+    "bank_account_id": "ba_1234567890"
+}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Withdrawal initiated successfully",
+    "data": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "reference": "wd_5f8a2b1c",
+        "amount": 50.00,
+        "currency": "usd",
+        "status": "processing",
+        "description": "Monthly earnings withdrawal",
+        "withdrawal_method": "bank_transfer",
+        "bank_account_id": "ba_1234567890",
+        "created_at": "2024-01-15T10:30:00.000000Z",
+        "updated_at": "2024-01-15T10:30:00.000000Z",
+        "user": {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john@example.com"
+        }
+    }
+}
+```
+
+### 2. Get Withdrawal History
+**GET** `/api/withdrawals/history`
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `status` (optional): Filter by status (pending, processing, succeeded, failed)
+- `from_date` (optional): Filter from date (YYYY-MM-DD)
+- `to_date` (optional): Filter to date (YYYY-MM-DD)
+- `per_page` (optional): Results per page (default: 15)
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Withdrawal history retrieved successfully",
+    "data": {
+        "current_page": 1,
+        "data": [
+            {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "reference": "wd_5f8a2b1c",
+                "amount": 50.00,
+                "currency": "usd",
+                "status": "processing",
+                "description": "Monthly earnings withdrawal",
+                "created_at": "2024-01-15T10:30:00.000000Z"
+            }
+        ],
+        "total": 5,
+        "per_page": 15,
+        "current_page": 1,
+        "last_page": 1
+    }
+}
+```
+
+### 3. Get Withdrawal Details
+**GET** `/api/withdrawals/{id}`
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+    "success": true,
+    "message": "Withdrawal details retrieved successfully",
+    "data": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "reference": "wd_5f8a2b1c",
+        "amount": 50.00,
+        "currency": "usd",
+        "status": "processing",
+        "description": "Monthly earnings withdrawal",
+        "withdrawal_method": "bank_transfer",
+        "bank_account_id": "ba_1234567890",
+        "created_at": "2024-01-15T10:30:00.000000Z",
+        "updated_at": "2024-01-15T10:30:00.000000Z",
+        "payout_data": {
+            "transfer_id": "tr_1234567890",
+            "amount": 50.00,
+            "currency": "usd",
+            "destination": "acct_1234567890"
+        },
+        "user": {
+            "id": 1,
+            "name": "John Doe",
+            "email": "john@example.com"
+        }
+    }
+}
+```
+
+## Status Codes
+- **pending**: Withdrawal request received, awaiting processing
+- **processing**: Withdrawal is being processed
+- **succeeded**: Withdrawal completed successfully
+- **failed**: Withdrawal failed
+
+## Error Responses
+
+### 400 Bad Request
+```json
+{
+    "success": false,
+    "message": "Insufficient wallet balance for withdrawal",
+    "data": null
+}
+```
+
+### 404 Not Found
+```json
+{
+    "success": false,
+    "message": "Withdrawal not found",
+    "data": null
+}
+```
+
+### 500 Internal Server Error
+```json
+{
+    "success": false,
+    "message": "Stripe transfer failed: Insufficient funds",
+    "data": null
+}
+```
+
+## Validation Rules
+- **amount**: Required, numeric, minimum $1.00
+- **currency**: Required, string, must be one of: usd, eur, gbp
+- **description**: Optional, string, max 255 characters
+- **withdrawal_method**: Optional, string, must be one of: bank_transfer, paypal, check
+- **bank_account_id**: Optional, string, Stripe bank account ID
+
+## Business Logic
+1. **Balance Check**: User must have sufficient wallet balance
+2. **Minimum Amount**: Minimum withdrawal amount is $1.00
+3. **Stripe Account**: User must have connected Stripe account (kyc_account_id)
+4. **Fee Structure**: Withdrawal fees are calculated as $0.25 + 1% of amount
+5. **Processing**: Withdrawals are processed via Stripe Connect transfers
+6. **Balance Update**: User wallet balance is decremented upon successful transfer
+
+## Webhook Integration
+The system listens for Stripe webhook events to update withdrawal status:
+- `transfer.succeeded`: Marks withdrawal as succeeded
+- `transfer.failed`: Marks withdrawal as failed and refunds balance
+
+## Security Considerations
+- All endpoints require authentication
+- Users can only access their own withdrawal records
+- Rate limiting applied to prevent abuse
+- Input validation and sanitization implemented
+- Secure Stripe API integration with proper error handling
+
+
 ## Dashboard API Endpoints
 
 ### GET /admin/dashboard
