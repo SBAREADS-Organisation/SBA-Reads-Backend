@@ -242,6 +242,12 @@ class User extends Authenticatable
         return $this->belongsToMany(Book::class, 'book_user', 'user_id', 'book_id')->withTimestamps();
     }
 
+    //readingProgress
+    public function readingProgress(): HasMany
+    {
+        return $this->hasMany(ReadingProgress::class);
+    }
+
     protected static function booted()
     {
         static::created(function ($user) {
