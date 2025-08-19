@@ -921,12 +921,17 @@ class BookController extends Controller
             $perPage = $request->input('items_per_page', 25);
             $books = $query->paginate($perPage);
 
-            return BookResource::collection($books)
-                ->additional([
-                    'code' => 200,
-                    'message' => 'Books retrieved successfully!',
-                    'error' => null,
-                ]);
+            // return BookResource::collection($books)
+            //     ->additional([
+            //         'code' => 200,
+            //         'message' => 'Books retrieved successfully!',
+            //         'error' => null,
+            //     ]);
+            return $this->success(
+                BookResource::collection($books),
+                'Books retrieved successfully!',
+                200
+            );
         } catch (\Exception $e) {
             return $this->error('Failed to retrieve books: ' . $e->getMessage(), 500, null, $e);
         }
