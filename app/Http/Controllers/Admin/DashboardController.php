@@ -82,7 +82,7 @@ class DashboardController extends Controller
 
             return $this->success($data, 'Dashboard data retrieved successfully.');
         } catch (\Exception $e) {
-            return $this->error('An error occurred while retrieving dashboard data.', 500, null, $e);
+            return $this->error('An error occurred while retrieving dashboard data.'. $e->getMessage(), 500, null, $e);
         }
     }
 
