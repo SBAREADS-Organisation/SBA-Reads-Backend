@@ -928,7 +928,7 @@ class BookController extends Controller
                     'error' => null,
                 ]);
         } catch (\Exception $e) {
-            return $this->error('Failed to retrieve books', 500, null, $e);
+            return $this->error('Failed to retrieve books: ' . $e->getMessage(), 500, null, $e);
         }
     }
 
