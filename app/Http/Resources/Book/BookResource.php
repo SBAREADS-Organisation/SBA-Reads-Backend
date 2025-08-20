@@ -24,48 +24,35 @@ class BookResource extends JsonResource
 
     public function toArray($request)
     {
-        $baseData = [
+        return [
             'id' => $this->id,
             'title' => $this->title,
             'slug' => $this->slug,
-            'cover_image' => $this->cover_image,
-            'actual_price' => $this->actual_price,
-            'discounted_price' => $this->discounted_price,
-            'currency' => $this->currency,
-            'format' => $this->format,
-            'publisher' => $this->publisher,
-            'publication_date' => $this->publication_date,
-            'status' => $this->status,
-            'created_at' => $this->created_at,
-        ];
-
-        if ($this->isListing) {
-            return array_merge($baseData, [
-                'average_rating' => round($this->reviews->avg('rating'), 1),
-                'reviews_count' => $this->reviews->count(),
-                'authors' => $this->authors->pluck('name'),
-                'categories' => $this->categories->pluck('name'),
-            ]);
-        }
-
-        // Full detail view - existing code
-        return array_merge($baseData, [
             'sub_title' => $this->sub_title,
             'description' => $this->description,
             'isbn' => $this->isbn,
+            'cover_image' => $this->cover_image,
             'language' => $this->language,
             'tags' => $this->tags,
             'genres' => $this->genres,
             'table_of_contents' => $this->table_of_contents,
+            'publication_date' => $this->publication_date,
+            'actual_price' => $this->actual_price,
+            'discounted_price' => $this->discounted_price,
+            'currency' => $this->currency,
+            'format' => $this->format,
             'availability' => $this->availability,
             'drm_info' => $this->drm_info,
+            'publisher' => $this->publisher,
             'target_audience' => $this->target_audience,
             'meta_data' => $this->meta_data,
             'visibility' => $this->visibility,
+            'status' => $this->status,
             'approved_at' => $this->approved_at,
             'approved_by' => $this->approved_by,
             'review_notes' => $this->review_notes,
             'expired_at' => $this->expired_at,
+            'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'deleted_at' => $this->deleted_at,
             'archived' => $this->archived,
@@ -78,6 +65,7 @@ class BookResource extends JsonResource
                     'name' => $cat->name,
                 ];
             }),
+            // Return all reviews and populate user_id with user information
             'reviews' => $this->reviews->map(function ($review) {
                 return [
                     'id' => $review->id,
@@ -85,34 +73,25 @@ class BookResource extends JsonResource
                     'rating' => $review->rating,
                     'comment' => $review->comment,
                     'created_at' => $review->created_at,
-                    'user' => [
+                    'user' => $review->user ? [
                         'id' => $review->user->id,
                         'name' => $review->user->name,
                         'email' => $review->user->email,
                         'profile_picture' => $review->user->profile_picture,
-                    ],
+                    ] : null,
                 ];
             }),
             'authors' => $this->authors->map(function ($author) {
-                $profilePicture = $author->profile_picture ?? [];
-                $publicId = $profilePicture['public_url'] ?? ($profilePicture['public_id'] ?? null);
-                $publicUrl = $profilePicture['public_id'] ?? ($profilePicture['public_url'] ?? null);
-                $publicId = is_numeric($publicId) ? (int) $publicId : null;
-                $publicUrl = is_string($publicUrl) ? $publicUrl : null;
-
                 return [
                     'id' => $author->id,
                     'name' => $author->name,
                     'email' => $author->email,
-                    'profile_picture' => [
-                        'public_id' => $publicId,
-                        'public_url' => $publicUrl,
-                    ],
+                    'profile_picture' => $author->profile_picture,
                     'bio' => $author->bio,
                 ];
             }),
-            'bookmarks' => $this->bookmarkedBy->pluck('id')->toArray(),
-            'readers' => $this->purchasers->pluck('id')->toArray(),
-        ]);
+            'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
+            'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
+        ];
     }
 }
