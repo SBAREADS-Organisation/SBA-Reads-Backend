@@ -128,6 +128,13 @@ Route::prefix('subscriptions')->group(function () {
 // Stripe Webhook Route
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
+// Paystack Routes
+Route::prefix('paystack')->group(function () {
+    Route::post('/payment/initialize', [\App\Http\Controllers\PaystackPaymentController::class, 'initializePayment']);
+    Route::post('/webhook', [\App\Http\Controllers\PaystackPaymentController::class, 'handleWebhook']);
+    Route::get('/callback', [\App\Http\Controllers\PaystackPaymentController::class, 'handleCallback']);
+});
+
 // Book Routes
 Route::middleware(['auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
