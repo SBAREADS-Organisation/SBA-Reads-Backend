@@ -81,6 +81,7 @@ class BookResource extends JsonResource
                     ] : null,
                 ];
             }),
+            'average_rate' => $this->reviews->avg('rating') ?? 0,
             'authors' => $this->authors->map(function ($author) {
                 return [
                     'id' => $author->id,
