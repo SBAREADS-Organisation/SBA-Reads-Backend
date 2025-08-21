@@ -475,8 +475,8 @@ class UserController extends Controller
                 // dd($upload);
 
                 $profilePicture = [
-                    'public_id' => $upload['url'],
-                    'public_url' => $upload['id'],
+                    'public_id' => (int) $upload['id'],
+                    'public_url' => (string) $upload['url'],
                 ];
             } else {
                 $profilePicture = $request->input('profile_picture', []);

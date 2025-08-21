@@ -95,10 +95,10 @@ class BookResource extends JsonResource
             }),
             'authors' => $this->authors->map(function ($author) {
                 $profilePicture = $author->profile_picture ?? [];
-                $publicId = $profilePicture['public_url'] ?? ($profilePicture['public_id'] ?? null);
-                $publicUrl = $profilePicture['public_id'] ?? ($profilePicture['public_url'] ?? null);
-                $publicId = is_numeric($publicId) ? (int) $publicId : null;
-                $publicUrl = is_string($publicUrl) ? $publicUrl : null;
+                $rawId = $profilePicture['public_id'] ?? null;
+                $rawUrl = $profilePicture['public_url'] ?? null;
+                $publicId = is_numeric($rawId) ? (int) $rawId : null;
+                $publicUrl = is_string($rawUrl) ? $rawUrl : null;
 
                 return [
                     'id' => $author->id,
