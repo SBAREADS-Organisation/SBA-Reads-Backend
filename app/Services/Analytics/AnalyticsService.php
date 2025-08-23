@@ -115,9 +115,17 @@ class AnalyticsService
      */
     public function getMonthlyRevenue(?User $user = null): array
     {
+        // Determine filters by scope
+        $statusFilter = ['succeeded', 'completed']; // include Paystack 'completed'
+        $typeFilter = ['purchase', 'earning']; // platform gross revenue
+        if ($user && method_exists($user, 'isAuthor') && $user->isAuthor()) {
+            // For authors, show their income (payouts/earnings), not platform purchases
+            $typeFilter = ['payout', 'earning'];
+        }
+
         $query = Transaction::selectRaw('EXTRACT(MONTH FROM created_at) as month, SUM(amount) as total')
-            ->where('status', 'succeeded')
-            ->whereIn('type', ['purchase', 'earning'])
+            ->whereIn('status', $statusFilter)
+            ->whereIn('type', $typeFilter)
             ->whereRaw('EXTRACT(YEAR FROM created_at) = ?', [Carbon::now()->year])
             ->groupBy('month')
             ->orderBy('month');

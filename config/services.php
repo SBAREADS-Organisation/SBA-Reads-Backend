@@ -62,4 +62,17 @@ return [
         // 'secure'     => env('CLOUDINARY_SECURE', true),
         // 'cdn_subdomain' => env('CLOUDINARY_CDN_SUBDOMAIN', false),
     ],
+
+    'paystack' => [
+        'public_key' => env('PAYSTACK_PUBLIC_KEY'),
+        'secret' => env('PAYSTACK_SECRET_KEY'),
+        'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
+        'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
+        'merchant_email' => env('PAYSTACK_MERCHANT_EMAIL'),
+    ],
+
+    'currency' => [
+        'api_key' => env('CURRENCY_API_KEY'),
+        'base_url' => env('CURRENCY_BASE_URL', 'https://api.exchangerate-api.com/v4'),
+    ],
 ];

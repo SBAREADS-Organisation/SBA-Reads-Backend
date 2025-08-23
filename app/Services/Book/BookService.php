@@ -150,19 +150,33 @@ class BookService
 
     public function deleteBook(Book $book, string $reason)
     {
-        $book->delete();
+        // Check if book has purchases
+        $hasPurchases = DigitalBookPurchase::whereHas('items', function($q) use ($book) {
+            $q->where('book_id', $book->id);
+        })->where('status', 'completed')->exists();
 
+        if ($hasPurchases) {
+            throw new \Exception('Cannot delete book that has been purchased');
+        }
+
+        // Delete files from Cloudinary
+        if ($book->cover_image && is_array($book->cover_image)) {
+            $this->cloudinaryMediaService->delete($book->cover_image['public_id']);
+        }
+
+        $book->delete();
         return true;
     }
 
-    public function purchaseBooks(array $bookIds, User $user)
+    public function purchaseBooks(array $bookIds, User $user, string $paymentProvider = 'stripe')
     {
         // Create a digital book purchase
         $purchase = DigitalBookPurchase::create([
             'user_id' => $user->id,
             'total_amount' => 0,
-            'currency' => 'usd',
+            'currency' => $paymentProvider === 'paystack' ? 'ngn' : 'usd',
             'status' => 'pending',
+            'payment_provider' => $paymentProvider,
         ]);
 
         $total = 0;
@@ -178,7 +192,8 @@ class BookService
                 'author_payout_amount' => $authorPayoutAmount,
                 'platform_fee_amount' => $book->pricing['actual_price'] - $authorPayoutAmount,
                 'payout_status' => 'pending',
-                'stripe_transfer_id' => null,
+                'payment_provider' => $paymentProvider,
+                'provider_transfer_id' => null,
             ]);
 
             $total += $purchaseItem->price_at_purchase;
@@ -189,14 +204,16 @@ class BookService
 
         $transaction = $this->paymentService->createPayment([
             'amount' => $total,
-            'currency' => 'usd',
+            'currency' => $paymentProvider === 'paystack' ? 'ngn' : 'usd',
             'description' => 'Digital books purchase',
             'purpose' => 'digital_book_purchase',
             'purpose_id' => $purchase->id,
+            'payment_provider' => $paymentProvider,
             'meta_data' => [
                 'book_ids' => $bookIds,
                 'user_id' => $user->id,
                 'purchase_id' => $purchase->id,
+                'payment_provider' => $paymentProvider,
             ],
         ], $user);
 
@@ -219,3 +236,7 @@ class BookService
         ], 'Purchase initiated successfully. Complete payment to access books.');
     }
 }
+
+
+
+

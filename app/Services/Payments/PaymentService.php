@@ -174,14 +174,28 @@ class PaymentService
     // getTransactionQuery
     public function getTransactionQuery()
     {
-        return Transaction::query()->with(['user', 'purpose']);
+        return Transaction::query()->with(['user', 'purpose' => function($query) {
+            // Handle cases where the purpose relationship cannot be resolved
+            $query->withDefault(function ($purpose, $parent) {
+                // If the purpose record doesn't exist, set a default value
+                $purpose->id = $parent->purpose_id;
+                $purpose->exists = false;
+            });
+        }]);
     }
 
     // getTransactionById
     public function getTransactionById($id)
     {
         try {
-            return Transaction::with(['user', 'purpose'])->find($id);
+            return Transaction::with(['user', 'purpose' => function($query) {
+                // Handle cases where the purpose relationship cannot be resolved
+                $query->withDefault(function ($purpose, $parent) {
+                    // If the purpose record doesn't exist, set a default value
+                    $purpose->id = $parent->purpose_id;
+                    $purpose->exists = false;
+                });
+            }])->find($id);
         } catch (\Throwable $th) {
             return $this->error('An error occurred while retrieving the transaction.', 500, $th->getMessage(), $th);
         }

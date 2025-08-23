@@ -76,7 +76,7 @@ class TransactionsController extends Controller
             $transactions = $query->paginate($request->get('per_page', 15));
 
             if ($transactions->isEmpty()) {
-                return $this->error('No transactions found for this user', 404);
+                return $this->success([], 'No transactions found for this user');
             }
 
             return $this->success($transactions, 'Your transactions retrieved successfully');

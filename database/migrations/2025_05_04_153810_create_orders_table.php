@@ -17,7 +17,7 @@ return new class extends Migration
             // $table->string('payment_reference')->unique();
             $table->decimal('total_amount', 10, 2);
             $table->uuid('transaction_id')->nullable();
-            $table->foreign('transaction_id')->references('id')->on('transactions')->onDelete('cascade');
+            // $table->foreign('transaction_id')->references('id')->on('transactions')->onDelete('cascade');
             // $table->enum('payment_status', ['pending', 'paid', 'failed'])->default('pending');
             $table->enum('status', ['pending', 'paid', 'processing', 'completed', 'cancelled'])->default('pending');
             $table->string('tracking_number')->nullable()->unique();
