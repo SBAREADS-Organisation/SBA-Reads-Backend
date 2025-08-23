@@ -21,9 +21,17 @@ return new class extends Migration
             $table->enum('status', ['pending', 'succeeded', 'failed', 'processing', 'refunded', 'available', 'requested', 'declined', 'approved', 'sent', 'settled', 'completed', 'locked', 'withdrawn', 'on_hold', 'expired'])->default('pending');
             $table->string('currency', 10)->default('usd');
             $table->decimal('amount', 15, 2);
+            // Dual currency support
+            $table->decimal('amount_usd', 15, 2)->nullable();
+            $table->decimal('amount_naira', 15, 2)->nullable();
+            $table->decimal('exchange_rate', 10, 4)->nullable();
             // description
             $table->string('description')->nullable();
-            $table->string('payment_provider')->default('stripe');
+            $table->string('payment_provider', 50)->default('stripe');
+            // Paystack-specific fields
+            $table->string('paystack_reference')->nullable()->unique();
+            $table->string('paystack_authorization_code')->nullable();
+            $table->json('paystack_response')->nullable();
             $table->enum('type', ['purchase', 'earning', 'payout', 'refund', 'fee', 'bonus', 'adjustment', 'others'])->default('debit');
             // purchased_by
             $table->foreignId('purchased_by')->nullable()->constrained('users')->nullOnDelete();
@@ -40,6 +48,8 @@ return new class extends Migration
             $table->string('purpose_id');
 
             $table->json('meta_data')->nullable();
+            // Optional: additional provider responses
+            // $table->json('provider_response')->nullable();
 
             $table->timestampsTz(); // UTC timestamps
         });

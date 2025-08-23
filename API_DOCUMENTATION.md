@@ -1285,8 +1285,1691 @@ All endpoints validate input data according to defined rules. Validation errors 
     ]
   }
 }
+```
+
+## Author/Publisher Endpoints
+
+### GET /author/dashboard
+Get author dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_books": 15,
+    "total_sales": 245,
+    "total_earnings": "1750.50",
+    "pending_earnings": "525.75",
+    "this_month_sales": 32,
+    "this_month_earnings": "224.00"
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully"
+}
+```
+
+### GET /author/my-books
+Get author's books
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "status": "approved",
+        "total_sales": 45,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Books retrieved successfully"
+}
+```
+
+### GET /author/transactions
+Get author's transaction history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "book_title": "Book Title",
+        "amount": "17.50",
+        "type": "book_sale",
+        "status": "completed",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Transactions retrieved successfully"
+}
+```
+
+## Admin Endpoints
+
+### GET /admin/dashboard
+Get admin dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
+    "total_revenue": "38940.00",
+    "platform_earnings": "11682.00",
+    "pending_payouts": 8,
+    "this_month_stats": {
+      "new_users": 45,
+      "new_books": 8,
+      "sales": 234,
+      "revenue": "1680.00"
+    }
+  },
+  "code": 200,
+  "message": "Admin dashboard data retrieved successfully"
+}
+```
+
+### GET /admin/users
+Get all users with filtering
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `role` (optional): `user`, `author`, `admin`
+- `status` (optional): `active`, `suspended`
+- `search` (optional): Search by name or email
+- `page` (optional): Page number
+
+**Response:**
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "author",
+        "status": "active",
+        "total_purchases": 15,
+        "total_books": 3,
+        "joined_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 25,
+      "total_items": 1250
+    }
+  },
+  "code": 200,
+  "message": "Users retrieved successfully"
+}
+```
+
+### GET /admin/books/pending
+Get books pending approval
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Pending Book Title",
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "category": "Fiction",
+        "price": "25.00",
+        "submitted_at": "2024-01-15T10:30:00Z",
+        "description": "Book description...",
+        "cover_image": "https://example.com/cover.jpg"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending books retrieved successfully"
+}
+```
+
+### POST /admin/books/{id}/approve
+Approve a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Book meets all quality standards"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "approved_by": "Admin Name"
+    }
+  },
+  "code": 200,
+  "message": "Book approved successfully"
+}
+```
+
+### POST /admin/books/{id}/reject
+Reject a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "rejection_reason": "Content does not meet quality standards",
+  "feedback": "Please improve the writing quality and resubmit"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "rejected",
+      "rejected_at": "2024-01-15T10:30:00Z",
+      "rejection_reason": "Content does not meet quality standards"
+    }
+  },
+  "code": 200,
+  "message": "Book rejected successfully"
+}
+```
+
+### GET /admin/payouts/pending
+Get pending payout requests
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payouts": [
+      {
+        "id": 1,
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "amount": "500.00",
+        "requested_at": "2024-01-15T10:30:00Z",
+        "payout_method": "bank_transfer",
+        "bank_details": {
+          "account_name": "Author Name",
+          "account_number": "1234567890",
+          "bank_name": "First Bank"
+        }
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending payouts retrieved successfully"
+}
+```
+
+### POST /admin/payouts/{id}/approve
+Approve a payout request
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Payout approved and processed",
+  "transaction_reference": "TXN_123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payout": {
+      "id": 1,
+      "amount": "500.00",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "transaction_reference": "TXN_123456789"
+    }
+  },
+  "code": 200,
+  "message": "Payout approved successfully"
+}
+```
+
+## Additional User Endpoints
+
+### GET /user/purchases
+Get user's purchase history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `page` (optional): Page number
+- `status` (optional): `completed`, `pending`, `failed`
+
+**Response:**
+```json
+{
+  "data": {
+    "purchases": [
+      {
+        "id": 1,
+        "book": {
+          "id": 1,
+          "title": "Book Title",
+          "author": "Author Name",
+          "cover_image": "https://example.com/cover.jpg"
+        },
+        "amount": "25.00",
+        "payment_method": "stripe",
+        "status": "completed",
+        "purchased_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 3,
+      "total_items": 25
+    }
+  },
+  "code": 200,
+  "message": "Purchase history retrieved successfully"
+}
+```
+
+### GET /user/library
+Get user's purchased books library
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "author": "Author Name",
+        "cover_image": "https://example.com/cover.jpg",
+        "purchased_at": "2024-01-15T10:30:00Z",
+        "last_read_at": "2024-01-16T14:20:00Z",
+        "reading_progress": 45
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Library retrieved successfully"
+}
+```
 
 
 
+## HTTP Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `500` - Internal Server Error
+- `503` - Service Unavailable
+
+## Rate Limiting
+
+Endpoints are rate-limited to 60 requests per minute. Exceeding this limit will result in a 429 status code.
+
+## Data Validation
+
+All endpoints validate input data according to defined rules. Validation errors are returned in the following format:
+
+```json
+{
+  "data": null,
+  "code": 400,
+  "message": "Validation failed",
+  "error": {
+    "field_name": [
+      "Error message"
+    ]
+  }
+}
+```
+
+## Author/Publisher Endpoints
+
+### GET /author/dashboard
+Get author dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_books": 15,
+    "total_sales": 245,
+    "total_earnings": "1750.50",
+    "pending_earnings": "525.75",
+    "this_month_sales": 32,
+    "this_month_earnings": "224.00"
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully"
+}
+```
+
+### GET /author/my-books
+Get author's books
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "status": "approved",
+        "total_sales": 45,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Books retrieved successfully"
+}
+```
+
+### GET /author/transactions
+Get author's transaction history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "book_title": "Book Title",
+        "amount": "17.50",
+        "type": "book_sale",
+        "status": "completed",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Transactions retrieved successfully"
+}
+```
+
+## Admin Endpoints
+
+### GET /admin/dashboard
+Get admin dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
+    "total_revenue": "38940.00",
+    "platform_earnings": "11682.00",
+    "pending_payouts": 8,
+    "this_month_stats": {
+      "new_users": 45,
+      "new_books": 8,
+      "sales": 234,
+      "revenue": "1680.00"
+    }
+  },
+  "code": 200,
+  "message": "Admin dashboard data retrieved successfully"
+}
+```
+
+### GET /admin/users
+Get all users with filtering
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `role` (optional): `user`, `author`, `admin`
+- `status` (optional): `active`, `suspended`
+- `search` (optional): Search by name or email
+- `page` (optional): Page number
+
+**Response:**
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "author",
+        "status": "active",
+        "total_purchases": 15,
+        "total_books": 3,
+        "joined_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 25,
+      "total_items": 1250
+    }
+  },
+  "code": 200,
+  "message": "Users retrieved successfully"
+}
+```
+
+### GET /admin/books/pending
+Get books pending approval
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Pending Book Title",
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "category": "Fiction",
+        "price": "25.00",
+        "submitted_at": "2024-01-15T10:30:00Z",
+        "description": "Book description...",
+        "cover_image": "https://example.com/cover.jpg"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending books retrieved successfully"
+}
+```
+
+### POST /admin/books/{id}/approve
+Approve a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Book meets all quality standards"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "approved_by": "Admin Name"
+    }
+  },
+  "code": 200,
+  "message": "Book approved successfully"
+}
+```
+
+### POST /admin/books/{id}/reject
+Reject a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "rejection_reason": "Content does not meet quality standards",
+  "feedback": "Please improve the writing quality and resubmit"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "rejected",
+      "rejected_at": "2024-01-15T10:30:00Z",
+      "rejection_reason": "Content does not meet quality standards"
+    }
+  },
+  "code": 200,
+  "message": "Book rejected successfully"
+}
+```
+
+### GET /admin/payouts/pending
+Get pending payout requests
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payouts": [
+      {
+        "id": 1,
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "amount": "500.00",
+        "requested_at": "2024-01-15T10:30:00Z",
+        "payout_method": "bank_transfer",
+        "bank_details": {
+          "account_name": "Author Name",
+          "account_number": "1234567890",
+          "bank_name": "First Bank"
+        }
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending payouts retrieved successfully"
+}
+```
+
+### POST /admin/payouts/{id}/approve
+Approve a payout request
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Payout approved and processed",
+  "transaction_reference": "TXN_123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payout": {
+      "id": 1,
+      "amount": "500.00",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "transaction_reference": "TXN_123456789"
+    }
+  },
+  "code": 200,
+  "message": "Payout approved successfully"
+}
+```
+
+## Additional User Endpoints
+
+### GET /user/purchases
+Get user's purchase history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `page` (optional): Page number
+- `status` (optional): `completed`, `pending`, `failed`
+
+**Response:**
+```json
+{
+  "data": {
+    "purchases": [
+      {
+        "id": 1,
+        "book": {
+          "id": 1,
+          "title": "Book Title",
+          "author": "Author Name",
+          "cover_image": "https://example.com/cover.jpg"
+        },
+        "amount": "25.00",
+        "payment_method": "stripe",
+        "status": "completed",
+        "purchased_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 3,
+      "total_items": 25
+    }
+  },
+  "code": 200,
+  "message": "Purchase history retrieved successfully"
+}
+```
+
+### GET /user/library
+Get user's purchased books library
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "author": "Author Name",
+        "cover_image": "https://example.com/cover.jpg",
+        "purchased_at": "2024-01-15T10:30:00Z",
+        "last_read_at": "2024-01-16T14:20:00Z",
+        "reading_progress": 45
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Library retrieved successfully"
+}
+```
+
+
+
+## HTTP Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `500` - Internal Server Error
+- `503` - Service Unavailable
+
+## Rate Limiting
+
+Endpoints are rate-limited to 60 requests per minute. Exceeding this limit will result in a 429 status code.
+
+## Data Validation
+
+All endpoints validate input data according to defined rules. Validation errors are returned in the following format:
+
+```json
+{
+  "data": null,
+  "code": 400,
+  "message": "Validation failed",
+  "error": {
+    "field_name": [
+      "Error message"
+    ]
+  }
+}
+```
+
+## Author/Publisher Endpoints
+
+### GET /author/dashboard
+Get author dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_books": 15,
+    "total_sales": 245,
+    "total_earnings": "1750.50",
+    "pending_earnings": "525.75",
+    "this_month_sales": 32,
+    "this_month_earnings": "224.00"
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully"
+}
+```
+
+### GET /author/my-books
+Get author's books
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "status": "approved",
+        "total_sales": 45,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Books retrieved successfully"
+}
+```
+
+### GET /author/transactions
+Get author's transaction history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "book_title": "Book Title",
+        "amount": "17.50",
+        "type": "book_sale",
+        "status": "completed",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Transactions retrieved successfully"
+}
+```
+
+## Admin Endpoints
+
+### GET /admin/dashboard
+Get admin dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
+    "total_revenue": "38940.00",
+    "platform_earnings": "11682.00",
+    "pending_payouts": 8,
+    "this_month_stats": {
+      "new_users": 45,
+      "new_books": 8,
+      "sales": 234,
+      "revenue": "1680.00"
+    }
+  },
+  "code": 200,
+  "message": "Admin dashboard data retrieved successfully"
+}
+```
+
+### GET /admin/users
+Get all users with filtering
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `role` (optional): `user`, `author`, `admin`
+- `status` (optional): `active`, `suspended`
+- `search` (optional): Search by name or email
+- `page` (optional): Page number
+
+**Response:**
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "author",
+        "status": "active",
+        "total_purchases": 15,
+        "total_books": 3,
+        "joined_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 25,
+      "total_items": 1250
+    }
+  },
+  "code": 200,
+  "message": "Users retrieved successfully"
+}
+```
+
+### GET /admin/books/pending
+Get books pending approval
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Pending Book Title",
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "category": "Fiction",
+        "price": "25.00",
+        "submitted_at": "2024-01-15T10:30:00Z",
+        "description": "Book description...",
+        "cover_image": "https://example.com/cover.jpg"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending books retrieved successfully"
+}
+```
+
+### POST /admin/books/{id}/approve
+Approve a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Book meets all quality standards"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "approved_by": "Admin Name"
+    }
+  },
+  "code": 200,
+  "message": "Book approved successfully"
+}
+```
+
+### POST /admin/books/{id}/reject
+Reject a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "rejection_reason": "Content does not meet quality standards",
+  "feedback": "Please improve the writing quality and resubmit"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "rejected",
+      "rejected_at": "2024-01-15T10:30:00Z",
+      "rejection_reason": "Content does not meet quality standards"
+    }
+  },
+  "code": 200,
+  "message": "Book rejected successfully"
+}
+```
+
+### GET /admin/payouts/pending
+Get pending payout requests
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payouts": [
+      {
+        "id": 1,
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "amount": "500.00",
+        "requested_at": "2024-01-15T10:30:00Z",
+        "payout_method": "bank_transfer",
+        "bank_details": {
+          "account_name": "Author Name",
+          "account_number": "1234567890",
+          "bank_name": "First Bank"
+        }
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending payouts retrieved successfully"
+}
+```
+
+### POST /admin/payouts/{id}/approve
+Approve a payout request
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Payout approved and processed",
+  "transaction_reference": "TXN_123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payout": {
+      "id": 1,
+      "amount": "500.00",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "transaction_reference": "TXN_123456789"
+    }
+  },
+  "code": 200,
+  "message": "Payout approved successfully"
+}
+```
+
+## Additional User Endpoints
+
+### GET /user/purchases
+Get user's purchase history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `page` (optional): Page number
+- `status` (optional): `completed`, `pending`, `failed`
+
+**Response:**
+```json
+{
+  "data": {
+    "purchases": [
+      {
+        "id": 1,
+        "book": {
+          "id": 1,
+          "title": "Book Title",
+          "author": "Author Name",
+          "cover_image": "https://example.com/cover.jpg"
+        },
+        "amount": "25.00",
+        "payment_method": "stripe",
+        "status": "completed",
+        "purchased_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 3,
+      "total_items": 25
+    }
+  },
+  "code": 200,
+  "message": "Purchase history retrieved successfully"
+}
+```
+
+### GET /user/library
+Get user's purchased books library
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "author": "Author Name",
+        "cover_image": "https://example.com/cover.jpg",
+        "purchased_at": "2024-01-15T10:30:00Z",
+        "last_read_at": "2024-01-16T14:20:00Z",
+        "reading_progress": 45
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Library retrieved successfully"
+}
+```
+
+
+
+## HTTP Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `500` - Internal Server Error
+- `503` - Service Unavailable
+
+## Rate Limiting
+
+Endpoints are rate-limited to 60 requests per minute. Exceeding this limit will result in a 429 status code.
+
+## Data Validation
+
+All endpoints validate input data according to defined rules. Validation errors are returned in the following format:
+
+```json
+{
+  "data": null,
+  "code": 400,
+  "message": "Validation failed",
+  "error": {
+    "field_name": [
+      "Error message"
+    ]
+  }
+}
+```
+
+## Author/Publisher Endpoints
+
+### GET /author/dashboard
+Get author dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_books": 15,
+    "total_sales": 245,
+    "total_earnings": "1750.50",
+    "pending_earnings": "525.75",
+    "this_month_sales": 32,
+    "this_month_earnings": "224.00"
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully"
+}
+```
+
+### GET /author/my-books
+Get author's books
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "status": "approved",
+        "total_sales": 45,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Books retrieved successfully"
+}
+```
+
+### GET /author/transactions
+Get author's transaction history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "book_title": "Book Title",
+        "amount": "17.50",
+        "type": "book_sale",
+        "status": "completed",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Transactions retrieved successfully"
+}
+```
+
+## Admin Endpoints
+
+### GET /admin/dashboard
+Get admin dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
+    "total_revenue": "38940.00",
+    "platform_earnings": "11682.00",
+    "pending_payouts": 8,
+    "this_month_stats": {
+      "new_users": 45,
+      "new_books": 8,
+      "sales": 234,
+      "revenue": "1680.00"
+    }
+  },
+  "code": 200,
+  "message": "Admin dashboard data retrieved successfully"
+}
+```
+
+### GET /admin/users
+Get all users with filtering
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `role` (optional): `user`, `author`, `admin`
+- `status` (optional): `active`, `suspended`
+- `search` (optional): Search by name or email
+- `page` (optional): Page number
+
+**Response:**
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "author",
+        "status": "active",
+        "total_purchases": 15,
+        "total_books": 3,
+        "joined_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 25,
+      "total_items": 1250
+    }
+  },
+  "code": 200,
+  "message": "Users retrieved successfully"
+}
+```
+
+### GET /admin/books/pending
+Get books pending approval
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Pending Book Title",
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "category": "Fiction",
+        "price": "25.00",
+        "submitted_at": "2024-01-15T10:30:00Z",
+        "description": "Book description...",
+        "cover_image": "https://example.com/cover.jpg"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending books retrieved successfully"
+}
+```
+
+### POST /admin/books/{id}/approve
+Approve a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Book meets all quality standards"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "approved_by": "Admin Name"
+    }
+  },
+  "code": 200,
+  "message": "Book approved successfully"
+}
+```
+
+### POST /admin/books/{id}/reject
+Reject a pending book
+
+**Headers:**
+```
+Authorization: B
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
+    "total_revenue": "38940.00",
+    "platform_earnings": "11682.00",
+    "pending_payouts": 8,
+    "this_month_stats": {
+      "new_users": 45,
+      "new_books": 8,
+      "sales": 234,
+      "revenue": "1680.00"
+    }
+  },
+  "code": 200,
+  "message": "Admin dashboard data retrieved successfully"
+}
+```
+
+### GET /admin/users
+Get all users with filtering
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `role` (optional): `user`, `author`, `admin`
+- `status` (optional): `active`, `suspended`
+- `search` (optional): Search by name or email
+- `page` (optional): Page number
+
+**Response:**
+```json
+{
+  "data": {
+    "users": [
+      {
+        "id": 1,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "role": "author",
+        "status": "active",
+        "total_purchases": 15,
+        "total_books": 3,
+        "joined_at": "2024-01-01T00:00:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 25,
+      "total_items": 1250
+    }
+  },
+  "code": 200,
+  "message": "Users retrieved successfully"
+}
+```
+
+### GET /admin/books/pending
+Get books pending approval
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Pending Book Title",
+        "author": {
+          "id": 5,
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "category": "Fiction",
+        "price": "25.00",
+        "submitted_at": "2024-01-15T10:30:00Z",
+        "description": "Book description...",
+        "cover_image": "https://example.com/cover.jpg"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending books retrieved successfully"
+}
+```
+
+### POST /admin/books/{id}/approve
+Approve a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Book meets all quality standards"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "book": {
+      "id": 1,
+      "title": "Book Title",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "approved_by": "Admin Name"
+    }
+  },
+  "code": 200,
+  "message": "Book approved successfully"
+}
+```
+
+### POST /admin/books/{id}/reject
+Reject a pending book
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
 
 
