@@ -36,15 +36,39 @@ class DashboardController extends Controller
             $pending_books_count = Book::where('status', 'pending')->count();
             $active_subscription_count = $this->subscriptionService->getActiveSubscriptionCount();
 
-            // Revenue calculations
-            $revenue = Transaction::where('type', 'earning')
+            // Revenue calculations - dual currency support
+            $revenue_usd = Transaction::where('type', 'earning')
                 ->where('status', 'succeeded')
+                ->where('currency', 'USD')
                 ->sum('amount');
 
-            // Total sales from all sources
-            $digital_sales = DigitalBookPurchase::where('status', 'completed')->sum('total_amount');
-            $physical_sales = Order::where('status', 'completed')->sum('total_amount');
-            $total_sales = $digital_sales + $physical_sales;
+            $revenue_ngn = Transaction::where('type', 'earning')
+                ->where('status', 'succeeded')
+                ->where('currency', 'NGN')
+                ->sum('amount');
+
+            $naira_revenue = Transaction::where('type', 'earning')
+                ->where('status', 'succeeded')
+                ->sum('naira_amount');
+
+            // Total sales from all sources with dual currency
+            $digital_sales_usd = DigitalBookPurchase::where('status', 'completed')
+                ->where('currency', 'USD')
+                ->sum('total_amount');
+            $digital_sales_ngn = DigitalBookPurchase::where('status', 'completed')
+                ->where('currency', 'NGN')
+                ->sum('total_amount');
+
+            $physical_sales_usd = Order::where('status', 'completed')
+                ->where('currency', 'USD')
+                ->sum('total_amount');
+            $physical_sales_ngn = Order::where('status', 'completed')
+                ->where('currency', 'NGN')
+                ->sum('total_amount');
+
+            $total_sales_usd = $digital_sales_usd + $physical_sales_usd;
+            $total_sales_ngn = $digital_sales_ngn + $physical_sales_ngn;
+            $total_sales = $total_sales_usd + $total_sales_ngn;
 
             // Reader engagement metrics
             $reader_engagement = $this->calculateReaderEngagement();
@@ -69,8 +93,16 @@ class DashboardController extends Controller
                 'published_books_count' => $published_books_count,
                 'pending_books_count' => $pending_books_count,
                 'active_subscription_count' => $active_subscription_count,
-                'revenue' => round($revenue, 2),
-                'total_sales' => round($total_sales, 2),
+                'revenue' => [
+                    'usd' => round($revenue_usd, 2),
+                    'ngn' => round($revenue_ngn, 2),
+                    'naira_total' => round($naira_revenue, 2),
+                ],
+                'total_sales' => [
+                    'usd' => round($total_sales_usd, 2),
+                    'ngn' => round($total_sales_ngn, 2),
+                    'total' => round($total_sales, 2),
+                ],
                 'total_books_sold' => $total_books_sold,
                 'reader_engagement' => $reader_engagement,
                 'recent_signups' => $recent_signups,

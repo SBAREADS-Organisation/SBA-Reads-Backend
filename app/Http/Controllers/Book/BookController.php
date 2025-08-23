@@ -818,6 +818,13 @@ class BookController extends Controller
     public function destroy(Book $book, Request $request)
     {
         try {
+            $user = $request->user();
+
+            // Authorization: Only book authors or admins can delete books
+            if ($book->author_id !== $user->id && !$user->hasRole(['admin', 'superadmin'])) {
+                return $this->error('Unauthorized. You can only delete your own books.', 403);
+            }
+
             $validator = validator($request->all(), [
                 'reason' => 'required|string|max:255',
             ]);
@@ -831,7 +838,7 @@ class BookController extends Controller
             if ($deleted) {
                 $this->notifier()->send(
                     User::find($book->author_id),
-                    'New Book Created',
+                    'Book Deleted',
                     'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
                     ['in-app', 'email'],
                     $book,
@@ -1191,3 +1198,5 @@ class BookController extends Controller
         }
     }
 }
+
+

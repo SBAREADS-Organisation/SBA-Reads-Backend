@@ -50,6 +50,7 @@ class AppServiceProvider extends ServiceProvider
             'transaction' => \App\Models\Transaction::class,
             'order_item' => \App\Models\OrderItem::class,
             'book_review' => \App\Models\BookReviews::class,
+            'digital_book_purchase' => \App\Models\DigitalBookPurchase::class,
         ]);
         $router->aliasMiddleware('role', \App\Http\Middleware\RoleMiddleware::class);
         // Broadcast::channel('order.{orderId}', function ($user, $orderId) {
