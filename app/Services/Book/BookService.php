@@ -150,8 +150,21 @@ class BookService
 
     public function deleteBook(Book $book, string $reason)
     {
-        $book->delete();
+        // Check if book has purchases
+        $hasPurchases = DigitalBookPurchase::whereHas('items', function($q) use ($book) {
+            $q->where('book_id', $book->id);
+        })->where('status', 'completed')->exists();
 
+        if ($hasPurchases) {
+            throw new \Exception('Cannot delete book that has been purchased');
+        }
+
+        // Delete files from Cloudinary
+        if ($book->cover_image && is_array($book->cover_image)) {
+            $this->cloudinaryMediaService->delete($book->cover_image['public_id']);
+        }
+
+        $book->delete();
         return true;
     }
 
@@ -223,5 +236,7 @@ class BookService
         ], 'Purchase initiated successfully. Complete payment to access books.');
     }
 }
+
+
 
 
