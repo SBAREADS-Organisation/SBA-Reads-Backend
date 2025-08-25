@@ -1278,6 +1278,9 @@ Handle Google callback
 #### GET /migrate
 Run database migrations
 
+#### GET /migrate/rollback
+Rollback previous migration
+
 #### GET /seed
 Run database seeders
 
