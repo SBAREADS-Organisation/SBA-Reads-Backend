@@ -14,14 +14,14 @@ return new class extends Migration
         // Add currency column to digital_book_purchase_items table
         Schema::table('digital_book_purchase_items', function (Blueprint $table) {
             if (!Schema::hasColumn('digital_book_purchase_items', 'currency')) {
-                $table->string('currency')->default('USD')->after('amount');
+                $table->string('currency')->default('USD');
             }
         });
 
         // Add currency column to orders table
         Schema::table('orders', function (Blueprint $table) {
             if (!Schema::hasColumn('orders', 'currency')) {
-                $table->string('currency')->default('USD')->after('total_amount');
+                $table->string('currency')->default('USD');
             }
         });
     }
