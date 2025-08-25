@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('paystack_webhook_events')) {
+            return;
+        }
         Schema::create('paystack_webhook_events', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('paystack_event_id')->unique();
@@ -42,6 +45,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('paystack_webhook_events');
+        if (Schema::hasTable('paystack_webhook_events')) {
+            Schema::dropIfExists('paystack_webhook_events');
+        }
     }
 };
