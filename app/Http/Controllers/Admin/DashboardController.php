@@ -49,7 +49,7 @@ class DashboardController extends Controller
 
             $naira_revenue = Transaction::where('type', 'earning')
                 ->where('status', 'succeeded')
-                ->sum('naira_amount');
+                ->sum('amount_naira');
 
             // Total sales from all sources with dual currency
             $digital_sales_usd = DigitalBookPurchase::where('status', 'completed')

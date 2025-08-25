@@ -53,7 +53,7 @@ class PaystackPaymentController extends Controller
                     'user_id' => $user->id,
                     'amount' => $amount,
                     'currency' => $currency,
-                    'naira_amount' => $nairaAmount,
+                    'amount_naira' => $nairaAmount,
                     'payment_vendor' => 'paystack',
                     'status' => 'pending',
                     'purpose' => $request->purpose,
@@ -83,7 +83,7 @@ class PaystackPaymentController extends Controller
                         'reference' => $paystackResponse['data']['reference'],
                         'amount' => $amount,
                         'currency' => $currency,
-                        'naira_amount' => $nairaAmount,
+                        'amount_naira' => $nairaAmount,
                     ]
                 ]);
             });
