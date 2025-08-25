@@ -11,6 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
+        if (Schema::hasTable('paystack_transactions')) {
+            return;
+        }
         Schema::create('paystack_transactions', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('transaction_id');
@@ -56,6 +59,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('paystack_transactions');
+        if (Schema::hasTable('paystack_transactions')) {
+            Schema::dropIfExists('paystack_transactions');
+        }
     }
 };

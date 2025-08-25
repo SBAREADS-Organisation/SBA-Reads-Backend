@@ -52,7 +52,11 @@ return new class extends Migration
      */
     public function down(): void
     {
+
         Schema::table('transactions', function (Blueprint $table) {
+            if (!Schema::hasColumn('transactions', 'amount_usd')) {
+                return;
+            }
             $table->dropColumn([
                 'amount_usd',
                 'amount_naira',
@@ -62,6 +66,7 @@ return new class extends Migration
                 'paystack_response'
             ]);
 
+            
             // Reset payment_provider to only stripe
             $table->string('payment_provider', 50)->default('stripe')->change();
         });

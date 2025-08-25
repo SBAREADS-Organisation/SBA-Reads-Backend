@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->decimal('wallet_balance', 10, 2)->default(0)->after('email');
+            if (!Schema::hasColumn('users', 'wallet_balance')) {
+                $table->decimal('wallet_balance', 10, 2)->default(0)->after('email');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('wallet_balance');
+            if (Schema::hasColumn('users', 'wallet_balance')) {
+                $table->dropColumn('wallet_balance');
+            }
         });
     }
 };
