@@ -119,7 +119,11 @@ class BookController extends Controller
             'reviews:id,book_id,rating'
         ])->paginate($request->get('items_per_page', 10));
 
-        return BookResource::collection($books, true); // true = listing mode
+        if ($books->isEmpty()) {
+            return $this->success([], 'No books found for the specified criteria');
+        }
+
+        return $this->success(BookResource::collection($books, true), 'Books retrieved successfully');
     }
 
     private function applyClassification($query, $classification)
