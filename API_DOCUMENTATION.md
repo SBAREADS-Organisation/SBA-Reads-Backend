@@ -238,64 +238,109 @@ The system listens for Stripe webhook events to update withdrawal status:
 ### GET /admin/dashboard
 Get comprehensive dashboard analytics and metrics.
 
-**Authentication Required**: Admin or Superadmin role
+**Authentication Required**: Manager or Superadmin role
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Accept: application/json
+```
 
 **Response:**
 ```json
 {
   "data": {
-    "reader_count": 1250,
-    "author_count": 350,
-    "published_books_count": 850,
-    "pending_books_count": 45,
-    "recent_signups": [...],
-    "recent_transactions": [...],
-    "recent_book_uploads": [...],
-    "active_subscription_count": 420,
-    "revenue": 125000.50,
-    "reader_engagement": {
-      "active_readers": 980,
-      "total_reading_sessions": 15420,
-      "average_reading_progress": 0.75,
-      "total_reading_time_minutes": 1250.5
+    "reader_count": 150,
+    "author_count": 45,
+    "published_books_count": 230,
+    "pending_books_count": 12,
+    "active_subscription_count": 89,
+    "revenue": {
+      "usd": 1250.50,
+      "ngn": 850000.00,
+      "naira_total": 2100000.00
     },
-    "books_published": 850,
-    "total_sales": 145000.75
+    "total_sales": {
+      "usd": 2500.75,
+      "ngn": 1200000.00,
+      "total": 3700000.75
+    },
+    "total_books_sold": 456,
+    "reader_engagement": {
+      "active_readers": 78,
+      "total_reading_sessions": 1234,
+      "average_reading_progress": 65.5,
+      "total_reading_time_minutes": 45678.25
+    },
+    "recent_signups": [
+      {
+        "id": 123,
+        "name": "John Doe",
+        "email": "john@example.com",
+        "account_type": "reader",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "recent_transactions": [
+      {
+        "id": 456,
+        "amount": 25.99,
+        "currency": "USD",
+        "status": "completed",
+        "created_at": "2024-01-15T14:20:00Z",
+        "user": {
+          "id": 789,
+          "name": "Jane Smith",
+          "email": "jane@example.com"
+        }
+      }
+    ],
+    "recent_book_uploads": [
+      {
+        "id": 101,
+        "title": "Sample Book",
+        "status": "pending",
+        "created_at": "2024-01-15T09:15:00Z",
+        "author": {
+          "id": 202,
+          "name": "Author Name",
+          "email": "author@example.com"
+        }
+      }
+    ],
+    "weekly_revenue": 450.25,
+    "weekly_signups": 23
   },
   "code": 200,
   "message": "Dashboard data retrieved successfully."
 }
 ```
 
-### Dashboard Payload Fields
+**Dashboard Payload Fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `reader_count` | integer | Total number of registered readers |
-| `author_count` | integer | Total number of registered authors |
-| `published_books_count` | integer | Total number of published books |
-| `pending_books_count` | integer | Total number of books pending approval |
-| `recent_signups` | array | List of recent user registrations |
-| `recent_transactions` | array | List of recent financial transactions |
-| `recent_book_uploads` | array | List of recent book uploads |
-| `active_subscription_count` | integer | Total number of active subscriptions |
-| `revenue` | decimal | Total revenue from all successful transactions |
-| `reader_engagement` | object | Reader engagement metrics |
-| `books_published` | integer | Total published books (alias of published_books_count) |
-| `total_sales` | decimal | Total sales amount from all completed orders |
-
-### Reader Engagement Metrics
-
-The `reader_engagement` object contains:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `active_readers` | integer | Number of users with reading progress |
-| `total_reading_sessions` | integer | Total reading sessions across all users |
-| `average_reading_progress` | float | Average reading progress across all users (0-100) |
-| `total_reading_time_minutes` | float | Total reading time in minutes across all users |
-
-### Usage Example
+| `reader_count` | integer | Total number of readers on platform |
+| `author_count` | integer | Total number of authors on platform |
+| `published_books_count` | integer | Total approved/published books |
+| `pending_books_count` | integer | Books awaiting approval |
+| `active_subscription_count` | integer | Active subscription count |
+| `revenue` | object | Revenue breakdown by currency |
+| `revenue.usd` | decimal | Total revenue in USD |
+| `revenue.ngn` | decimal | Total revenue in Nigerian Naira |
+| `revenue.naira_total` | decimal | Combined revenue in Naira |
+| `total_sales` | object | Sales breakdown by currency |
+| `total_books_sold` | integer | Total number of books sold |
+| `reader_engagement` | object | Platform engagement metrics |
+| `reader_engagement.active_readers` | integer | Currently active readers |
+| `reader_engagement.total_reading_sessions` | integer | Total reading sessions |
+| `reader_engagement.average_reading_progress` | decimal | Average reading progress percentage |
+| `reader_engagement.total_reading_time_minutes` | decimal | Total reading time in minutes |
+| `recent_signups` | array | Last 5 user registrations |
+| `recent_transactions` | array | Last 5 platform transactions |
+| `recent_book_uploads` | array | Last 5 book uploads |
+| `weekly_revenue` | decimal | Revenue for current week |
+| `weekly_signups` | integer | New signups this week |
 
 ```bash
 curl -X GET https://your-domain.com/api/admin/dashboard \
@@ -308,52 +353,112 @@ Get author-specific dashboard analytics and metrics.
 
 **Authentication Required**: Author role
 
+**Headers:**
+```
+Authorization: Bearer {token}
+Accept: application/json
+```
+
 **Response:**
 ```json
 {
   "data": {
-    "revenue": 15000.75,
+    "revenue": 1250.50,
     "reader_engagement": {
-      "active_readers": 120,
-      "total_reading_sessions": 450,
-      "average_reading_progress": 0.68,
-      "total_reading_time_minutes": 2850.5
+      "active_readers": 25,
+      "total_reading_sessions": 156,
+      "average_reading_progress": 72.3,
+      "total_reading_time_minutes": 8945.5
     },
-    "books_published": 12,
-    "total_sales": 18500.25,
-    "total_books_count": 15,
-    "pending_books_count": 3,
-    "recent_transactions": [...],
-    "recent_book_uploads": [...]
+    "books_published": 8,
+    "total_sales": 2340.75,
+    "books_sold": 45,
+    "books_uploaded": 10,
+    "books_rejected": 1,
+    "books_approved": 8,
+    "total_books_count": 10,
+    "pending_books_count": 1,
+    "recent_transactions": [
+      {
+        "id": 789,
+        "amount": 15.99,
+        "currency": "USD",
+        "status": "completed",
+        "created_at": "2024-01-15T16:45:00Z",
+        "book": {
+          "id": 101,
+          "title": "My Book Title"
+        }
+      }
+    ],
+    "recent_book_uploads": [
+      {
+        "id": 102,
+        "title": "Latest Book",
+        "status": "approved",
+        "created_at": "2024-01-14T11:30:00Z",
+        "cover_image": "https://cloudinary.com/image.jpg"
+      }
+    ],
+    "monthly_sales": 12,
+    "wallet_balance": 450.25,
+    "metrics": {
+      "sales_by_book": {
+        "101": {
+          "digital_sales": 5,
+          "physical_sales": 3,
+          "total_sales": 8
+        }
+      },
+      "top_performing_books": [
+        {
+          "id": 101,
+          "title": "Best Seller",
+          "total_sales": 25,
+          "revenue": 375.00
+        }
+      ],
+      "total_books_with_sales": 6
+    },
+    "status_breakdown": {
+      "approved": 8,
+      "pending": 1,
+      "rejected": 1,
+      "total": 10
+    }
   },
   "code": 200,
   "message": "Author dashboard data retrieved successfully."
 }
 ```
 
-### Author Dashboard Payload Fields
+**Author Dashboard Payload Fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `revenue` | decimal | Total earnings from successful transactions for this author |
-| `reader_engagement` | object | Reader engagement metrics for author's books |
-| `books_published` | integer | Number of published books by this author |
-| `total_sales` | decimal | Total sales amount from all completed orders for author's books |
-| `total_books_count` | integer | Total number of books created by this author |
-| `pending_books_count` | integer | Number of books pending approval by this author |
-| `recent_transactions` | array | List of recent transactions for this author |
-| `recent_book_uploads` | array | List of recent book uploads by this author |
-
-### Author Reader Engagement Metrics
-
-The `reader_engagement` object for authors contains:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `active_readers` | integer | Number of users reading this author's books |
-| `total_reading_sessions` | integer | Total reading sessions across author's books |
-| `average_reading_progress` | decimal | Average reading progress across author's books |
-| `total_reading_time_minutes` | decimal | Total reading time for author's books |
+| `revenue` | decimal | Total author earnings |
+| `reader_engagement` | object | Engagement metrics for author's books |
+| `reader_engagement.active_readers` | integer | Readers currently reading author's books |
+| `reader_engagement.total_reading_sessions` | integer | Total sessions for author's books |
+| `reader_engagement.average_reading_progress` | decimal | Average progress on author's books |
+| `reader_engagement.total_reading_time_minutes` | decimal | Total time spent reading author's books |
+| `books_published` | integer | Number of approved books |
+| `total_sales` | decimal | Total sales revenue |
+| `books_sold` | integer | Total number of books sold |
+| `books_uploaded` | integer | Total books uploaded by author |
+| `books_rejected` | integer | Number of rejected books |
+| `books_approved` | integer | Number of approved books |
+| `total_books_count` | integer | Total books by author |
+| `pending_books_count` | integer | Books awaiting approval |
+| `recent_transactions` | array | Last 5 author transactions |
+| `recent_book_uploads` | array | Last 5 books uploaded by author |
+| `monthly_sales` | integer | Sales count for current month |
+| `wallet_balance` | decimal | Author's current wallet balance |
+| `metrics` | object | Detailed performance metrics |
+| `metrics.sales_by_book` | object | Sales breakdown per book |
+| `metrics.top_performing_books` | array | Top 5 books by performance |
+| `metrics.total_books_with_sales` | integer | Number of books that have sales |
+| `status_breakdown` | object | Book status distribution |
 
 ```bash
 curl -X GET https://your-domain.com/api/author/dashboard \
@@ -1172,6 +1277,9 @@ Handle Google callback
 
 #### GET /migrate
 Run database migrations
+
+#### GET /migrate/rollback
+Rollback previous migration
 
 #### GET /seed
 Run database seeders
@@ -2700,6 +2808,269 @@ Authorization: Bearer {token}
     "total_books": 320,
     "pending_books": 12,
     "total_sales": 5420,
+    "total_revenue": "
+          "name": "Author Name",
+          "email": "author@example.com"
+        },
+        "amount": "500.00",
+        "requested_at": "2024-01-15T10:30:00Z",
+        "payout_method": "bank_transfer",
+        "bank_details": {
+          "account_name": "Author Name",
+          "account_number": "1234567890",
+          "bank_name": "First Bank"
+        }
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Pending payouts retrieved successfully"
+}
+```
+
+### POST /admin/payouts/{id}/approve
+Approve a payout request
+
+**Headers:**
+```
+Authorization: Bearer {token}
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "approval_notes": "Payout approved and processed",
+  "transaction_reference": "TXN_123456789"
+}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "payout": {
+      "id": 1,
+      "amount": "500.00",
+      "status": "approved",
+      "approved_at": "2024-01-15T10:30:00Z",
+      "transaction_reference": "TXN_123456789"
+    }
+  },
+  "code": 200,
+  "message": "Payout approved successfully"
+}
+```
+
+## Additional User Endpoints
+
+### GET /user/purchases
+Get user's purchase history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Query Parameters:**
+- `page` (optional): Page number
+- `status` (optional): `completed`, `pending`, `failed`
+
+**Response:**
+```json
+{
+  "data": {
+    "purchases": [
+      {
+        "id": 1,
+        "book": {
+          "id": 1,
+          "title": "Book Title",
+          "author": "Author Name",
+          "cover_image": "https://example.com/cover.jpg"
+        },
+        "amount": "25.00",
+        "payment_method": "stripe",
+        "status": "completed",
+        "purchased_at": "2024-01-15T10:30:00Z"
+      }
+    ],
+    "pagination": {
+      "current_page": 1,
+      "total_pages": 3,
+      "total_items": 25
+    }
+  },
+  "code": 200,
+  "message": "Purchase history retrieved successfully"
+}
+```
+
+### GET /user/library
+Get user's purchased books library
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "author": "Author Name",
+        "cover_image": "https://example.com/cover.jpg",
+        "purchased_at": "2024-01-15T10:30:00Z",
+        "last_read_at": "2024-01-16T14:20:00Z",
+        "reading_progress": 45
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Library retrieved successfully"
+}
+```
+
+
+
+## HTTP Status Codes
+
+- `200` - Success
+- `201` - Created
+- `400` - Bad Request
+- `401` - Unauthorized
+- `403` - Forbidden
+- `404` - Not Found
+- `409` - Conflict
+- `422` - Unprocessable Entity
+- `500` - Internal Server Error
+- `503` - Service Unavailable
+
+## Rate Limiting
+
+Endpoints are rate-limited to 60 requests per minute. Exceeding this limit will result in a 429 status code.
+
+## Data Validation
+
+All endpoints validate input data according to defined rules. Validation errors are returned in the following format:
+
+```json
+{
+  "data": null,
+  "code": 400,
+  "message": "Validation failed",
+  "error": {
+    "field_name": [
+      "Error message"
+    ]
+  }
+}
+```
+
+## Author/Publisher Endpoints
+
+### GET /author/dashboard
+Get author dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_books": 15,
+    "total_sales": 245,
+    "total_earnings": "1750.50",
+    "pending_earnings": "525.75",
+    "this_month_sales": 32,
+    "this_month_earnings": "224.00"
+  },
+  "code": 200,
+  "message": "Dashboard data retrieved successfully"
+}
+```
+
+### GET /author/my-books
+Get author's books
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "books": [
+      {
+        "id": 1,
+        "title": "Book Title",
+        "status": "approved",
+        "total_sales": 45,
+        "created_at": "2024-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Books retrieved successfully"
+}
+```
+
+### GET /author/transactions
+Get author's transaction history
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "transactions": [
+      {
+        "id": 1,
+        "book_title": "Book Title",
+        "amount": "17.50",
+        "type": "book_sale",
+        "status": "completed",
+        "created_at": "2024-01-15T10:30:00Z"
+      }
+    ]
+  },
+  "code": 200,
+  "message": "Transactions retrieved successfully"
+}
+```
+
+## Admin Endpoints
+
+### GET /admin/dashboard
+Get admin dashboard statistics
+
+**Headers:**
+```
+Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "data": {
+    "total_users": 1250,
+    "total_authors": 85,
+    "total_books": 320,
+    "pending_books": 12,
+    "total_sales": 5420,
     "total_revenue": "38940.00",
     "platform_earnings": "11682.00",
     "pending_payouts": 8,
@@ -3268,6 +3639,7 @@ Authorization: Bearer {token}
     "total_books": 15,
     "total_sales": 245,
     "total_earnings
+
 
 
 

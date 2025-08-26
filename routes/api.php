@@ -264,6 +264,17 @@ Route::get('migrate', function () {
     ]);
 });
 
+//rollback migration
+Route::get('migrate/rollback', function () {
+    Artisan::call('migrate:rollback', ['--force' => true]);
+    $output = Artisan::output();
+
+    return response()->json([
+        'message' => 'Rollback executed',
+        'output' => $output,
+    ]);
+});
+
 // Database seeding route
 Route::get('seed', function () {
     Artisan::call('db:seed');
