@@ -288,10 +288,7 @@ class BookController extends Controller
         ])->paginate($request->input('per_page', 20));
 
         if ($books->isEmpty()) {
-            return $this->error(
-                'No books found for this author.',
-                404
-            );
+            return $this->success([], 'No books found for the specified criteria');
         }
 
         return $this->success(
