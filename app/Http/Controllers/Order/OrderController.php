@@ -70,7 +70,7 @@ class OrderController extends Controller
             $orders = $query->paginate($request->get('per_page', 15));
 
             if ($orders->isEmpty()) {
-                return $this->error('No orders found', 404);
+                return $this->success([], 'No orders found for the specified criteria');
             }
 
             return $this->success(OrderResource::collection($orders), 'All orders retrieved');
@@ -122,7 +122,7 @@ class OrderController extends Controller
             $orders = $query->paginate($request->get('per_page', 15));
 
             if ($orders->isEmpty()) {
-                return $this->error('No orders found', 404);
+                return $this->success([], 'No orders found for the specified criteria');
             }
 
             return $this->success(OrderResource::collection($orders), 'User orders retrieved successfully');
