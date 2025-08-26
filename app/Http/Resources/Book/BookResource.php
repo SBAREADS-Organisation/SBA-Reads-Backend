@@ -78,28 +78,35 @@ class BookResource extends JsonResource
                         'id' => $review->user->id,
                         'name' => $review->user->name,
                         'email' => $review->user->email,
-                        'profile_picture' => $review->user->profile_picture,
+                        'profile_picture' => $this->formatProfilePicture($review->user->profile_picture ?? []),
                     ] : null,
                 ];
             }),
             'average_rate' => $this->reviews->avg('rating') ?? 0,
             'authors' => $this->authors->map(function ($author) {
-                $profilePicture = $author->profile_picture ?? [];
-                $rawId = $profilePicture['public_id'] ?? null;
-                $rawUrl = $profilePicture['public_url'] ?? null;
-                $publicId = is_numeric($rawId) ? (int) $rawId : null;
-                $publicUrl = is_string($rawUrl) ? $rawUrl : null;
-
                 return [
                     'id' => $author->id,
                     'name' => $author->name,
                     'email' => $author->email,
-                    'profile_picture' => $author->profile_picture,
+                    'profile_picture' => $this->formatProfilePicture($author->profile_picture ?? []),
                     'bio' => $author->bio,
                 ];
             }),
             'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
             'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
+        ];
+    }
+
+    private function formatProfilePicture($profilePicture)
+    {
+        $rawId = $profilePicture['public_id'] ?? null;
+        $rawUrl = $profilePicture['public_url'] ?? null;
+        $publicId = is_numeric($rawId) ? (int) $rawId : null;
+        $publicUrl = is_string($rawUrl) ? $rawUrl : null;
+
+        return [
+            'public_id' => $publicId,
+            'public_url' => $publicUrl,
         ];
     }
 }

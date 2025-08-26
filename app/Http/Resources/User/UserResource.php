@@ -21,7 +21,7 @@ class UserResource extends JsonResource
             'account_type' => $this->account_type,
             'status' => $this->status,
             'kyc_status' => $this->kyc_status,
-            'profile_picture' => $this->profile_picture,
+            'profile_picture' => $this->formatProfilePicture($this->profile_picture ?? []),
             'bio' => $this->bio,
             'preferences' => $this->preferences,
             'last_login_at' => $this->last_login_at,
@@ -42,6 +42,19 @@ class UserResource extends JsonResource
             'roles' => $this->whenLoaded('roles', function () {
                 return $this->roles->pluck('name')->toArray();
             }),
+        ];
+    }
+
+    private function formatProfilePicture($profilePicture)
+    {
+        $rawId = $profilePicture['public_id'] ?? null;
+        $rawUrl = $profilePicture['public_url'] ?? null;
+        $publicId = is_numeric($rawId) ? (int) $rawId : null;
+        $publicUrl = is_string($rawUrl) ? $rawUrl : null;
+
+        return [
+            'public_id' => $publicId,
+            'public_url' => $publicUrl,
         ];
     }
 }
