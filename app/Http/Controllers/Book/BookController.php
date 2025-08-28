@@ -123,7 +123,18 @@ class BookController extends Controller
             return $this->success([], 'No books found for the specified criteria');
         }
 
-        return $this->success(BookResource::collection($books, true), 'Books retrieved successfully');
+        // Extract items from paginator first, then create Resource collection to avoid double nesting
+        $resourceCollection = BookResource::collection($books->getCollection());
+        
+        return $this->success([
+            'data' => $resourceCollection->toArray(request()),
+            'current_page' => $books->currentPage(),
+            'last_page' => $books->lastPage(),
+            'per_page' => $books->perPage(),
+            'total' => $books->total(),
+            'from' => $books->firstItem(),
+            'to' => $books->lastItem()
+        ], 'Books retrieved successfully');
     }
 
     private function applyClassification($query, $classification)
