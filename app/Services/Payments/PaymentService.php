@@ -6,6 +6,7 @@ use App\Models\DigitalBookPurchaseItem;
 use App\Models\OrderItem;
 use App\Models\Transaction;
 use App\Services\Stripe\StripeConnectService;
+use App\Services\Paystack\PaystackService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -14,12 +15,16 @@ use Stripe\PaymentIntent;
 class PaymentService
 {
     protected $stripe;
+    protected $paystack;
 
     use ApiResponse;
 
-    public function __construct(StripeConnectService $stripe)
-    {
+    public function __construct(
+        StripeConnectService $stripe,
+        PaystackService $paystack
+    ) {
         $this->stripe = $stripe;
+        $this->paystack = $paystack;
     }
 
     public function createPayment(array $data, $user): JsonResponse|Transaction
@@ -28,60 +33,138 @@ class PaymentService
             $data = json_decode(json_encode($data));
             $str = Str::of($data->purpose)->take(3);
             $reference = uniqid("$str".'_');
-
-            $paymentIntentPayload = [
-                'amount' => $this->convertToSubunit($data->amount, $data->currency),
-                'currency' => $data->currency,
-                'purpose' => $data->purpose,
-                'reference' => $reference,
-                'description' => $data->description ?? null,
-                'purpose_id' => $data->purpose_id ?? 0,
-            ];
-
-            $responsePayload = $this->stripe->createPaymentIntent($paymentIntentPayload, $user);
-
-            if ($responsePayload instanceof JsonResponse) {
-                $responseData = $responsePayload->getData(true);
-                $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
-
-                return $this->error(
-                    'An error occurred while creating the payment intent.',
-                    500,
-                    config('app.debug') ? $errorMessage : null,
-
-                );
-            } elseif ($responsePayload instanceof PaymentIntent) {
-                // Save Payment record
-                return Transaction::create([
-                    'id' => Str::uuid(),
-                    'user_id' => $user->id,
-                    'reference' => $reference,
-                    'payment_intent_id' => $responsePayload->id,
-                    'payment_client_secret' => $responsePayload->client_secret,
-                    'amount' => $data->amount,
-                    'currency' => $data->currency ?? 'usd',
-                    'payment_provider' => 'stripe',
-                    'description' => $data->description ?? null,
-                    'purpose_type' => $data->purpose,
-                    'purpose_id' => $data->purpose_id ?? null,
-                    'meta_data' => json_encode($data->meta_data ?? []),
-                    'status' => 'pending',
-                    'type' => 'purchase',
-                    'direction' => 'debit',
-                ]);
-
+            
+            // Determine payment provider based on currency
+            $provider = $this->getPaymentProvider($data->currency ?? 'USD');
+            
+            if ($provider === 'paystack') {
+                return $this->createPaystackPayment($data, $user, $reference);
             } else {
-                return $this->error(
-                    'An internal error occurred due to an unexpected service response.',
-                    500,
-                    config('app.debug') ? 'Stripe service returned an unhandled type.' : null
-                );
+                return $this->createStripePayment($data, $user, $reference);
             }
         } catch (\Throwable $th) {
-            // throw $th;
-            // dd($th);
             return $this->error('An error occurred while creating the payment intent.', 500, $th->getMessage(), $th);
         }
+    }
+    
+    protected function createStripePayment($data, $user, $reference): JsonResponse|Transaction
+    {
+        $paymentIntentPayload = [
+            'amount' => $this->convertToSubunit($data->amount, $data->currency),
+            'currency' => $data->currency,
+            'purpose' => $data->purpose,
+            'reference' => $reference,
+            'description' => $data->description ?? null,
+            'purpose_id' => $data->purpose_id ?? 0,
+        ];
+
+        $responsePayload = $this->stripe->createPaymentIntent($paymentIntentPayload, $user);
+
+        if ($responsePayload instanceof JsonResponse) {
+            $responseData = $responsePayload->getData(true);
+            $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
+
+            return $this->error(
+                'An error occurred while creating the payment intent.',
+                500,
+                config('app.debug') ? $errorMessage : null
+            );
+        } elseif ($responsePayload instanceof PaymentIntent) {
+            // Save Payment record
+            return Transaction::create([
+                'id' => Str::uuid(),
+                'user_id' => $user->id,
+                'reference' => $reference,
+                'payment_intent_id' => $responsePayload->id,
+                'payment_client_secret' => $responsePayload->client_secret,
+                'amount' => $data->amount,
+                'currency' => $data->currency ?? 'usd',
+                'payment_provider' => 'stripe',
+                'description' => $data->description ?? null,
+                'purpose_type' => $data->purpose,
+                'purpose_id' => $data->purpose_id ?? null,
+                'meta_data' => json_encode($data->meta_data ?? []),
+                'status' => 'pending',
+                'type' => 'purchase',
+                'direction' => 'debit',
+            ]);
+        } else {
+            return $this->error(
+                'An internal error occurred due to an unexpected service response.',
+                500,
+                config('app.debug') ? 'Stripe service returned an unhandled type.' : null
+            );
+        }
+    }
+    
+    protected function createPaystackPayment($data, $user, $reference): JsonResponse|Transaction
+    {
+        // For Paystack, we need to handle the payment differently
+        // Create transaction record first, then initialize payment
+        $transaction = Transaction::create([
+            'id' => Str::uuid(),
+            'user_id' => $user->id,
+            'reference' => $reference,
+            'amount' => $data->amount,
+            'currency' => $data->currency ?? 'NGN',
+            'payment_provider' => 'paystack',
+            'description' => $data->description ?? null,
+            'purpose_type' => $data->purpose,
+            'purpose_id' => $data->purpose_id ?? null,
+            'meta_data' => json_encode($data->meta_data ?? []),
+            'status' => 'pending',
+            'type' => 'purchase',
+            'direction' => 'debit',
+        ]);
+        
+        // Initialize Paystack payment
+        $paystackResponse = $this->paystack->initializePayment([
+            'amount' => $data->amount,
+            'currency' => $data->currency ?? 'NGN',
+            'reference' => $reference,
+            'purpose' => $data->purpose,
+            'purpose_id' => $data->purpose_id,
+            'description' => $data->description ?? null,
+        ], $user);
+        
+        if (!$paystackResponse['status']) {
+            // Delete the transaction if Paystack initialization failed
+            $transaction->delete();
+            return $this->error(
+                'Payment initialization failed',
+                500,
+                $paystackResponse['message'] ?? 'Unknown Paystack error'
+            );
+        }
+        
+        // Update transaction with Paystack response data
+        $transaction->update([
+            'payment_intent_id' => $paystackResponse['data']['reference'] ?? $reference,
+            'payment_client_secret' => $paystackResponse['data']['authorization_url'] ?? null,
+            'meta_data' => json_encode(array_merge(
+                $data->meta_data ?? [],
+                ['paystack_response' => $paystackResponse]
+            )),
+        ]);
+        
+        return $transaction;
+    }
+    
+    /**
+     * Determine the appropriate payment provider based on currency
+     */
+    protected function getPaymentProvider(string $currency): string
+    {
+        $currency = strtoupper($currency);
+        
+        // African currencies prioritize Paystack
+        $africanCurrencies = ['NGN', 'GHS', 'KES', 'ZAR'];
+        if (in_array($currency, $africanCurrencies)) {
+            return 'paystack';
+        }
+        
+        // Default to Stripe for other currencies
+        return 'stripe';
     }
 
     public function updatePaymentStatus(string $paymentIntentId, string $status)
