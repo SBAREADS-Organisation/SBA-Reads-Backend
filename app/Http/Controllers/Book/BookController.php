@@ -1151,14 +1151,40 @@ class BookController extends Controller
             // Fetch books data
             $books = Book::whereIn('id', $bookIds)->get();
 
-            // Create digital book purchase records
+            // Calculate total amount
+            $totalAmount = $books->sum('actual_price');
+            $platformFeeAmount = $totalAmount * 0.3; // 30% platform fee
+
+            // Ensure total amount is not null or zero
+            if ($totalAmount <= 0) {
+                return $this->error('Total amount cannot be zero. Please check book prices.', 400);
+            }
+
+            // Create single digital book purchase record
+            $purchase = DigitalBookPurchase::create([
+                'user_id' => $user->id,
+                'total_amount' => (float) $totalAmount,
+                'platform_fee_amount' => (float) $platformFeeAmount,
+                'currency' => $currency,
+                'status' => 'pending',
+            ]);
+
+            // Create individual purchase items for each book
             foreach ($bookIds as $bookId) {
-                DigitalBookPurchase::create([
-                    'user_id' => $user->id,
+                $book = $books->find($bookId);
+                $authorPayoutAmount = $book->actual_price * 0.7; // 70% to author
+
+                DigitalBookPurchaseItem::create([
+                    'digital_book_purchase_id' => $purchase->id,
                     'book_id' => $bookId,
-                    'purchase_price' => $books->find($bookId)->actual_price ?? 0,
-                    'currency' => $currency,
-                    'status' => 'pending',
+                    'author_id' => $book->author_id,
+                    'quantity' => 1,
+                    'price_at_purchase' => $book->actual_price,
+                    'author_payout_amount' => $authorPayoutAmount,
+                    'platform_fee_amount' => $book->actual_price - $authorPayoutAmount,
+                    'payout_status' => 'pending',
+                    'payment_provider' => $provider,
+                    'provider_transfer_id' => null,
                 ]);
             }
 
@@ -1166,10 +1192,12 @@ class BookController extends Controller
             $user->purchasedBooks()->syncWithoutDetaching($bookIds);
 
             return $this->success([
+                'purchase_id' => $purchase->id,
                 'books' => $bookIds,
                 'currency' => $currency,
                 'provider' => $provider,
-                'total_amount' => $books->sum('actual_price'),
+                'total_amount' => $totalAmount,
+                'platform_fee_amount' => $platformFeeAmount,
                 'status' => 'pending'
             ], 'Book purchase initiated successfully. Use the provided provider for payment processing.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
