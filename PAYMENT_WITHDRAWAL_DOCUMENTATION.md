@@ -4,6 +4,12 @@
 
 This document provides comprehensive documentation for the payment and withdrawal flows using both Paystack and Stripe payment providers in the SBA Reads platform. The system supports multiple payment methods and currencies to cater to a global audience.
 
+### Key Features (v2.1.0)
+- **Automatic Currency-Based Provider Selection**: System intelligently routes payments to optimal providers based on currency
+- **Enhanced Regional Support**: Seamless integration with Paystack for African markets and Stripe for global markets
+- **Unified API Experience**: Single endpoints automatically handle provider selection without manual specification
+- **Real-time Provider Response**: All payment endpoints return the selected provider for frontend integration
+
 ## Payment Providers Integration
 
 ### Supported Providers
@@ -15,16 +21,17 @@ This document provides comprehensive documentation for the payment and withdrawa
 
 ### Provider Selection Logic
 
-The system uses the `PaymentProviderFactory` to manage payment providers. Provider selection is typically determined at the application level rather than automatic selection.
+The system automatically selects payment providers based on the currency specified in the request payload. This ensures optimal regional payment processing and compliance.
 
+**Automatic Selection Rules:**
 ```php
-// Create payment provider instance
-$provider = PaymentProviderFactory::create('stripe');
-// or
-$provider = PaymentProviderFactory::create('paystack');
-
-// Get available providers
-$providers = PaymentProviderFactory::getProviders();
+// Currency-based provider selection
+$provider = match($currency) {
+    'NGN', 'GHS', 'KES', 'ZAR' => 'paystack', // African currencies
+    'USD' => 'stripe',                        // Global preference for USD
+    'EUR', 'GBP', 'CAD', 'AUD' => 'stripe',   // Stripe-only currencies
+    default => 'stripe'                       // Fallback to Stripe
+};
 ```
 
 **Available Providers:**
@@ -46,10 +53,10 @@ $providers = PaymentProviderFactory::getProviders();
 ```
 
 **Selection Criteria:**
-1. **Manual Selection**: Users or the frontend can specify the payment provider
-2. **Currency Support**: Each provider supports specific currencies
-3. **Geographic Optimization**: Paystack for African markets, Stripe for global markets
-4. **Use Case**: Different providers may be preferred for different transaction types
+1. **Automatic Currency-Based Selection**: System automatically selects provider based on currency
+2. **Regional Optimization**: Paystack for African currencies (NGN, GHS, KES, ZAR), Stripe for global currencies
+3. **Currency Support**: Each provider supports specific currencies as defined in the mapping
+4. **Fallback Strategy**: Defaults to Stripe for unsupported currencies
 
 ## Payment Flow Architecture
 
@@ -96,7 +103,7 @@ graph TD
 #### Initialize Payment (Stripe)
 **Note**: Stripe payments are handled through book purchase and order endpoints, not a dedicated payment initialization endpoint.
 
-#### Purchase Books (Stripe)
+#### Purchase Books (Enhanced with Currency Selection)
 **POST** `/api/books/purchase`
 
 **Authentication Required**: Bearer Token
@@ -104,8 +111,8 @@ graph TD
 **Request Body:**
 ```json
 {
-  "book_ids": [1, 2, 3],
-  "payment_provider": "stripe"
+  "books": [1, 2, 3],
+  "currency": "USD"
 }
 ```
 
@@ -113,24 +120,25 @@ graph TD
 ```json
 {
   "success": true,
-  "message": "Purchase initiated successfully. Complete payment to access books.",
   "data": {
-    "purchase": {
-      "id": "uuid-here",
-      "total_amount": 25.99,
-      "items": [...]
-    },
-    "transaction": {
-      "id": "uuid-here",
-      "reference": "dig_67890abcde",
-      "payment_intent_id": "pi_3OjXYZabcdef",
-      "amount": 25.99,
-      "currency": "usd",
-      "status": "pending"
-    },
-    "client_secret": "pi_3OjXYZabcdef_secret_xyz123"
-  }
+    "books": [1, 2, 3],
+    "currency": "USD",
+    "provider": "stripe",
+    "total_amount": 75.99,
+    "status": "pending"
+  },
+  "message": "Book purchase initiated successfully. Use the provided provider for payment processing."
 }
+```
+
+**Validation Rules:**
+- `books`: Required array of book IDs
+- `currency`: Required string, exactly 3 characters, must be one of: USD, EUR, GBP, CAD, AUD, NGN, GHS, KES, ZAR
+
+**Provider Selection Logic:**
+- **Stripe**: USD, EUR, GBP, CAD, AUD (Global markets)
+- **Paystack**: NGN, GHS, KES, ZAR (African markets)
+- **USD**: Defaults to Stripe for global preference
 ```
 
 #### Initialize Payment (Paystack)
@@ -180,7 +188,76 @@ graph TD
 }
 ```
 
-### 4. Additional Payment Endpoints
+### 4. Order Endpoints
+
+#### Create Order (Enhanced with Currency Selection)
+**POST** `/api/order`
+
+**Authentication Required**: Bearer Token
+
+**Request Body:**
+```json
+{
+  "books": [
+    {
+      "book_id": 1,
+      "quantity": 2
+    },
+    {
+      "book_id": 2, 
+      "quantity": 1
+    }
+  ],
+  "delivery_address": "123 Main Street, City, Country",
+  "currency": "USD"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "order": {
+      "id": "order-id",
+      "order_number": "ORD-123456",
+      "total_amount": 45.99,
+      "status": "pending",
+      "tracking_number": "TRK-ABCD-123456"
+    },
+    "transaction": {
+      "id": "transaction-id",
+      "reference": "ord_xyz123",
+      "payment_intent_id": "pi_stripe_or_paystack_id",
+      "amount": 45.99,
+      "currency": "USD",
+      "status": "pending"
+    },
+    "provider": "stripe",
+    "currency": "USD"
+  },
+  "message": "Order created successfully. Please proceed to payment."
+}
+```
+
+**Validation Rules:**
+- `books`: Required array with minimum 1 item
+- `books.*.book_id`: Required, must exist in books table
+- `books.*.quantity`: Required integer, minimum 1
+- `delivery_address`: Required string, max 500 characters
+- `currency`: Required string, exactly 3 characters, must be one of: USD, EUR, GBP, CAD, AUD, NGN, GHS, KES, ZAR
+
+#### Get User Orders
+**GET** `/api/order/my-orders`
+
+**Authentication Required**: Bearer Token
+
+#### Track Order
+**GET** `/api/order/track/{tracking_id}`
+
+**Authentication Required**: Bearer Token
+
+### 5. Additional Payment Endpoints
 
 #### User Payment Methods
 
@@ -866,10 +943,11 @@ All payment and withdrawal activities are logged in:
 | 1.1.0 | 2024-02-01 | Added Paystack support |
 | 1.2.0 | 2024-03-15 | Enhanced withdrawal system |
 | 2.0.0 | 2024-08-28 | **Major Update**: Comprehensive documentation update based on actual codebase implementation. Updated all endpoints, schemas, and flows to match current Laravel 12 implementation |
+| 2.1.0 | 2025-01-15 | **Currency-Based Provider Selection**: Added automatic payment provider selection based on currency. Enhanced `/api/books/purchase` and `/api/order` endpoints to accept currency field and return selected provider. Implemented regional optimization for payment processing. |
 
 ---
 
-*This documentation has been thoroughly updated to reflect the actual codebase implementation. Last updated: August 2024*
+*This documentation has been thoroughly updated to reflect the actual codebase implementation. Last updated: January 2025*
 ### Common Issues
 
 1. **Webhook Delivery Failures**
