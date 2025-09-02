@@ -125,7 +125,7 @@ class BookController extends Controller
 
         // Extract items from paginator first, then create Resource collection to avoid double nesting
         $resourceCollection = BookResource::collection($books->getCollection());
-        
+
         return $this->success([
             'data' => $resourceCollection->toArray(request()),
             'current_page' => $books->currentPage(),
@@ -1118,6 +1118,7 @@ class BookController extends Controller
             $validator = Validator::make($request->all(), [
                 'books' => 'required|array',
                 'books.*' => 'required|integer|exists:books,id',
+                'currency' => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
             ]);
 
             if ($validator->fails()) {
@@ -1126,6 +1127,10 @@ class BookController extends Controller
 
             $user = $request->user();
             $bookIds = $request->input('books');
+            $currency = strtoupper($request->input('currency'));
+
+            // Determine payment provider based on currency
+            $provider = $this->getPaymentProvider($currency);
 
             // Check if the user already owns any of the books
             $ownedBooks = $user->purchasedBooks()->whereIn('book_id', $bookIds)->pluck('book_id');
@@ -1152,13 +1157,21 @@ class BookController extends Controller
                     'user_id' => $user->id,
                     'book_id' => $bookId,
                     'purchase_price' => $books->find($bookId)->actual_price ?? 0,
-                    'currency' => 'USD',
-                    'status' => 'completed',
+                    'currency' => $currency,
+                    'status' => 'pending',
                 ]);
             }
 
             // Add books to user's purchased books relationship
             $user->purchasedBooks()->syncWithoutDetaching($bookIds);
+
+            return $this->success([
+                'books' => $bookIds,
+                'currency' => $currency,
+                'provider' => $provider,
+                'total_amount' => $books->sum('actual_price'),
+                'status' => 'pending'
+            ], 'Book purchase initiated successfully. Use the provided provider for payment processing.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
@@ -1208,6 +1221,45 @@ class BookController extends Controller
                 $e->getMessage()
             );
         }
+    }
+
+    /**
+     * Determine the appropriate payment provider based on currency
+     *
+     * @param string $currency
+     * @return string
+     */
+    private function getPaymentProvider(string $currency): string
+    {
+        $currency = strtoupper($currency);
+
+        // Provider currency mapping
+        $stripeSupported = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+        $paystackSupported = ['NGN', 'USD', 'GHS', 'KES', 'ZAR'];
+
+        // African currencies prioritize Paystack
+        $africanCurrencies = ['NGN', 'GHS', 'KES', 'ZAR'];
+        if (in_array($currency, $africanCurrencies)) {
+            return 'paystack';
+        }
+
+        // For USD, prefer Stripe for global use
+        if ($currency === 'USD') {
+            return 'stripe';
+        }
+
+        // Check Stripe support first
+        if (in_array($currency, $stripeSupported)) {
+            return 'stripe';
+        }
+
+        // Check Paystack support
+        if (in_array($currency, $paystackSupported)) {
+            return 'paystack';
+        }
+
+        // Default to Stripe for unsupported currencies
+        return 'stripe';
     }
 }
 

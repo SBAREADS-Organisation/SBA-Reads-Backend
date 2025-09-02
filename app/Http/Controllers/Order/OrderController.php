@@ -139,6 +139,7 @@ class OrderController extends Controller
                 'books.*.book_id' => 'required|exists:books,id',
                 'books.*.quantity' => 'required|integer|min:1',
                 'delivery_address' => 'required|string|max:500',
+                'currency' => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
             ]);
 
             if ($validator->fails()) {
