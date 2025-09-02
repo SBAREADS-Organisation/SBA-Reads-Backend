@@ -62,15 +62,24 @@ class OrderService
 
             $order->update(['total_amount' => $total]);
 
+            // Get currency from payload, default to USD if not provided
+            $currency = isset($payload->currency) ? strtoupper($payload->currency) : 'USD';
+
+            // Determine the appropriate payment provider based on currency
+            $provider = $this->getPaymentProvider($currency);
+
             $transaction = $this->paymentService->createPayment([
                 'amount' => $total,
-                'currency' => $book->currency ?? $book->currency[0] ?? 'usd',
+                'currency' => $currency,
                 'description' => 'Book order',
                 'purpose' => 'order',
                 'purpose_id' => $order->id,
+                'payment_provider' => $provider,
                 'meta_data' => [
                     'order_id' => $order->id,
                     'user_id' => $user->id,
+                    'provider' => $provider,
+                    'currency' => $currency,
                 ],
             ], $user);
 
@@ -88,7 +97,12 @@ class OrderService
             DB::commit();
 
             return $this->success(
-                ['order' => $order, 'transaction' => $transaction],
+                [
+                    'order' => $order,
+                    'transaction' => $transaction,
+                    'provider' => $provider,
+                    'currency' => $currency
+                ],
                 'Order created successfully. Please proceed to payment.'
             );
         } catch (\Exception $e) {
@@ -113,6 +127,45 @@ class OrderService
         ]);
 
         return $address->id;
+    }
+
+    /**
+     * Determine the appropriate payment provider based on currency
+     *
+     * @param string $currency
+     * @return string
+     */
+    private function getPaymentProvider(string $currency): string
+    {
+        $currency = strtoupper($currency);
+
+        // Provider currency mapping
+        $stripeSupported = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
+        $paystackSupported = ['NGN', 'USD', 'GHS', 'KES', 'ZAR'];
+
+        // African currencies prioritize Paystack
+        $africanCurrencies = ['NGN', 'GHS', 'KES', 'ZAR'];
+        if (in_array($currency, $africanCurrencies)) {
+            return 'paystack';
+        }
+
+        // For USD, prefer Stripe for global use
+        if ($currency === 'USD') {
+            return 'stripe';
+        }
+
+        // Check Stripe support first
+        if (in_array($currency, $stripeSupported)) {
+            return 'stripe';
+        }
+
+        // Check Paystack support
+        if (in_array($currency, $paystackSupported)) {
+            return 'paystack';
+        }
+
+        // Default to Stripe for unsupported currencies
+        return 'stripe';
     }
 
     public function trackOrder($user, $tracking_number)
