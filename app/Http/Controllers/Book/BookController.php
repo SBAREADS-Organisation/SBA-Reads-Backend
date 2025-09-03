@@ -1222,7 +1222,6 @@ class BookController extends Controller
                 'status' => 'pending',
                 // Payment processing fields
                 'payment_intent_id' => $transaction->payment_intent_id,
-                'client_secret' => $transaction->payment_client_secret,
                 'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : (
                     isset($transaction->meta_data['paystack_response']['data']['authorization_url']) 
                         ? $transaction->meta_data['paystack_response']['data']['authorization_url'] 
