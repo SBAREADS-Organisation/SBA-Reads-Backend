@@ -33,10 +33,10 @@ class PaymentService
             $data = json_decode(json_encode($data));
             $str = Str::of($data->purpose)->take(3);
             $reference = uniqid("$str".'_');
-            
+
             // Determine payment provider based on currency
             $provider = $this->getPaymentProvider($data->currency ?? 'USD');
-            
+
             if ($provider === 'paystack') {
                 return $this->createPaystackPayment($data, $user, $reference);
             } else {
@@ -46,7 +46,7 @@ class PaymentService
             return $this->error('An error occurred while creating the payment intent.', 500, $th->getMessage(), $th);
         }
     }
-    
+
     protected function createStripePayment($data, $user, $reference): JsonResponse|Transaction
     {
         $paymentIntentPayload = [
@@ -96,7 +96,7 @@ class PaymentService
             );
         }
     }
-    
+
     protected function createPaystackPayment($data, $user, $reference): JsonResponse|Transaction
     {
         // For Paystack, we need to handle the payment differently
@@ -116,7 +116,7 @@ class PaymentService
             'type' => 'purchase',
             'direction' => 'debit',
         ]);
-        
+
         // Initialize Paystack payment
         $paystackResponse = $this->paystack->initializePayment([
             'amount' => $data->amount,
@@ -126,7 +126,7 @@ class PaymentService
             'purpose_id' => $data->purpose_id,
             'description' => $data->description ?? null,
         ], $user);
-        
+
         if (!$paystackResponse['status']) {
             // Delete the transaction if Paystack initialization failed
             $transaction->delete();
@@ -136,7 +136,7 @@ class PaymentService
                 $paystackResponse['message'] ?? 'Unknown Paystack error'
             );
         }
-        
+
         // Update transaction with Paystack response data
         $transaction->update([
             'payment_intent_id' => $paystackResponse['data']['reference'] ?? $reference,
@@ -146,23 +146,23 @@ class PaymentService
                 ['paystack_response' => $paystackResponse]
             )),
         ]);
-        
+
         return $transaction;
     }
-    
+
     /**
      * Determine the appropriate payment provider based on currency
      */
     protected function getPaymentProvider(string $currency): string
     {
         $currency = strtoupper($currency);
-        
+
         // African currencies prioritize Paystack
         $africanCurrencies = ['NGN', 'GHS', 'KES', 'ZAR'];
         if (in_array($currency, $africanCurrencies)) {
             return 'paystack';
         }
-        
+
         // Default to Stripe for other currencies
         return 'stripe';
     }

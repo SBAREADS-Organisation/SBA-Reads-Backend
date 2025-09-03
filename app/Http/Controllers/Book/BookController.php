@@ -1188,18 +1188,47 @@ class BookController extends Controller
                 ]);
             }
 
-            // Add books to user's purchased books relationship
-            $user->purchasedBooks()->syncWithoutDetaching($bookIds);
+            // Create payment transaction (books will be added to library after successful payment confirmation via webhook)
+            $transaction = app(\App\Services\Payments\PaymentService::class)->createPayment([
+                'amount' => $totalAmount,
+                'currency' => $currency,
+                'description' => 'Digital books purchase',
+                'purpose' => 'digital_book_purchase', 
+                'purpose_id' => $purchase->id,
+                'meta_data' => [
+                    'book_ids' => $bookIds,
+                    'user_id' => $user->id,
+                    'purchase_id' => $purchase->id,
+                    'provider' => $provider,
+                ],
+            ], $user);
+
+            if ($transaction instanceof \Illuminate\Http\JsonResponse) {
+                $responseData = $transaction->getData(true);
+                return $this->error(
+                    'An error occurred while initiating the books purchase process.',
+                    $transaction->getStatusCode(),
+                    $responseData['error'] ?? 'Unknown error from payment service.'
+                );
+            }
 
             return $this->success([
-                'purchase_id' => $purchase->id,
-                'books' => $bookIds,
+                'purchase' => $purchase->load('items.book'),
+                'transaction' => $transaction,
                 'currency' => $currency,
                 'provider' => $provider,
                 'total_amount' => $totalAmount,
                 'platform_fee_amount' => $platformFeeAmount,
-                'status' => 'pending'
-            ], 'Book purchase initiated successfully. Use the provided provider for payment processing.');
+                'status' => 'pending',
+                // Payment processing fields
+                'payment_intent_id' => $transaction->payment_intent_id,
+                'client_secret' => $transaction->payment_client_secret,
+                'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : (
+                    isset($transaction->meta_data['paystack_response']['data']['authorization_url']) 
+                        ? $transaction->meta_data['paystack_response']['data']['authorization_url'] 
+                        : null
+                ),
+            ], 'Book purchase initiated successfully. Complete payment to access books.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
