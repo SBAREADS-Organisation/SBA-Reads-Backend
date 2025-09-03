@@ -74,15 +74,19 @@ class PaystackWebhookService
             );
 
             // Update related transaction if exists
-            if ($paystackTransaction->transaction_id) {
-                $transaction = Transaction::find($paystackTransaction->transaction_id);
-                if ($transaction) {
-                    $transaction->update([
-                        'status' => 'completed',
-                        'payment_method' => 'paystack',
-                        'transaction_reference' => $data['reference'],
-                    ]);
-                }
+            $transaction = Transaction::where('reference', 'LIKE', '%' . $data['reference'] . '%')
+                ->orWhere('payment_intent_id', $data['reference'])
+                ->first();
+                
+            if ($transaction) {
+                $transaction->update([
+                    'status' => 'succeeded',
+                    'payment_method' => 'paystack',
+                    'transaction_reference' => $data['reference'],
+                ]);
+                
+                // Process the successful transaction based on purpose
+                $this->processSuccessfulTransaction($transaction, $data);
             }
 
             // Create payment audit
@@ -194,5 +198,103 @@ class PaystackWebhookService
         $computedSignature = hash_hmac('sha512', $payload, $secret);
 
         return hash_equals($computedSignature, $signature);
+    }
+    
+    /**
+     * Process successful transaction based on its purpose
+     */
+    protected function processSuccessfulTransaction(Transaction $transaction, array $data): void
+    {
+        try {
+            $user = $transaction->user;
+            
+            switch ($transaction->purpose_type) {
+                case 'digital_book_purchase':
+                    $this->processSuccessfulDigitalBookPurchase($transaction, $user);
+                    break;
+                    
+                case 'order':
+                    $this->processSuccessfulOrder($transaction, $user);
+                    break;
+                    
+                default:
+                    Log::info("Unhandled transaction purpose: {$transaction->purpose_type}");
+                    break;
+            }
+        } catch (\Exception $e) {
+            Log::error('Error processing successful Paystack transaction: ' . $e->getMessage());
+        }
+    }
+    
+    /**
+     * Process successful digital book purchase (mirrors Stripe webhook functionality)
+     */
+    protected function processSuccessfulDigitalBookPurchase(Transaction $transaction, $user): void
+    {
+        try {
+            $purchaseId = $transaction->purpose_id;
+            $purchase = \App\Models\DigitalBookPurchase::with(['items.book.author'])
+                ->where('user_id', $user->id)
+                ->findOrFail($purchaseId);
+
+            // Only update if payment actually succeeded
+            if ($purchase->status !== 'paid') {
+                $purchase->update(['status' => 'paid']);
+            }
+
+            foreach ($purchase->items as $item) {
+                // Add to user's purchased books using dedicated service
+                app(\App\Services\Book\BookPurchaseService::class)
+                    ->addBooksToUserLibrary($user, [$item->book_id]);
+
+                // Update author wallet (only after successful payment)
+                $author = $item->book->author;
+                if ($author) {
+                    $author->increment('wallet_balance', $item->author_payout_amount);
+
+                    // Create payout transaction record
+                    \App\Models\Transaction::create([
+                        'id' => \Illuminate\Support\Str::uuid(),
+                        'user_id' => $author->id,
+                        'reference' => uniqid('pay_immediate_'),
+                        'status' => 'succeeded',
+                        'currency' => $purchase->currency ?? 'NGN',
+                        'amount' => $item->author_payout_amount,
+                        'payment_provider' => 'app',
+                        'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
+                        'type' => 'payout',
+                        'direction' => 'credit',
+                        'purpose_type' => 'digital_book_purchase',
+                        'purpose_id' => $purchase->id,
+                    ]);
+                }
+
+                // Update analytics
+                $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                    ['book_id' => $item->book_id],
+                    ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                );
+                $bookAnalytics->increment('purchases', 1);
+                $bookAnalytics->save();
+            }
+        } catch (\Exception $e) {
+            Log::error('Error processing successful digital book purchase: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+    
+    /**
+     * Process successful order (placeholder for future implementation)
+     */
+    protected function processSuccessfulOrder(Transaction $transaction, $user): void
+    {
+        try {
+            // TODO: Implement order processing for Paystack
+            // This would be similar to the Stripe webhook order processing
+            Log::info("Order processing for Paystack not yet implemented. Transaction: {$transaction->id}");
+        } catch (\Exception $e) {
+            Log::error('Error processing successful order: ' . $e->getMessage());
+            throw $e;
+        }
     }
 }
