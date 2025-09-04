@@ -77,14 +77,14 @@ class PaystackWebhookService
             $transaction = Transaction::where('reference', 'LIKE', '%' . $data['reference'] . '%')
                 ->orWhere('payment_intent_id', $data['reference'])
                 ->first();
-                
+
             if ($transaction) {
                 $transaction->update([
                     'status' => 'succeeded',
                     'payment_method' => 'paystack',
                     'transaction_reference' => $data['reference'],
                 ]);
-                
+
                 // Process the successful transaction based on purpose
                 $this->processSuccessfulTransaction($transaction, $data);
             }
@@ -117,9 +117,29 @@ class PaystackWebhookService
     protected function handleTransferSuccess(array $data): bool
     {
         return DB::transaction(function () use ($data) {
-            // Update withdrawal or payout transaction
-            // Implementation depends on your withdrawal system
             Log::info('Paystack transfer success handled', $data);
+
+            // Find and update related withdrawal transaction
+            $transferReference = $data['reference'] ?? null;
+            if ($transferReference) {
+                $withdrawal = \App\Models\Withdrawal::where('reference', $transferReference)
+                    ->orWhere('provider_reference', $transferReference)
+                    ->first();
+
+                if ($withdrawal) {
+                    $withdrawal->update([
+                        'status' => 'completed',
+                        'completed_at' => now(),
+                        'provider_response' => json_encode($data)
+                    ]);
+
+                    // Update related transaction if exists
+                    $transaction = \App\Models\Transaction::where('reference', $withdrawal->reference)->first();
+                    if ($transaction) {
+                        $transaction->update(['status' => 'succeeded']);
+                    }
+                }
+            }
 
             WebhookEvent::create([
                 'service' => 'paystack',
@@ -140,6 +160,37 @@ class PaystackWebhookService
         return DB::transaction(function () use ($data) {
             Log::warning('Paystack transfer failed', $data);
 
+            // Find and update related withdrawal transaction
+            $transferReference = $data['reference'] ?? null;
+            if ($transferReference) {
+                $withdrawal = \App\Models\Withdrawal::where('reference', $transferReference)
+                    ->orWhere('provider_reference', $transferReference)
+                    ->first();
+
+                if ($withdrawal) {
+                    $withdrawal->update([
+                        'status' => 'failed',
+                        'failed_at' => now(),
+                        'failure_reason' => $data['message'] ?? 'Transfer failed',
+                        'provider_response' => json_encode($data)
+                    ]);
+
+                    // Update related transaction if exists
+                    $transaction = \App\Models\Transaction::where('reference', $withdrawal->reference)->first();
+                    if ($transaction) {
+                        $transaction->update(['status' => 'failed']);
+                    }
+
+                    // Optionally refund user wallet if this was a withdrawal
+                    if ($withdrawal->user_id) {
+                        $user = \App\Models\User::find($withdrawal->user_id);
+                        if ($user) {
+                            $user->increment('wallet_balance', $withdrawal->amount);
+                        }
+                    }
+                }
+            }
+
             WebhookEvent::create([
                 'service' => 'paystack',
                 'event_type' => 'transfer.failed',
@@ -159,6 +210,29 @@ class PaystackWebhookService
         return DB::transaction(function () use ($data) {
             Log::info('Paystack subscription created', $data);
 
+            $subscriptionCode = $data['subscription_code'] ?? null;
+            $customerEmail = $data['customer']['email'] ?? null;
+
+            if ($subscriptionCode && $customerEmail) {
+                // Find user by email
+                $user = \App\Models\User::where('email', $customerEmail)->first();
+
+                if ($user) {
+                    // Update or create user subscription
+                    $userSubscription = \App\Models\UserSubscription::where('user_id', $user->id)
+                        ->where('provider', 'paystack')
+                        ->first();
+
+                    if ($userSubscription) {
+                        $userSubscription->update([
+                            'status' => 'active',
+                            'provider_subscription_id' => $subscriptionCode,
+                            'provider_response' => json_encode($data)
+                        ]);
+                    }
+                }
+            }
+
             WebhookEvent::create([
                 'service' => 'paystack',
                 'event_type' => 'subscription.create',
@@ -177,6 +251,23 @@ class PaystackWebhookService
     {
         return DB::transaction(function () use ($data) {
             Log::info('Paystack subscription disabled', $data);
+
+            $subscriptionCode = $data['subscription_code'] ?? null;
+
+            if ($subscriptionCode) {
+                // Find and disable the subscription
+                $userSubscription = \App\Models\UserSubscription::where('provider_subscription_id', $subscriptionCode)
+                    ->where('provider', 'paystack')
+                    ->first();
+
+                if ($userSubscription) {
+                    $userSubscription->update([
+                        'status' => 'cancelled',
+                        'cancelled_at' => now(),
+                        'provider_response' => json_encode($data)
+                    ]);
+                }
+            }
 
             WebhookEvent::create([
                 'service' => 'paystack',
@@ -199,7 +290,7 @@ class PaystackWebhookService
 
         return hash_equals($computedSignature, $signature);
     }
-    
+
     /**
      * Process successful transaction based on its purpose
      */
@@ -207,16 +298,16 @@ class PaystackWebhookService
     {
         try {
             $user = $transaction->user;
-            
+
             switch ($transaction->purpose_type) {
                 case 'digital_book_purchase':
                     $this->processSuccessfulDigitalBookPurchase($transaction, $user);
                     break;
-                    
+
                 case 'order':
                     $this->processSuccessfulOrder($transaction, $user);
                     break;
-                    
+
                 default:
                     Log::info("Unhandled transaction purpose: {$transaction->purpose_type}");
                     break;
@@ -225,7 +316,7 @@ class PaystackWebhookService
             Log::error('Error processing successful Paystack transaction: ' . $e->getMessage());
         }
     }
-    
+
     /**
      * Process successful digital book purchase (mirrors Stripe webhook functionality)
      */
@@ -282,16 +373,66 @@ class PaystackWebhookService
             throw $e;
         }
     }
-    
+
     /**
-     * Process successful order (placeholder for future implementation)
+     * Process successful order (mirrors Stripe webhook functionality)
      */
     protected function processSuccessfulOrder(Transaction $transaction, $user): void
     {
         try {
-            // TODO: Implement order processing for Paystack
-            // This would be similar to the Stripe webhook order processing
-            Log::info("Order processing for Paystack not yet implemented. Transaction: {$transaction->id}");
+            $orderId = $transaction->purpose_id;
+            if (!is_numeric($orderId)) {
+                throw new \InvalidArgumentException('Purpose ID is missing or invalid for book order.');
+            }
+            $orderId = (int)$orderId;
+            $order = $user->orders()->with('items.book.author')->findOrFail($orderId);
+
+            if ($order->status === 'pending') {
+                $order->update(['status' => 'paid']);
+
+                foreach ($order->items as $item) {
+                    // Update analytics
+                    $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                        ['book_id' => $item->book_id],
+                        ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                    );
+                    $bookAnalytics->increment('purchases', (int) $item->quantity);
+                    $bookAnalytics->save();
+
+                    // Immediately update author wallet balance
+                    $author = $item->book->author;
+                    if ($author && isset($item->author_payout_amount)) {
+                        $authorPayoutAmount = $item->author_payout_amount * $item->quantity;
+                        $author->increment('wallet_balance', $authorPayoutAmount);
+
+                        // Create immediate payout transaction record
+                        \App\Models\Transaction::create([
+                            'id' => \Illuminate\Support\Str::uuid(),
+                            'user_id' => $author->id,
+                            'reference' => uniqid('pay_immediate_'),
+                            'status' => 'succeeded',
+                            'currency' => $order->currency ?? 'NGN',
+                            'amount' => $authorPayoutAmount,
+                            'payment_provider' => 'app',
+                            'description' => "Immediate author payout for Order ID: {$order->id}",
+                            'type' => 'payout',
+                            'direction' => 'credit',
+                            'purpose_type' => 'order',
+                            'purpose_id' => $order->id,
+                        ]);
+                    }
+                }
+            }
+
+            // Schedule delayed payout if needed
+            if ($order->payout_status === 'pending') {
+                $delayDays = 7;
+                \App\Jobs\ProcessAuthorPayout::dispatch(purpose: 'order', purposeId: $order->id)
+                    ->delay(now()->addDays($delayDays));
+            }
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            Log::error('Order record not found: ' . $e->getMessage());
+            throw new \Exception('Order record not found: ' . $e->getMessage(), 404, $e);
         } catch (\Exception $e) {
             Log::error('Error processing successful order: ' . $e->getMessage());
             throw $e;
