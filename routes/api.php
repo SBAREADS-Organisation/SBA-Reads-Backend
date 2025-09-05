@@ -131,8 +131,8 @@ Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-we
 // Paystack Routes
 Route::prefix('paystack')->group(function () {
     Route::post('/payment/initialize', [\App\Http\Controllers\PaystackPaymentController::class, 'initializePayment']);
-    Route::post('/webhook', [\App\Http\Controllers\PaystackPaymentController::class, 'handleWebhook']);
-    Route::get('/callback', [\App\Http\Controllers\PaystackPaymentController::class, 'handleCallback']);
+    Route::post('/webhook', [\App\Http\Controllers\PaystackPaymentController::class, 'handleWebhook'])->name('paystack.webhook');
+    Route::get('/callback', [\App\Http\Controllers\PaystackPaymentController::class, 'handleCallback'])->name('paystack.callback');
 });
 
 // Book Routes

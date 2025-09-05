@@ -71,7 +71,7 @@ class PaystackPaymentController extends Controller
                 ], $user);
 
                 if (!$paystackResponse['status']) {
-                    throw new \Exception($paystackResponse['message'] ?? 'Payment initialization failed');
+                    throw new \Exception($paystackResponse['message'] ?? 'Payment initialization failed (in initializePayment try)');
                 }
 
                 return response()->json([
@@ -91,7 +91,7 @@ class PaystackPaymentController extends Controller
             Log::error('Paystack payment initialization failed: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Payment initialization failed: ' . $e->getMessage()
+                'message' => 'Payment initialization failed (in initializePayment catch): ' . $e->getMessage()
             ], 500);
         }
     }

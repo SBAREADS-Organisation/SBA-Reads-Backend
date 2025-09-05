@@ -53,8 +53,8 @@ class UserResource extends JsonResource
         $publicUrl = is_string($rawUrl) ? $rawUrl : null;
 
         return [
-            'public_id' => $publicId,
-            'public_url' => $publicUrl,
+            'public_id' => (int) $publicId,
+            'public_url' => (string) $publicUrl,
         ];
     }
 }

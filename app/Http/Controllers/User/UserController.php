@@ -438,7 +438,7 @@ class UserController extends Controller
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 // 'profile_picture' => 'nullable|array',
-                'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+                'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
                 // 'profile_picture.public_id' => 'nullable|string|max:255',
             ];
 

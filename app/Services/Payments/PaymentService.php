@@ -43,7 +43,7 @@ class PaymentService
                 return $this->createStripePayment($data, $user, $reference);
             }
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while creating the payment intent.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while creating the payment intent: ' . $th->getMessage(), 500, $th->getMessage(), $th);
         }
     }
 
@@ -99,6 +99,7 @@ class PaymentService
 
     protected function createPaystackPayment($data, $user, $reference): JsonResponse|Transaction
     {
+        try{
         // For Paystack, we need to handle the payment differently
         // Create transaction record first, then initialize payment
         $transaction = Transaction::create([
@@ -119,7 +120,7 @@ class PaymentService
 
         // Initialize Paystack payment
         $paystackResponse = $this->paystack->initializePayment([
-            'amount' => $data->amount,
+            'amount' => (float) $data->amount,
             'currency' => $data->currency ?? 'NGN',
             'reference' => $reference,
             'purpose' => $data->purpose,
@@ -131,24 +132,28 @@ class PaymentService
             // Delete the transaction if Paystack initialization failed
             $transaction->delete();
             return $this->error(
-                'Payment initialization failed',
+                'Payment initialization failed (createPaystackPayment): ' . $paystackResponse['message'],
                 500,
                 $paystackResponse['message'] ?? 'Unknown Paystack error'
             );
         }
 
+       
         // Update transaction with Paystack response data
         $transaction->update([
             'payment_intent_id' => $paystackResponse['data']['reference'] ?? $reference,
             'payment_client_secret' => $paystackResponse['data']['authorization_url'] ?? null,
             'meta_data' => json_encode(array_merge(
-                $data->meta_data ?? [],
+                (array) ($data->meta_data ?? []),
                 ['paystack_response' => $paystackResponse]
             )),
         ]);
 
         return $transaction;
+    } catch (\Throwable $th) {
+        return $this->error('An error occurred while creating the Paystack payment: ' . $th->getMessage(), 500, $th->getMessage(), $th);
     }
+}
 
     /**
      * Determine the appropriate payment provider based on currency

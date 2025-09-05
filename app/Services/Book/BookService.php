@@ -99,8 +99,8 @@ class BookService
         if (isset($data['cover_image']) && $data['cover_image'] instanceof UploadedFile) {
             $upload = $this->cloudinaryMediaService->upload($data['cover_image'], 'book_cover');
             $data['cover_image'] = [
-                'public_url' => $upload['url'],
-                'public_id' => $upload['id'],
+                'public_url' => (string) $upload['url'],
+                'public_id' => (int) $upload['id'],
             ];
 
             $mediaUploadIds[] = $upload['id'];
@@ -113,8 +113,8 @@ class BookService
                 if ($file instanceof UploadedFile) {
                     $upload = $this->cloudinaryMediaService->upload($file, 'book_content');
                     $uploadedFiles[] = [
-                        'public_url' => $upload['url'],
-                        'public_id' => $upload['id'],
+                        'public_url' => (string) $upload['url'],
+                        'public_id' => (int) $upload['id'],
                     ];
 
                     $mediaUploadIds[] = $upload['id'];
