@@ -28,7 +28,7 @@ class PaystackService
     {
         try{
         $payload = [
-            'amount' => $data['amount'] * 100, // Convert to kobo
+            'amount' => (int) $data['amount'] * 100, // Convert to kobo
             'email' => $user->email,
             'currency' => $data['currency'] ?? 'NGN',
             'reference' => $data['reference'] ?? uniqid('paystack_'),
