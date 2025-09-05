@@ -86,9 +86,8 @@ class OrderService
             if ($transaction instanceof JsonResponse) {
                 $responseData = $transaction->getData(true);
                 return $this->error(
-                    'An error occurred while initiating the books order process.',
-                    $transaction->getStatusCode(),
-                    $responseData['error'] ?? 'Unknown error from payment service.'
+                    'An error occurred while initiating the books order process.' . ($responseData['error'] ?? 'Unknown error from payment service.'),
+                    $transaction->getStatusCode()
                 );
             }
 
@@ -141,7 +140,7 @@ class OrderService
 
         // Provider currency mapping
         $stripeSupported = ['USD', 'EUR', 'GBP', 'CAD', 'AUD'];
-        $paystackSupported = ['NGN', 'USD', 'GHS', 'KES', 'ZAR'];
+        $paystackSupported = ['NGN', 'GHS', 'KES', 'ZAR'];
 
         // African currencies prioritize Paystack
         $africanCurrencies = ['NGN', 'GHS', 'KES', 'ZAR'];
