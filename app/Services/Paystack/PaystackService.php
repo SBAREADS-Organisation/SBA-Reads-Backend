@@ -26,6 +26,7 @@ class PaystackService
      */
     public function initializePayment(array $data, User $user): array
     {
+        try{
         $payload = [
             'amount' => $data['amount'] * 100, // Convert to kobo
             'email' => $user->email,
@@ -43,6 +44,12 @@ class PaystackService
             ->post($this->baseUrl . '/transaction/initialize', $payload);
 
         return $response->json();
+        } catch (\Exception $e) {
+            return [
+                'status' => false,
+                'message' => 'Error initializing payment: ' . $e->getMessage()
+            ];
+        }
     }
 
     /**
