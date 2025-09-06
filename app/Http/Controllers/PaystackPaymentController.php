@@ -44,9 +44,14 @@ class PaystackPaymentController extends Controller
         try {
             return DB::transaction(function () use ($user, $amount, $currency, $request) {
                 // Calculate naira equivalent if currency is USD
-                $nairaAmount = $currency === 'USD'
-                    ? $this->currencyService->convert($amount, 'USD', 'NGN')
-                    : $amount;
+                $nairaAmount = $amount;
+                if ($currency === 'USD') {
+                    try {
+                        $nairaAmount = $this->currencyService->convert($amount, 'USD', 'NGN');
+                    } catch (\Exception $e) {
+                        throw new \Exception('Unable to fetch current exchange rates. Please try again later.');
+                    }
+                }
 
                 // Create transaction record
                 $transaction = Transaction::create([
