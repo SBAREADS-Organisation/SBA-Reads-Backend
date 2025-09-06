@@ -138,7 +138,6 @@ class PaymentService
             );
         }
 
-       
         // Update transaction with Paystack response data
         $transaction->update([
             'payment_intent_id' => $paystackResponse['data']['reference'] ?? $reference,

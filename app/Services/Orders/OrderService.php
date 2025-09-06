@@ -100,7 +100,9 @@ class OrderService
                     'order' => $order,
                     'transaction' => $transaction,
                     'provider' => $provider,
-                    'currency' => $currency
+                    'currency' => $currency,
+                    // Payment processing fields
+                    'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : null
                 ],
                 'Order created successfully. Please proceed to payment.'
             );

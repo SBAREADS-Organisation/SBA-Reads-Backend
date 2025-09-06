@@ -167,8 +167,14 @@ class OrderController extends Controller
             }
 
             if (in_array($order->status, ['pending', 'processing'])) {
-                $paymentIntent = $this->stripe->retrievePaymentIntent($order->transaction->payment_intent_id);
-                $order->client_secret = $paymentIntent->client_secret ?? null;
+                if ($order->transaction->payment_provider === 'paystack') {
+                    // For Paystack, the authorization URL is stored in payment_client_secret
+                    $order->authorization_url = $order->transaction->payment_client_secret;
+                } else {
+                    // For Stripe, retrieve the client secret
+                    $paymentIntent = $this->stripe->retrievePaymentIntent($order->transaction->payment_intent_id);
+                    $order->client_secret = $paymentIntent->client_secret ?? null;
+                }
             }
 
             return $this->success($order, 'Order detail');

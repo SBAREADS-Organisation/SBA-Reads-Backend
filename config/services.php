@@ -72,7 +72,7 @@ return [
     ],
 
     'currency' => [
-        'api_key' => env('CURRENCY_API_KEY'),
-        'base_url' => env('CURRENCY_BASE_URL', 'https://api.exchangerate-api.com/v4'),
+        'api_key' => env('CURRENCY_API_KEY', '0892ece648e6384b851037a3'),
+        'base_url' => env('CURRENCY_BASE_URL', 'https://v6.exchangerate-api.com/v6'),
     ],
 ];

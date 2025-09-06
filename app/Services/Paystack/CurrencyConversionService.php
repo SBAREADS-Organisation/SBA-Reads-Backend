@@ -14,7 +14,7 @@ class CurrencyConversionService
     public function __construct()
     {
         $this->apiKey = config('services.currency.api_key');
-        $this->baseUrl = config('services.currency.base_url', 'https://api.exchangerate-api.com/v4');
+        $this->baseUrl = config('services.currency.base_url', 'https://v6.exchangerate-api.com/v6');
     }
 
     /**
@@ -32,51 +32,81 @@ class CurrencyConversionService
     }
 
     /**
-     * Get exchange rate between two currencies
+     * Get exchange rate between two currencies with retry logic
      */
     public function getExchangeRate(string $fromCurrency, string $toCurrency): float
     {
         $cacheKey = "exchange_rate_{$fromCurrency}_{$toCurrency}";
 
         return Cache::remember($cacheKey, 3600, function () use ($fromCurrency, $toCurrency) {
-            try {
-                $response = Http::get("{$this->baseUrl}/latest/{$fromCurrency}");
+            for ($attempt = 1; $attempt <= 3; $attempt++) {
+                try {
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $data['rates'][$toCurrency] ?? 1;
+                    $url = "{$this->baseUrl}/{$this->apiKey}/latest/{$fromCurrency}";
+
+                    // Use SSL verification in production, skip in local development
+                    $http = app()->environment('local') ? Http::withoutVerifying() : Http::asJson();
+                    $response = $http->timeout(10)->get($url);
+
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (isset($data['result']) && $data['result'] === 'success') {
+                            $rate = $data['conversion_rates'][$toCurrency] ?? null;
+                            if ($rate !== null) {
+                                return $rate;
+                            }
+                        }
+                        $rate = $data['rates'][$toCurrency] ?? null;
+                        if ($rate !== null) {
+                            return $rate;
+                        }
+
+                    } else {
+                    }
+                } catch (\Exception $e) {
                 }
 
-                // Fallback to 1:1 if API fails
-                return 1;
-            } catch (\Exception $e) {
-                Log::error('Currency conversion error: ' . $e->getMessage());
-                return 1;
+                if ($attempt < 3) {
+                    sleep(1);
+                }
             }
+            throw new \Exception("Failed to get exchange rate from API after 3 attempts");
         });
     }
 
     /**
-     * Get all available rates for a base currency
+     * Get all available rates for a base currency with retry logic
      */
     public function getAllRates(string $baseCurrency = 'USD'): array
     {
         $cacheKey = "all_rates_{$baseCurrency}";
 
         return Cache::remember($cacheKey, 3600, function () use ($baseCurrency) {
-            try {
-                $response = Http::get("{$this->baseUrl}/latest/{$baseCurrency}");
+            // Try up to 3 times to get all rates
+            for ($attempt = 1; $attempt <= 3; $attempt++) {
+                try {
+                    $url = "{$this->baseUrl}/{$this->apiKey}/latest/{$baseCurrency}";
 
-                if ($response->successful()) {
-                    $data = $response->json();
-                    return $data['rates'] ?? [];
+                    // Use SSL verification in production, skip in local development
+                    $http = app()->environment('local') ? Http::withoutVerifying() : Http::asJson();
+                    $response = $http->timeout(10)->get($url);
+
+                    if ($response->successful()) {
+                        $data = $response->json();
+                        if (isset($data['result']) && $data['result'] === 'success') {
+                            return $data['conversion_rates'] ?? [];
+                        }
+                        return $data['rates'] ?? [];
+                    } else {
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Currency rates error on attempt $attempt: " . $e->getMessage());
                 }
-
-                return [];
-            } catch (\Exception $e) {
-                Log::error('Currency rates error: ' . $e->getMessage());
-                return [];
+                if ($attempt < 3) {
+                    sleep(1);
+                }
             }
+            return [];
         });
     }
 
