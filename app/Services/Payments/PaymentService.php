@@ -83,7 +83,7 @@ class PaymentService
                 'description' => $data->description ?? null,
                 'purpose_type' => $data->purpose,
                 'purpose_id' => $data->purpose_id ?? null,
-                'meta_data' => json_encode($data->meta_data ?? []),
+                'meta_data' => $data->meta_data ?? [], // Store as array, not JSON string
                 'status' => 'pending',
                 'type' => 'purchase',
                 'direction' => 'debit',
@@ -112,7 +112,7 @@ class PaymentService
             'description' => $data->description ?? null,
             'purpose_type' => $data->purpose,
             'purpose_id' => $data->purpose_id ?? null,
-            'meta_data' => json_encode($data->meta_data ?? []),
+            'meta_data' => $data->meta_data ?? [], // Store as array, not JSON string
             'status' => 'pending',
             'type' => 'purchase',
             'direction' => 'debit',
@@ -142,10 +142,10 @@ class PaymentService
         $transaction->update([
             'payment_intent_id' => $paystackResponse['data']['reference'] ?? $reference,
             'payment_client_secret' => $paystackResponse['data']['authorization_url'] ?? null,
-            'meta_data' => json_encode(array_merge(
+            'meta_data' => array_merge(
                 (array) ($data->meta_data ?? []),
                 ['paystack_response' => $paystackResponse]
-            )),
+            ), // Store as array, not JSON string
         ]);
 
         return $transaction;
@@ -243,7 +243,7 @@ class PaymentService
                 'description' => $data['description'] ?? null,
                 'purpose_type' => $data['purpose'],
                 'purpose_id' => $data['purpose_id'] ?? null,
-                'meta_data' => json_encode($data['meta_data'] ?? []),
+                'meta_data' => $data['meta_data'] ?? [], // Store as array, not JSON string
                 'status' => $data['status'] ?? 'pending',
                 'purchased_by' => $data['purchased_by'] ?? null,
                 'payment_intent_id' => $data['payment_intent_id'] ?? null,

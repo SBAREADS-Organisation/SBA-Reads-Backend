@@ -35,14 +35,16 @@ class PaystackPaymentController extends Controller
             'purpose' => 'required|string',
             'purpose_id' => 'nullable|integer',
             'description' => 'nullable|string',
+            'meta_data' => 'nullable|array',
         ]);
 
         $user = auth()->user();
         $amount = $request->amount;
         $currency = strtoupper($request->currency);
+        $metaData = $request->meta_data ?? [];
 
         try {
-            return DB::transaction(function () use ($user, $amount, $currency, $request) {
+            return DB::transaction(function () use ($user, $amount, $currency, $request, $metaData) {
                 // Calculate naira equivalent if currency is USD
                 $nairaAmount = $amount;
                 if ($currency === 'USD') {
@@ -64,6 +66,7 @@ class PaystackPaymentController extends Controller
                     'purpose' => $request->purpose,
                     'purpose_id' => $request->purpose_id,
                     'description' => $request->description,
+                    'meta_data' => $metaData, // Store metadata
                 ]);
 
                 // Initialize Paystack payment
@@ -78,6 +81,14 @@ class PaystackPaymentController extends Controller
                 if (!$paystackResponse['status']) {
                     throw new \Exception($paystackResponse['message'] ?? 'Payment initialization failed (in initializePayment try)');
                 }
+
+                // Update transaction with Paystack response data
+                $transaction->update([
+                    'meta_data' => array_merge(
+                        (array) $metaData,
+                        ['paystack_response' => $paystackResponse]
+                    ), // Store as array, not JSON string
+                ]);
 
                 return response()->json([
                     'success' => true,
@@ -146,10 +157,18 @@ class PaystackPaymentController extends Controller
 
             if ($transaction) {
                 $transaction->update([
-                    'status' => 'completed',
+                    'status' => 'succeeded',
                     'transaction_reference' => $reference,
                     'paid_at' => now(),
                 ]);
+
+                // Process the successful transaction using the same logic as the webhook
+                $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
+                $webhookPayload = [
+                    'event' => 'charge.success',
+                    'data' => $verification['data']
+                ];
+                $webhookService->handleWebhook($webhookPayload);
             }
 
             return redirect()->route('payment.success')->with('success', 'Payment completed successfully');
