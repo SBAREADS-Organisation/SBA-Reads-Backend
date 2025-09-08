@@ -157,10 +157,18 @@ class PaystackPaymentController extends Controller
 
             if ($transaction) {
                 $transaction->update([
-                    'status' => 'completed',
+                    'status' => 'succeeded',
                     'transaction_reference' => $reference,
                     'paid_at' => now(),
                 ]);
+
+                // Process the successful transaction using the same logic as the webhook
+                $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
+                $webhookPayload = [
+                    'event' => 'charge.success',
+                    'data' => $verification['data']
+                ];
+                $webhookService->handleWebhook($webhookPayload);
             }
 
             return redirect()->route('payment.success')->with('success', 'Payment completed successfully');
