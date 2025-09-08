@@ -35,14 +35,16 @@ class PaystackPaymentController extends Controller
             'purpose' => 'required|string',
             'purpose_id' => 'nullable|integer',
             'description' => 'nullable|string',
+            'meta_data' => 'nullable|array',
         ]);
 
         $user = auth()->user();
         $amount = $request->amount;
         $currency = strtoupper($request->currency);
+        $metaData = $request->meta_data ?? [];
 
         try {
-            return DB::transaction(function () use ($user, $amount, $currency, $request) {
+            return DB::transaction(function () use ($user, $amount, $currency, $request, $metaData) {
                 // Calculate naira equivalent if currency is USD
                 $nairaAmount = $amount;
                 if ($currency === 'USD') {
@@ -64,6 +66,7 @@ class PaystackPaymentController extends Controller
                     'purpose' => $request->purpose,
                     'purpose_id' => $request->purpose_id,
                     'description' => $request->description,
+                    'meta_data' => $metaData, // Store metadata
                 ]);
 
                 // Initialize Paystack payment
@@ -78,6 +81,14 @@ class PaystackPaymentController extends Controller
                 if (!$paystackResponse['status']) {
                     throw new \Exception($paystackResponse['message'] ?? 'Payment initialization failed (in initializePayment try)');
                 }
+
+                // Update transaction with Paystack response data
+                $transaction->update([
+                    'meta_data' => array_merge(
+                        (array) $metaData,
+                        ['paystack_response' => $paystackResponse]
+                    ), // Store as array, not JSON string
+                ]);
 
                 return response()->json([
                     'success' => true,
