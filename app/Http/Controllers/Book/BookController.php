@@ -20,6 +20,7 @@ use App\Services\Book\BookService;
 use App\Services\Book\PdfTocExtractorService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -1391,8 +1392,7 @@ class BookController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Error retrieving purchased books: ' . $e->getMessage());
-            return $this->error('Failed to retrieve purchased books', 500);
+            return $this->error('Failed to retrieve purchased books: ' . $e->getMessage(), 500);
         }
     }
 }
