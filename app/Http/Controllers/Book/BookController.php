@@ -1317,6 +1317,82 @@ class BookController extends Controller
         // Default to Stripe for unsupported currencies
         return 'stripe';
     }
+
+    // Get my purchased books
+    public function myPurchasedBooks(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'items_per_page' => 'sometimes|integer|min:1|max:100000',
+                'search' => 'sometimes|string|max:255',
+                'sort_by' => 'sometimes|string|in:title,purchase_date,created_at',
+                'sort_dir' => 'sometimes|string|in:asc,desc',
+            ]);
+            if ($validator->fails()) {
+                return $this->error('Validation failed.', 422, $validator->errors());
+            }
+            $user = $request->user();
+            $perPage = $request->input('items_per_page', 10000);
+            $search = $request->input('search');
+            $sortBy = $request->input('sort_by', 'purchase_date');
+            $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+
+            $query = Book::query()
+                ->whereHas('purchasedBy', function ($q) use ($user) {
+                    $q->where('user_id', $user->id)
+                      ->whereHas('purchase', function ($pq) {
+                          $pq->where('status', 'completed');
+                      });
+                })
+                ->with([
+                    'authors:id,name',
+                    'categories:id,name',
+                    'analytics:id,book_id,views,downloads,likes',
+                    'readingProgress' => fn($q) => $q->where('user_id', $user->id),
+                ]);
+
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('title', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            // Join with purchase items to sort by purchase date
+            if ($sortBy === 'purchase_date') {
+                $query->join('digital_book_purchase_items as dpi', 'books.id', '=', 'dpi.book_id')
+                      ->join('digital_book_purchases as dp', 'dpi.digital_book_purchase_id', '=', 'dp.id')
+                      ->where('dp.user_id', $user->id)
+                      ->where('dp.status', 'completed')
+                      ->orderBy('dp.created_at', $sortDir)
+                      ->select('books.*');
+            } else {
+                // Other sorting options
+                if (in_array($sortBy, ['title', 'created_at'])) {
+                    $query->orderBy("books.{$sortBy}", $sortDir);
+                } else {
+                    // Default sorting
+                    $query->orderBy('books.created_at', 'desc');
+                }
+            }
+
+            $books = $query->paginate($perPage);
+
+            return $this->success(
+                [
+                    'books' => BookResource::collection($books),
+                    // 'meta' => [
+                    //     'current_page' => $books->currentPage(),
+                    //     'last_page' => $books->lastPage(),
+                    //     'total' => $books->total(),
+                    // ],
+                ],
+                'Purchased books retrieved successfully',
+                200
+            );
+        } catch (\Exception $e) {
+            Log::error('Error retrieving purchased books: ' . $e->getMessage());
+            return $this->error('Failed to retrieve purchased books', 500);
+        }
+    }
 }
-
-

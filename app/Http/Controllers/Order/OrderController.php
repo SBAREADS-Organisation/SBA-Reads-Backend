@@ -85,7 +85,7 @@ class OrderController extends Controller
     public function userOrders(Request $request)
     {
         try {
-            $query = $request->user()->orders()->with(['items.book:id,title,cover_image,actual_price,discounted_price', 'deliveryAddress:id,address']);
+            $query = $request->user()->orders()->with(['items.book:id,title,cover_image,actual_price,discounted_price,authors', 'deliveryAddress:id,address']);
 
             // Filter by status
             if ($request->filled('status')) {

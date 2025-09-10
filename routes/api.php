@@ -159,6 +159,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
+    //get my purchased books
+    Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
 
     // Author-specific endpoints (only for account_type = 'author')
     Route::middleware(['role:author'])->prefix('author')->group(function () {
@@ -239,6 +241,31 @@ Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
 // Utility Routes
+//composer install
+Route::get('composer-install', function () {
+    Artisan::call('composer:install');
+    $output = Artisan::output();
+
+    return response()->json([
+        'message' => 'Composer dependencies installed successfully',
+        'code' => 200,
+        'output' => $output,
+    ], 200);
+});
+
+//configure scribe
+Route::get('scribe-generate', function () {
+    Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
+    Artisan::call('scribe:generate');
+    $output = Artisan::output();
+
+    return response()->json([
+        'message' => 'Scribe documentation generated successfully',
+        'code' => 200,
+        'output' => $output,
+    ], 200);
+});
+
 // Database migration route
 Route::get('migrate', function () {
     Artisan::call('migrate', ['--force' => true]);
