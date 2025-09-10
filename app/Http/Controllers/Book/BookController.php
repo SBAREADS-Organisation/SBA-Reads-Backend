@@ -838,26 +838,36 @@ class BookController extends Controller
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
-            $validator = validator($request->all(), [
-                'reason' => 'required|string|max:255',
-            ]);
+            // Only require reason for admins, not for authors deleting their own books
+            $rules = [];
+            if ($user->hasRole(['admin', 'superadmin'])) {
+                $rules['reason'] = 'required|string|max:255';
+            } else {
+                $rules['reason'] = 'nullable|string|max:255';
+            }
+
+            $validator = validator($request->all(), $rules);
 
             if ($validator->fails()) {
                 return $this->error($validator->errors(), 422, 'Validation failed.');
             }
 
-            $deleted = $this->service->deleteBook($book, $request->input('reason'));
+            $reason = $request->input('reason', 'Author requested deletion');
+            $deleted = $this->service->deleteBook($book, $reason);
 
             if ($deleted) {
+                // Only send reason in notification if provided
+                $notificationReason = $request->input('reason') ? ' Reason: ' . $request->input('reason') : '';
+
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'Book Deleted',
-                    'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
+                    'Your book "' . $book->title . '" has been deleted.' . $notificationReason,
                     ['in-app', 'email'],
                     $book,
                     new BookDeleted(
                         $book,
-                        $request->input('reason'),
+                        $reason,
                         User::find($book->author_id)
                     ),
                 );
@@ -1194,7 +1204,7 @@ class BookController extends Controller
                 'amount' => $totalAmount,
                 'currency' => $currency,
                 'description' => 'Digital books purchase',
-                'purpose' => 'digital_book_purchase', 
+                'purpose' => 'digital_book_purchase',
                 'purpose_id' => $purchase->id,
                 'meta_data' => [
                     'book_ids' => $bookIds,
@@ -1224,8 +1234,8 @@ class BookController extends Controller
                 // Payment processing fields
                 'payment_intent_id' => $transaction->payment_intent_id,
                 'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : (
-                    isset($transaction->meta_data['paystack_response']['data']['authorization_url']) 
-                        ? $transaction->meta_data['paystack_response']['data']['authorization_url'] 
+                    isset($transaction->meta_data['paystack_response']['data']['authorization_url'])
+                        ? $transaction->meta_data['paystack_response']['data']['authorization_url']
                         : null
                 ),
             ], 'Book purchase initiated successfully. Complete payment to access books.');
