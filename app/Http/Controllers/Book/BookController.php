@@ -838,26 +838,44 @@ class BookController extends Controller
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
-            $validator = validator($request->all(), [
-                'reason' => 'required|string|max:255',
-            ]);
+            // Check if user is admin/superadmin
+            $isAdmin = $user->hasRole(['admin', 'superadmin']);
 
-            if ($validator->fails()) {
-                return $this->error($validator->errors(), 422, 'Validation failed.');
+            // For admins, reason is required. For authors, no validation at all.
+            if ($isAdmin) {
+                $validator = validator($request->all(), [
+                    'reason' => 'required|string|max:255',
+                ]);
+
+                if ($validator->fails()) {
+                    return $this->error($validator->errors(), 422, 'Validation failed.');
+                }
+
+                $reason = $request->input('reason');
+            } else {
+                // For authors, completely remove validation - no checks at all
+                // Just use provided reason or default, without any validation
+                $reason = $request->input('reason', 'Author requested deletion');
             }
 
-            $deleted = $this->service->deleteBook($book, $request->input('reason'));
+            $deleted = $this->service->deleteBook($book, $reason);
 
             if ($deleted) {
+                // Only send reason in notification if provided and not the default
+                $notificationReason = '';
+                if ($request->has('reason') && $request->input('reason') && $request->input('reason') !== 'Author requested deletion') {
+                    $notificationReason = ' Reason: ' . $request->input('reason');
+                }
+
                 $this->notifier()->send(
                     User::find($book->author_id),
                     'Book Deleted',
-                    'Your book "' . $book->title . '" has been deleted. Reason: ' . $request->input('reason'),
+                    'Your book "' . $book->title . '" has been deleted.' . $notificationReason,
                     ['in-app', 'email'],
                     $book,
                     new BookDeleted(
                         $book,
-                        $request->input('reason'),
+                        $reason,
                         User::find($book->author_id)
                     ),
                 );
@@ -1194,7 +1212,7 @@ class BookController extends Controller
                 'amount' => $totalAmount,
                 'currency' => $currency,
                 'description' => 'Digital books purchase',
-                'purpose' => 'digital_book_purchase', 
+                'purpose' => 'digital_book_purchase',
                 'purpose_id' => $purchase->id,
                 'meta_data' => [
                     'book_ids' => $bookIds,
@@ -1224,8 +1242,8 @@ class BookController extends Controller
                 // Payment processing fields
                 'payment_intent_id' => $transaction->payment_intent_id,
                 'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : (
-                    isset($transaction->meta_data['paystack_response']['data']['authorization_url']) 
-                        ? $transaction->meta_data['paystack_response']['data']['authorization_url'] 
+                    isset($transaction->meta_data['paystack_response']['data']['authorization_url'])
+                        ? $transaction->meta_data['paystack_response']['data']['authorization_url']
                         : null
                 ),
             ], 'Book purchase initiated successfully. Complete payment to access books.');
