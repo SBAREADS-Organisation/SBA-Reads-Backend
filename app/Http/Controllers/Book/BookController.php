@@ -861,11 +861,8 @@ class BookController extends Controller
             $deleted = $this->service->deleteBook($book, $reason);
 
             if ($deleted) {
-                // Only send reason in notification if provided and not the default
-                $notificationReason = '';
-                if ($request->has('reason') && $request->input('reason') && $request->input('reason') !== 'Author requested deletion') {
-                    $notificationReason = ' Reason: ' . $request->input('reason');
-                }
+                // Only send reason in notification if provided
+                $notificationReason = $request->input('reason') ? ' Reason: ' . $request->input('reason') : '';
 
                 $this->notifier()->send(
                     User::find($book->author_id),
@@ -1399,7 +1396,7 @@ class BookController extends Controller
 
             return $this->success(
                 [
-                    'books' => BookResource::collection($books)
+                    'books' => BookResource::collection($books),
                     // 'meta' => [
                     //     'current_page' => $books->currentPage(),
                     //     'last_page' => $books->lastPage(),
