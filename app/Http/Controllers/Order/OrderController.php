@@ -85,7 +85,7 @@ class OrderController extends Controller
     public function userOrders(Request $request)
     {
         try {
-            $query = $request->user()->orders()->with(['items.book:id,title,cover_image,actual_price,discounted_price,authors', 'deliveryAddress:id,address']);
+            $query = $request->user()->orders()->with(['items.book:id,title,cover_image,actual_price,discounted_price', 'deliveryAddress:id,address', 'items.book.author:id,name,profile_picture']);
 
             // Filter by status
             if ($request->filled('status')) {
@@ -127,7 +127,7 @@ class OrderController extends Controller
 
             return $this->success(OrderResource::collection($orders), 'User orders retrieved successfully');
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while fetching user orders. Try again!', 500, null, $th);
+            return $this->error('An error occurred while fetching user orders. Try again!' . $th->getMessage(), 500, null, $th);
         }
     }
 

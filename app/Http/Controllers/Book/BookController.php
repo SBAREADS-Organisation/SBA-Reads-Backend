@@ -1381,7 +1381,7 @@ class BookController extends Controller
 
             return $this->success(
                 [
-                    'books' => BookResource::collection($books),
+                    'books' => BookResource::collection($books)
                     // 'meta' => [
                     //     'current_page' => $books->currentPage(),
                     //     'last_page' => $books->lastPage(),
