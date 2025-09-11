@@ -838,26 +838,34 @@ class BookController extends Controller
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
-            // Only require reason for admins, not for authors deleting their own books
-            $rules = [];
-            if ($user->hasRole(['admin', 'superadmin'])) {
-                $rules['reason'] = 'required|string|max:255';
+            // Check if user is admin/superadmin
+            $isAdmin = $user->hasRole(['admin', 'superadmin']);
+
+            // For admins, reason is required. For authors, no validation at all.
+            if ($isAdmin) {
+                $validator = validator($request->all(), [
+                    'reason' => 'required|string|max:255',
+                ]);
+
+                if ($validator->fails()) {
+                    return $this->error($validator->errors(), 422, 'Validation failed.');
+                }
+
+                $reason = $request->input('reason');
             } else {
-                $rules['reason'] = 'nullable|string|max:255';
+                // For authors, completely remove validation - no checks at all
+                // Just use provided reason or default, without any validation
+                $reason = $request->input('reason', 'Author requested deletion');
             }
 
-            $validator = validator($request->all(), $rules);
-
-            if ($validator->fails()) {
-                return $this->error($validator->errors(), 422, 'Validation failed.');
-            }
-
-            $reason = $request->input('reason', 'Author requested deletion');
             $deleted = $this->service->deleteBook($book, $reason);
 
             if ($deleted) {
-                // Only send reason in notification if provided
-                $notificationReason = $request->input('reason') ? ' Reason: ' . $request->input('reason') : '';
+                // Only send reason in notification if provided and not the default
+                $notificationReason = '';
+                if ($request->has('reason') && $request->input('reason') && $request->input('reason') !== 'Author requested deletion') {
+                    $notificationReason = ' Reason: ' . $request->input('reason');
+                }
 
                 $this->notifier()->send(
                     User::find($book->author_id),
