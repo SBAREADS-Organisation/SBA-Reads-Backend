@@ -856,11 +856,10 @@ class BookController extends Controller
                 }
 
                 $reason = $request->input('reason');
-            } else {
-                // For authors, completely remove validation - no checks at all
-                // Just use provided reason or default, without any validation
-                $reason = $request->input('reason', 'Author requested deletion');
-            }
+        } else {
+            // For authors, no payload required
+            $reason = 'Author requested deletion';
+        }
 
             $deleted = $this->service->deleteBook($book, $reason);
 
