@@ -18,6 +18,7 @@ use App\Models\User;
 use App\Notifications\Book\Milestone\MilestoneReachedNotification;
 use App\Services\Book\BookService;
 use App\Services\Book\PdfTocExtractorService;
+use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -32,15 +33,18 @@ class BookController extends Controller
 {
     protected BookService $service;
 
+    public ?CloudinaryMediaUploadService $cloudinaryService;
+
     private $rules;
 
     // use ApiResponse;
 
-    public function __construct(BookService $service)
+    public function __construct(BookService $service, CloudinaryMediaUploadService $cloudinaryService)
     {
         // $this->middleware('auth:sanctum');
         // $this->middleware('role:admin')->except(['index','show']);
         $this->service = $service;
+        $this->cloudinaryService = $cloudinaryService;
 
         $this->rules = [
             'books' => 'required|array|min:1',
@@ -712,7 +716,7 @@ class BookController extends Controller
             $user = $request->user();
 
             // Authorization: Only book authors or admins can update books
-            if ($book->author_id !== $user->id && !$user->hasRole(['admin', 'superadmin'])) {
+            if (!$book->authors()->where('users.id', $user->id)->exists() && !$user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only update your own books.', 403);
             }
 
@@ -732,6 +736,7 @@ class BookController extends Controller
                 'publication_date' => 'sometimes|nullable|date',
                 'language' => 'sometimes|nullable|array',
                 'language.*' => 'string|max:50',
+                'cover_image' => 'sometimes|file|mimes:jpg,jpeg,png|max:5120',
                 'format' => 'sometimes|nullable|string|max:50',
                 'target_audience' => 'sometimes|nullable|array',
                 'target_audience.*' => 'string|max:50',
@@ -752,6 +757,27 @@ class BookController extends Controller
             }
 
             $validated = $validator->validated();
+
+            // Handle cover_image upload
+            if ($request->hasFile('cover_image')) {
+                // Delete old cover image if exists
+                if ($book->cover_image && is_array($book->cover_image) && isset($book->cover_image['public_id'])) {
+                    $this->cloudinaryService->delete($book->cover_image['public_id']);
+                }
+
+                // Upload new cover image
+                $upload = $this->cloudinaryService->upload($request->file('cover_image'), 'book_cover');
+                $validated['cover_image'] = json_encode([
+                    'public_url' => (string) $upload['url'],
+                    'public_id' => (int) $upload['id'],
+                ]);
+
+                // Attach media to book
+                \App\Models\MediaUpload::where('id', $upload['id'])->update([
+                    'mediable_type' => 'book',
+                    'mediable_id' => $book->id,
+                ]);
+            }
 
             // Handle categories relationship separately
             $categories = null;
@@ -838,7 +864,7 @@ class BookController extends Controller
             $user = $request->user();
 
             // Authorization: Only book authors or admins can delete books
-            if ($book->author_id !== $user->id && !$user->hasRole(['admin', 'superadmin'])) {
+            if (!$book->authors()->where('users.id', $user->id)->exists() && !$user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
@@ -885,7 +911,7 @@ class BookController extends Controller
 
             return $this->error('Failed to delete book.', 500);
         } catch (\Throwable $th) {
-            return $this->error('Failed to delete book.', 500, null, $th);
+            return $this->error('Failed to delete book: ' . $th->getMessage(), 500, null, $th);
         }
     }
 
