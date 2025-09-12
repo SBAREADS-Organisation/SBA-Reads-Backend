@@ -146,7 +146,11 @@ class BookController extends Controller
                     ->orderBy('created_at', 'desc');
 
             case 'trending':
-                return $query->orderByDesc('views_count');
+                return $query
+                    ->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
+                    ->orderByDesc('a.purchases')
+                    ->orderByDesc('a.views')
+                    ->select('books.*');
 
             case 'top_picks':
                 return $query->whereIn('id', function ($subquery) {
@@ -1239,8 +1243,8 @@ class BookController extends Controller
                 'payment_intent_id' => $transaction->payment_intent_id,
                 'authorization_url' => $provider === 'paystack' ? $transaction->payment_client_secret : (
                     isset($transaction->meta_data['paystack_response']['data']['authorization_url'])
-                        ? $transaction->meta_data['paystack_response']['data']['authorization_url']
-                        : null
+                    ? $transaction->meta_data['paystack_response']['data']['authorization_url']
+                    : null
                 ),
             ], 'Book purchase initiated successfully. Complete payment to access books.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -1355,9 +1359,9 @@ class BookController extends Controller
             $query = Book::query()
                 ->whereHas('purchasedBy', function ($q) use ($user) {
                     $q->where('user_id', $user->id)
-                      ->whereHas('purchase', function ($pq) {
-                          $pq->where('status', 'completed');
-                      });
+                        ->whereHas('purchase', function ($pq) {
+                            $pq->where('status', 'completed');
+                        });
                 })
                 ->with([
                     'authors:id,name',
@@ -1376,11 +1380,11 @@ class BookController extends Controller
             // Join with purchase items to sort by purchase date
             if ($sortBy === 'purchase_date') {
                 $query->join('digital_book_purchase_items as dpi', 'books.id', '=', 'dpi.book_id')
-                      ->join('digital_book_purchases as dp', 'dpi.digital_book_purchase_id', '=', 'dp.id')
-                      ->where('dp.user_id', $user->id)
-                      ->where('dp.status', 'completed')
-                      ->orderBy('dp.created_at', $sortDir)
-                      ->select('books.*');
+                    ->join('digital_book_purchases as dp', 'dpi.digital_book_purchase_id', '=', 'dp.id')
+                    ->where('dp.user_id', $user->id)
+                    ->where('dp.status', 'completed')
+                    ->orderBy('dp.created_at', $sortDir)
+                    ->select('books.*');
             } else {
                 // Other sorting options
                 if (in_array($sortBy, ['title', 'created_at'])) {
