@@ -114,7 +114,6 @@ class CloudinaryMediaUploadService
         // return Cloudinary::destroy($publicId)['result'] === 'ok';
         $response = (new UploadApi)->destroy($publicId, [
             'invalidate' => true,
-            'resource_type' => 'auto',
         ]);
 
         return isset($response['result']) && $response['result'] === 'ok';
