@@ -160,7 +160,7 @@ class BookService
         }
 
         // Delete files from Cloudinary
-        if ($book->cover_image && is_array($book->cover_image)) {
+        if ($book->cover_image && is_array($book->cover_image) && isset($book->cover_image['public_id'])) {
             $this->cloudinaryMediaService->delete($book->cover_image['public_id']);
         }
 
