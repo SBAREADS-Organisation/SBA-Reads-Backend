@@ -28,6 +28,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Stripe\StripeClient;
 
@@ -241,16 +242,10 @@ Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
 // Utility Routes
-//composer install
-Route::get('composer-install', function () {
-    Artisan::call('composer:install');
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Composer dependencies installed successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
+//testing logs
+Route::get('log-test', function () {
+    Log::info('Log test route accessed');
+    return response()->json(['message' => 'Log test successful']);
 });
 
 //configure scribe

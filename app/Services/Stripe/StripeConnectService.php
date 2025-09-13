@@ -691,6 +691,7 @@ class StripeConnectService
             // Error Handling
             if ($paymentIntent instanceof Exception\InvalidRequestException) {
                 $error = $paymentIntent->getMessage();
+                Log::error('Error creating payment intent: ' . $error);
 
                 return response()->json([
                     'message' => 'Error initiating Payment',
@@ -702,7 +703,7 @@ class StripeConnectService
 
             return $paymentIntent;
         } catch (\Throwable $th) {
-            return $this->error('Error creating payment intent', 500, $th->getMessage(), $th);
+            return $this->error('Error creating payment intent: ' . $th->getMessage(), 500, $th->getMessage(), $th);
         }
     }
 

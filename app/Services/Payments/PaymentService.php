@@ -9,6 +9,7 @@ use App\Services\Stripe\StripeConnectService;
 use App\Services\Paystack\PaystackService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Stripe\PaymentIntent;
 
@@ -49,6 +50,7 @@ class PaymentService
 
     protected function createStripePayment($data, $user, $reference): JsonResponse|Transaction
     {
+
         $paymentIntentPayload = [
             'amount' => $this->convertToSubunit($data->amount, $data->currency),
             'currency' => $data->currency,
@@ -63,6 +65,7 @@ class PaymentService
         if ($responsePayload instanceof JsonResponse) {
             $responseData = $responsePayload->getData(true);
             $errorMessage = $responseData['error'] ?? 'Unknown error from payment service.';
+            Log::error('Error creating stripe payment intent: ' . $errorMessage);
 
             return $this->error(
                 'An error occurred while creating the payment intent.',

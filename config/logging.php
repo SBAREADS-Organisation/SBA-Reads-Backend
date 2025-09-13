@@ -74,15 +74,15 @@ return [
         ],
 
         'slack' => [
-            'driver' => 'custom', // 'driver' => 'slack',
-            'via' => App\Services\Slack\SlackWebhookService::class,
+            'driver' => 'slack',
+            //'via' => App\Services\Slack\SlackWebhookService::class,
             'webhook_url' => env('LOG_SLACK_WEBHOOK_URL'),
-            'channel' => env('LOG_SLACK_CHANNEL', '#general'),
+            //'channel' => env('LOG_SLACK_CHANNEL', '#general'),
             'url' => env('LOG_SLACK_WEBHOOK_URL'),
             'username' => env('LOG_SLACK_USERNAME', 'Laravel Log'),
             'emoji' => env('LOG_SLACK_EMOJI', ':boom:'),
             'icon' => env('LOG_SLACK_ICON', ':ghost:'),
-            'level' => 'critical', // env('LOG_LEVEL', 'critical'),
+            //'level' => env('LOG_LEVEL', 'error'),
             'replace_placeholders' => true,
         ],
 
