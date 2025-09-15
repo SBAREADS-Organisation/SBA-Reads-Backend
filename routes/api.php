@@ -250,7 +250,7 @@ Route::get('log-test', function () {
 
 //configure scribe
 Route::get('scribe-generate', function () {
-    Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
+    //Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
     Artisan::call('scribe:generate');
     $output = Artisan::output();
 

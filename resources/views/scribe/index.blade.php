@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>Laravel API Documentation</title>
+    <title>SBA READS API Documentation</title>
 
     <link href="https://fonts.googleapis.com/css?family=Open+Sans&display=swap" rel="stylesheet">
 
@@ -26,7 +26,7 @@
             </style>
 
     <script>
-        var tryItOutBaseUrl = "http://localhost";
+        var tryItOutBaseUrl = "https://sbareads.surprises.ng";
         var useCsrf = Boolean();
         var csrfUrl = "/sanctum/csrf-cookie";
     </script>
@@ -229,7 +229,7 @@
     </ul>
 
     <ul class="toc-footer" id="last-updated">
-        <li>Last updated: September 10, 2025</li>
+        <li>Last updated: September 14, 2025</li>
     </ul>
 </div>
 
@@ -238,7 +238,7 @@
     <div class="content">
         <h1 id="introduction">Introduction</h1>
 <aside>
-    <strong>Base URL</strong>: <code>http://localhost</code>
+    <strong>Base URL</strong>: <code>https://sbareads.surprises.ng</code>
 </aside>
 <pre><code>This documentation aims to provide all the information you need to work with our API.
 
@@ -265,14 +265,14 @@ You can switch the language used with the tabs at the top right (or from the nav
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/auth/login" \
+    "https://sbareads.surprises.ng/api/auth/login" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/auth/login"
+    "https://sbareads.surprises.ng/api/auth/login"
 );
 
 const headers = {
@@ -373,14 +373,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/auth/forgot-password" \
+    "https://sbareads.surprises.ng/api/auth/forgot-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/auth/forgot-password"
+    "https://sbareads.surprises.ng/api/auth/forgot-password"
 );
 
 const headers = {
@@ -481,14 +481,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/auth/reset-password" \
+    "https://sbareads.surprises.ng/api/auth/reset-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/auth/reset-password"
+    "https://sbareads.surprises.ng/api/auth/reset-password"
 );
 
 const headers = {
@@ -589,14 +589,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/auth/verify-reset-password-otp" \
+    "https://sbareads.surprises.ng/api/auth/verify-reset-password-otp" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/auth/verify-reset-password-otp"
+    "https://sbareads.surprises.ng/api/auth/verify-reset-password-otp"
 );
 
 const headers = {
@@ -697,14 +697,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/withdrawals/initiate" \
+    "https://sbareads.surprises.ng/api/withdrawals/initiate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
     \"amount\": 16,
     \"currency\": \"ngz\",
     \"bank_account_id\": \"architecto\",
-    \"withdrawal_method\": \"bank_transfer\",
+    \"withdrawal_method\": \"check\",
     \"description\": \"Et animi quos velit et fugiat.\"
 }"
 </code></pre></div>
@@ -712,7 +712,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/withdrawals/initiate"
+    "https://sbareads.surprises.ng/api/withdrawals/initiate"
 );
 
 const headers = {
@@ -724,7 +724,7 @@ let body = {
     "amount": 16,
     "currency": "ngz",
     "bank_account_id": "architecto",
-    "withdrawal_method": "bank_transfer",
+    "withdrawal_method": "check",
     "description": "Et animi quos velit et fugiat."
 };
 
@@ -849,10 +849,10 @@ Must be one of:
 <i>optional</i> &nbsp;
                 <input type="text" style="display: none"
                               name="withdrawal_method"                data-endpoint="POSTapi-withdrawals-initiate"
-               value="bank_transfer"
+               value="check"
                data-component="body">
     <br>
-<p>Example: <code>bank_transfer</code></p>
+<p>Example: <code>check</code></p>
 Must be one of:
 <ul style="list-style-type: square;"><li><code>bank_transfer</code></li> <li><code>paypal</code></li> <li><code>check</code></li></ul>
         </div>
@@ -882,7 +882,7 @@ Must be one of:
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/superadmin/create" \
+    "https://sbareads.surprises.ng/api/user/superadmin/create" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -894,7 +894,7 @@ Must be one of:
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/superadmin/create"
+    "https://sbareads.surprises.ng/api/user/superadmin/create"
 );
 
 const headers = {
@@ -1024,14 +1024,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/register" \
+    "https://sbareads.surprises.ng/api/user/register" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/register"
+    "https://sbareads.surprises.ng/api/user/register"
 );
 
 const headers = {
@@ -1132,7 +1132,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/verify-email" \
+    "https://sbareads.surprises.ng/api/user/verify-email" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -1144,7 +1144,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/verify-email"
+    "https://sbareads.surprises.ng/api/user/verify-email"
 );
 
 const headers = {
@@ -1274,7 +1274,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/resend-email-token" \
+    "https://sbareads.surprises.ng/api/user/resend-email-token" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -1285,7 +1285,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/resend-email-token"
+    "https://sbareads.surprises.ng/api/user/resend-email-token"
 );
 
 const headers = {
@@ -1403,14 +1403,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/profile" \
+    "https://sbareads.surprises.ng/api/user/profile" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/profile"
+    "https://sbareads.surprises.ng/api/user/profile"
 );
 
 const headers = {
@@ -1511,14 +1511,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/profile/action/architecto/architecto" \
+    "https://sbareads.surprises.ng/api/user/profile/action/architecto/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/profile/action/architecto/architecto"
+    "https://sbareads.surprises.ng/api/user/profile/action/architecto/architecto"
 );
 
 const headers = {
@@ -1642,14 +1642,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "http://localhost/api/user/profile/preference" \
+    "https://sbareads.surprises.ng/api/user/profile/preference" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/profile/preference"
+    "https://sbareads.surprises.ng/api/user/profile/preference"
 );
 
 const headers = {
@@ -1750,14 +1750,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "http://localhost/api/user/profile/settings" \
+    "https://sbareads.surprises.ng/api/user/profile/settings" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/profile/settings"
+    "https://sbareads.surprises.ng/api/user/profile/settings"
 );
 
 const headers = {
@@ -1858,14 +1858,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/address" \
+    "https://sbareads.surprises.ng/api/user/address" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/address"
+    "https://sbareads.surprises.ng/api/user/address"
 );
 
 const headers = {
@@ -1966,14 +1966,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/subscriptions/subscribe" \
+    "https://sbareads.surprises.ng/api/user/subscriptions/subscribe" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/subscriptions/subscribe"
+    "https://sbareads.surprises.ng/api/user/subscriptions/subscribe"
 );
 
 const headers = {
@@ -2074,14 +2074,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/token/refresh" \
+    "https://sbareads.surprises.ng/api/user/token/refresh" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/token/refresh"
+    "https://sbareads.surprises.ng/api/user/token/refresh"
 );
 
 const headers = {
@@ -2182,14 +2182,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/logout" \
+    "https://sbareads.surprises.ng/api/user/logout" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/logout"
+    "https://sbareads.surprises.ng/api/user/logout"
 );
 
 const headers = {
@@ -2290,14 +2290,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/profile/change-password" \
+    "https://sbareads.surprises.ng/api/user/profile/change-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/profile/change-password"
+    "https://sbareads.surprises.ng/api/user/profile/change-password"
 );
 
 const headers = {
@@ -2398,14 +2398,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/kyc/initiate" \
+    "https://sbareads.surprises.ng/api/user/kyc/initiate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/kyc/initiate"
+    "https://sbareads.surprises.ng/api/user/kyc/initiate"
 );
 
 const headers = {
@@ -2506,14 +2506,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/kyc/upload-document" \
+    "https://sbareads.surprises.ng/api/user/kyc/upload-document" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/kyc/upload-document"
+    "https://sbareads.surprises.ng/api/user/kyc/upload-document"
 );
 
 const headers = {
@@ -2614,14 +2614,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/payment_method/add-card" \
+    "https://sbareads.surprises.ng/api/user/payment_method/add-card" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/payment_method/add-card"
+    "https://sbareads.surprises.ng/api/user/payment_method/add-card"
 );
 
 const headers = {
@@ -2722,14 +2722,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/user/payment_method/add-bank-account" \
+    "https://sbareads.surprises.ng/api/user/payment_method/add-bank-account" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/user/payment_method/add-bank-account"
+    "https://sbareads.surprises.ng/api/user/payment_method/add-bank-account"
 );
 
 const headers = {
@@ -2830,14 +2830,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/webhooks/stripe" \
+    "https://sbareads.surprises.ng/api/webhooks/stripe" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/webhooks/stripe"
+    "https://sbareads.surprises.ng/api/webhooks/stripe"
 );
 
 const headers = {
@@ -2938,7 +2938,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/paystack/payment/initialize" \
+    "https://sbareads.surprises.ng/api/paystack/payment/initialize" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -2953,7 +2953,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/paystack/payment/initialize"
+    "https://sbareads.surprises.ng/api/paystack/payment/initialize"
 );
 
 const headers = {
@@ -3130,14 +3130,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/paystack/webhook" \
+    "https://sbareads.surprises.ng/api/paystack/webhook" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/paystack/webhook"
+    "https://sbareads.surprises.ng/api/paystack/webhook"
 );
 
 const headers = {
@@ -3238,14 +3238,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books" \
+    "https://sbareads.surprises.ng/api/books" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books"
+    "https://sbareads.surprises.ng/api/books"
 );
 
 const headers = {
@@ -3346,14 +3346,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/preview" \
+    "https://sbareads.surprises.ng/api/books/preview" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/preview"
+    "https://sbareads.surprises.ng/api/books/preview"
 );
 
 const headers = {
@@ -3454,14 +3454,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "http://localhost/api/books/16" \
+    "https://sbareads.surprises.ng/api/books/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16"
+    "https://sbareads.surprises.ng/api/books/16"
 );
 
 const headers = {
@@ -3574,14 +3574,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "http://localhost/api/books/16/toggle-visibility" \
+    "https://sbareads.surprises.ng/api/books/16/toggle-visibility" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16/toggle-visibility"
+    "https://sbareads.surprises.ng/api/books/16/toggle-visibility"
 );
 
 const headers = {
@@ -3694,14 +3694,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "http://localhost/api/books/16" \
+    "https://sbareads.surprises.ng/api/books/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16"
+    "https://sbareads.surprises.ng/api/books/16"
 );
 
 const headers = {
@@ -3814,14 +3814,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/purchase" \
+    "https://sbareads.surprises.ng/api/books/purchase" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/purchase"
+    "https://sbareads.surprises.ng/api/books/purchase"
 );
 
 const headers = {
@@ -3922,7 +3922,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/16/start-reading" \
+    "https://sbareads.surprises.ng/api/books/16/start-reading" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -3933,7 +3933,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16/start-reading"
+    "https://sbareads.surprises.ng/api/books/16/start-reading"
 );
 
 const headers = {
@@ -4085,7 +4085,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/16/reviews" \
+    "https://sbareads.surprises.ng/api/books/16/reviews" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -4097,7 +4097,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16/reviews"
+    "https://sbareads.surprises.ng/api/books/16/reviews"
 );
 
 const headers = {
@@ -4239,14 +4239,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/16/bookmark" \
+    "https://sbareads.surprises.ng/api/books/16/bookmark" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16/bookmark"
+    "https://sbareads.surprises.ng/api/books/16/bookmark"
 );
 
 const headers = {
@@ -4359,14 +4359,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/books/0/architecto" \
+    "https://sbareads.surprises.ng/api/books/0/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/0/architecto"
+    "https://sbareads.surprises.ng/api/books/0/architecto"
 );
 
 const headers = {
@@ -4490,14 +4490,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "http://localhost/api/books/16/bookmark" \
+    "https://sbareads.surprises.ng/api/books/16/bookmark" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/books/16/bookmark"
+    "https://sbareads.surprises.ng/api/books/16/bookmark"
 );
 
 const headers = {
@@ -4610,14 +4610,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/categories" \
+    "https://sbareads.surprises.ng/api/categories" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/categories"
+    "https://sbareads.surprises.ng/api/categories"
 );
 
 const headers = {
@@ -4718,14 +4718,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "http://localhost/api/categories/16" \
+    "https://sbareads.surprises.ng/api/categories/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/categories/16"
+    "https://sbareads.surprises.ng/api/categories/16"
 );
 
 const headers = {
@@ -4838,14 +4838,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "http://localhost/api/categories/16" \
+    "https://sbareads.surprises.ng/api/categories/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/categories/16"
+    "https://sbareads.surprises.ng/api/categories/16"
 );
 
 const headers = {
@@ -4958,14 +4958,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/order" \
+    "https://sbareads.surprises.ng/api/order" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/order"
+    "https://sbareads.surprises.ng/api/order"
 );
 
 const headers = {
@@ -5066,18 +5066,18 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "http://localhost/api/order/architecto/status-update" \
+    "https://sbareads.surprises.ng/api/order/architecto/status-update" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
-    \"status\": \"cancelled\"
+    \"status\": \"declined\"
 }"
 </code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/order/architecto/status-update"
+    "https://sbareads.surprises.ng/api/order/architecto/status-update"
 );
 
 const headers = {
@@ -5086,7 +5086,7 @@ const headers = {
 };
 
 let body = {
-    "status": "cancelled"
+    "status": "declined"
 };
 
 fetch(url, {
@@ -5187,10 +5187,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="text" style="display: none"
                               name="status"                data-endpoint="PUTapi-order--id--status-update"
-               value="cancelled"
+               value="declined"
                data-component="body">
     <br>
-<p>Example: <code>cancelled</code></p>
+<p>Example: <code>declined</code></p>
 Must be one of:
 <ul style="list-style-type: square;"><li><code>completed</code></li> <li><code>declined</code></li> <li><code>cancelled</code></li> <li><code>processing</code></li></ul>
         </div>
@@ -5209,14 +5209,14 @@ Must be one of:
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/transaction/payment/status" \
+    "https://sbareads.surprises.ng/api/transaction/payment/status" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/transaction/payment/status"
+    "https://sbareads.surprises.ng/api/transaction/payment/status"
 );
 
 const headers = {
@@ -5317,7 +5317,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/admin/invite-admin" \
+    "https://sbareads.surprises.ng/api/admin/invite-admin" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -5330,7 +5330,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/invite-admin"
+    "https://sbareads.surprises.ng/api/admin/invite-admin"
 );
 
 const headers = {
@@ -5472,14 +5472,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/admin/app-versions-support" \
+    "https://sbareads.surprises.ng/api/admin/app-versions-support" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/app-versions-support"
+    "https://sbareads.surprises.ng/api/admin/app-versions-support"
 );
 
 const headers = {
@@ -5580,14 +5580,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "http://localhost/api/admin/app-versions-support/architecto" \
+    "https://sbareads.surprises.ng/api/admin/app-versions-support/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/app-versions-support/architecto"
+    "https://sbareads.surprises.ng/api/admin/app-versions-support/architecto"
 );
 
 const headers = {
@@ -5700,14 +5700,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "http://localhost/api/admin/app-versions-support/architecto" \
+    "https://sbareads.surprises.ng/api/admin/app-versions-support/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/app-versions-support/architecto"
+    "https://sbareads.surprises.ng/api/admin/app-versions-support/architecto"
 );
 
 const headers = {
@@ -5820,14 +5820,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "http://localhost/api/admin/subscriptions" \
+    "https://sbareads.surprises.ng/api/admin/subscriptions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/subscriptions"
+    "https://sbareads.surprises.ng/api/admin/subscriptions"
 );
 
 const headers = {
@@ -5928,14 +5928,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "http://localhost/api/admin/subscriptions/architecto" \
+    "https://sbareads.surprises.ng/api/admin/subscriptions/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/subscriptions/architecto"
+    "https://sbareads.surprises.ng/api/admin/subscriptions/architecto"
 );
 
 const headers = {
@@ -6048,14 +6048,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "http://localhost/api/admin/subscriptions/architecto" \
+    "https://sbareads.surprises.ng/api/admin/subscriptions/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "http://localhost/api/admin/subscriptions/architecto"
+    "https://sbareads.surprises.ng/api/admin/subscriptions/architecto"
 );
 
 const headers = {
