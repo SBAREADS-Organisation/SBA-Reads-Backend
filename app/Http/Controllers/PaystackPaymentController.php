@@ -10,6 +10,7 @@ use App\Services\Payments\PaymentProviderFactory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
 
 class PaystackPaymentController extends Controller
 {
@@ -38,7 +39,8 @@ class PaystackPaymentController extends Controller
             'meta_data' => 'nullable|array',
         ]);
 
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
         $amount = $request->amount;
         $currency = strtoupper($request->currency);
         $metaData = $request->meta_data ?? [];
@@ -57,7 +59,11 @@ class PaystackPaymentController extends Controller
                         $paystackAmount = $nairaAmount;
                         $paystackCurrency = 'NGN';
                         $exchangeRate = $nairaAmount / $amount;
+                        
+                        // Log the conversion for transparency
+                        Log::info("Currency conversion: $amount USD = $nairaAmount NGN at rate $exchangeRate");
                     } catch (\Exception $e) {
+                        Log::error('Currency conversion failed: ' . $e->getMessage());
                         throw new \Exception('Unable to fetch current exchange rates. Please try again later.');
                     }
                 }
@@ -111,6 +117,7 @@ class PaystackPaymentController extends Controller
                         'original_amount' => $currency === 'USD' ? $amount : null,
                         'original_currency' => $currency === 'USD' ? $currency : null,
                         'exchange_rate' => $exchangeRate,
+                        'display_amount' => $this->formatDisplayAmount($amount, $currency, $paystackAmount, $paystackCurrency, $exchangeRate)
                     ]
                 ]);
             });
@@ -121,6 +128,28 @@ class PaystackPaymentController extends Controller
                 'message' => 'Payment initialization failed (in initializePayment catch): ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Format display amount for user information
+     */
+    private function formatDisplayAmount($originalAmount, $originalCurrency, $convertedAmount, $convertedCurrency, $exchangeRate)
+    {
+        if ($originalCurrency === 'USD' && $convertedCurrency === 'NGN') {
+            return [
+                'original' => '$' . number_format($originalAmount, 2) . ' USD',
+                'converted' => '₦' . number_format($convertedAmount, 2) . ' NGN',
+                'exchange_rate' => '1 USD = ' . number_format($exchangeRate, 2) . ' NGN',
+                'message' => "You will be charged ₦" . number_format($convertedAmount, 2) . " NGN (equivalent to $$originalAmount USD at current exchange rate)"
+            ];
+        }
+        
+        return [
+            'original' => number_format($originalAmount, 2) . ' ' . $originalCurrency,
+            'converted' => null,
+            'exchange_rate' => null,
+            'message' => "You will be charged " . number_format($convertedAmount, 2) . " " . $convertedCurrency
+        ];
     }
 
     /**
@@ -209,7 +238,7 @@ class PaystackPaymentController extends Controller
     public function getTransactionDetails($transactionId)
     {
         $transaction = Transaction::where('payment_vendor', 'paystack')
-            ->where('user_id', auth()->id())
+            ->where('user_id', Auth::id())
             ->findOrFail($transactionId);
 
         return response()->json([
@@ -250,7 +279,8 @@ class PaystackPaymentController extends Controller
             'account_name' => 'required|string',
         ]);
 
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
         $amount = $request->amount;
 
         try {
