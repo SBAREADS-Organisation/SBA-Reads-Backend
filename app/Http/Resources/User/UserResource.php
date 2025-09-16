@@ -82,11 +82,9 @@ class UserResource extends JsonResource
             'purchased_books' => $this->whenLoaded('purchasedBooks', function () {
                 return $this->purchasedBooks->pluck('id')->toArray();
             }),
-
             // 'bookmarks' => $this->whenLoaded('bookmarks', function () {
             //     return $this->bookmarks->pluck('id')->toArray();
             // }),
-
             'kyc_info' => $this->whenLoaded('kycInfo'),
             'professional_profile' => $this->whenLoaded('professionalProfile'),
             'roles' => $this->whenLoaded('roles', function () {
