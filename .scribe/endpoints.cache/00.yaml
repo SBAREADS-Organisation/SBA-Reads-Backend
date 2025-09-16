@@ -186,7 +186,7 @@ endpoints:
         name: withdrawal_method
         description: ''
         required: false
-        example: bank_transfer
+        example: check
         type: string
         enumValues:
           - bank_transfer
@@ -209,7 +209,7 @@ endpoints:
       amount: 16
       currency: ngz
       bank_account_id: architecto
-      withdrawal_method: bank_transfer
+      withdrawal_method: check
       description: 'Et animi quos velit et fugiat.'
     fileParameters: []
     responses: []
@@ -1657,7 +1657,7 @@ endpoints:
         name: status
         description: ''
         required: true
-        example: cancelled
+        example: declined
         type: string
         enumValues:
           - completed
@@ -1668,7 +1668,7 @@ endpoints:
         nullable: false
         custom: []
     cleanBodyParameters:
-      status: cancelled
+      status: declined
     fileParameters: []
     responses: []
     responseFields: []

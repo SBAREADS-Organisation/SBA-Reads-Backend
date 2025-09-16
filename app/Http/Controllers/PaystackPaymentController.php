@@ -47,9 +47,16 @@ class PaystackPaymentController extends Controller
             return DB::transaction(function () use ($user, $amount, $currency, $request, $metaData) {
                 // Calculate naira equivalent if currency is USD
                 $nairaAmount = $amount;
+                $paystackAmount = $amount;
+                $paystackCurrency = $currency;
+                $exchangeRate = null;
+
                 if ($currency === 'USD') {
                     try {
                         $nairaAmount = $this->currencyService->convert($amount, 'USD', 'NGN');
+                        $paystackAmount = $nairaAmount;
+                        $paystackCurrency = 'NGN';
+                        $exchangeRate = $nairaAmount / $amount;
                     } catch (\Exception $e) {
                         throw new \Exception('Unable to fetch current exchange rates. Please try again later.');
                     }
@@ -58,9 +65,11 @@ class PaystackPaymentController extends Controller
                 // Create transaction record
                 $transaction = Transaction::create([
                     'user_id' => $user->id,
-                    'amount' => $amount,
-                    'currency' => $currency,
-                    'amount_naira' => $nairaAmount,
+                    'amount' => $paystackAmount,
+                    'amount_usd' => $currency === 'USD' ? $amount : null,
+                    'amount_naira' => $paystackCurrency === 'NGN' ? $paystackAmount : null,
+                    'exchange_rate' => $exchangeRate,
+                    'currency' => $paystackCurrency,
                     'payment_vendor' => 'paystack',
                     'status' => 'pending',
                     'purpose' => $request->purpose,
@@ -71,8 +80,8 @@ class PaystackPaymentController extends Controller
 
                 // Initialize Paystack payment
                 $paystackResponse = $this->paystackService->initializePayment([
-                    'amount' => $amount,
-                    'currency' => $currency,
+                    'amount' => $paystackAmount,
+                    'currency' => $paystackCurrency,
                     'reference' => 'paystack_' . $transaction->id . '_' . uniqid(),
                     'purpose' => $request->purpose,
                     'purpose_id' => $request->purpose_id,
@@ -97,9 +106,11 @@ class PaystackPaymentController extends Controller
                         'authorization_url' => $paystackResponse['data']['authorization_url'],
                         'access_code' => $paystackResponse['data']['access_code'],
                         'reference' => $paystackResponse['data']['reference'],
-                        'amount' => $amount,
-                        'currency' => $currency,
-                        'amount_naira' => $nairaAmount,
+                        'amount' => $paystackAmount,
+                        'currency' => $paystackCurrency,
+                        'original_amount' => $currency === 'USD' ? $amount : null,
+                        'original_currency' => $currency === 'USD' ? $currency : null,
+                        'exchange_rate' => $exchangeRate,
                     ]
                 ]);
             });
