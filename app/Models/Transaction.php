@@ -26,6 +26,9 @@ class Transaction extends Model
         'currency',
         'type',
         'amount',
+        'amount_usd',
+        'amount_naira',
+        'exchange_rate',
         'description',
         'payment_provider',
         'purchased_by',
@@ -35,6 +38,9 @@ class Transaction extends Model
         'purpose_type',
         'purpose_id',
         'meta_data',
+        'paystack_reference',
+        'paystack_authorization_code',
+        'paystack_response',
     ];
 
     /**
