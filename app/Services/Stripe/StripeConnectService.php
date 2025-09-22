@@ -4,13 +4,16 @@ namespace App\Services\Stripe;
 
 use App\Models\PaymentMethod as PaymentMethodModel;
 use App\Models\User;
+use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Stripe\Account;
+use Stripe\Balance;
 use Stripe\Customer;
 use Stripe\Exception;
 use Stripe\File;
@@ -18,6 +21,8 @@ use Stripe\PaymentIntent;
 use Stripe\PaymentMethod;
 use Stripe\Stripe;
 use Stripe\Webhook;
+use Stripe\Payout;
+use App\Models\StripePayout;
 
 class StripeConnectService
 {
@@ -410,7 +415,7 @@ class StripeConnectService
             // Handle $intent_purpose === 'subscription'
             if ($intent_purpose === 'subscription') {
                 // Find the user subscription by the purpose_id
-                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */'subscription'])->where('id', $intent_purpose_id)->first();
+                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */ 'subscription'])->where('id', $intent_purpose_id)->first();
                 $txn = \App\Models\Transaction::where('payment_intent_id', $paymentIntent->id)->first();
                 if ($userSubscription) {
                     // Update the subscription status to active
@@ -520,7 +525,7 @@ class StripeConnectService
             ]);
 
             // Check if the payment method was created successfully
-            if (! $paymentMethod) {
+            if (!$paymentMethod) {
                 // PaymentMethod::delete($existPaymentMethod->id);
                 return response()->json([
                     'message' => 'Error creating payment method in database',
@@ -612,7 +617,7 @@ class StripeConnectService
             ]);
 
             // Check if the payment method was created successfully
-            if (! $paymentMethod) {
+            if (!$paymentMethod) {
                 // PaymentMethod::delete($existPaymentMethod->id);
                 return response()->json([
                     'message' => 'Error creating payment method in database',
@@ -727,6 +732,122 @@ class StripeConnectService
             return $paymentIntent;
         } catch (\Throwable $th) {
             return $this->error('Error retrieving Payment Intent', 500, $th->getMessage(), $th);
+        }
+    }
+
+    public function retrieveAccountBalance($stripeAccountId): JsonResponse
+    {
+        try {
+            if (empty($stripeAccountId)) {
+                return $this->error('Stripe account ID is required', 422);
+            }
+
+            // Retrieve the balance for a connected account
+            $balance = Balance::retrieve(['stripe_account' => $stripeAccountId]);
+
+            // Sum amounts per currency for available and pending balances (amounts are in the smallest currency unit)
+            $sumByCurrency = function ($items) {
+                $result = [];
+                if (is_iterable($items)) {
+                    foreach ($items as $item) {
+                        $currency = strtolower($item->currency ?? '');
+                        if ($currency === '') {
+                            continue;
+                        }
+                        $result[$currency] = ($result[$currency] ?? 0) + (int)($item->amount ?? 0);
+                    }
+                }
+                return $result;
+            };
+
+            $available = $sumByCurrency($balance->available ?? []);
+            $pending = $sumByCurrency($balance->pending ?? []);
+
+            // Convert to main units if PaymentService is available
+            $availableMain = $available;
+            $pendingMain = $pending;
+
+            foreach ($available as $currency => $amount) {
+                $availableMain[$currency] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+            }
+            foreach ($pending as $currency => $amount) {
+                $pendingMain[$currency] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+            }
+
+            $data = [
+                'stripe_account_id' => $stripeAccountId,
+                'available' => $availableMain, // amounts in main units
+                'pending' => $pendingMain,     // amounts in main units
+                'raw' => $balance,
+            ];
+
+            return $this->success($data, 'Account balance retrieved successfully', 200);
+        } catch (\Throwable $th) {
+            return $this->error('Error retrieving account balance', 500, $th->getMessage(), $th);
+        }
+    }
+
+    public function createPayout($stripeAccountId, $amount, $currency): JsonResponse
+    {
+        try {
+            if (empty($stripeAccountId)) {
+                return $this->error('Stripe account ID is required', 422);
+            }
+            if ($amount <= 0) {
+                return $this->error('Payout amount must be greater than zero', 422);
+            }
+            if (empty($currency) || strlen($currency) !== 3) {
+                return $this->error('Valid 3-letter currency code is required', 422);
+            }
+            //CHECK if the account balance is sufficient for the payout
+            $balanceResponse = $this->retrieveAccountBalance($stripeAccountId);
+            if ($balanceResponse->getStatusCode() !== 200) {
+                return $this->error('Unable to retrieve account balance for payout', 500);
+            }
+            $balanceData = $balanceResponse->getData();
+            $availableBalances = $balanceData->data->available ?? [];
+            $availableAmount = $availableBalances->{strtolower($currency)} ?? 0;
+            if ($availableAmount < $amount) {
+                return $this->error('Insufficient balance for the requested payout', 422);
+            }
+
+            // Convert amount to the smallest currency unit
+            $amountInSubunits = app(PaymentService::class)->convertToSubunit($amount, $currency);
+
+            // Create the payout to the connected account
+            $payout = Payout::create(
+                [
+                    'amount' => $amountInSubunits,
+                    'currency' => strtolower($currency),
+                    'method' => 'standard',
+                    'description' => 'Payout of ' . number_format($amount, 2) . ' ' . strtoupper($currency),
+                ],
+                ['stripe_account' => $stripeAccountId]
+            );
+
+            // Error Handling
+            if ($payout instanceof Exception\InvalidRequestException) {
+                $error = $payout->getMessage();
+
+                return response()->json([
+                    'message' => 'Error initiating payout',
+                    'code' => 400,
+                    'data' => null,
+                    'error' => $error,
+                ], 400);
+            }
+
+            // Create a record in the stripe_payouts table
+            $user = User::where('kyc_account_id', $stripeAccountId)->first();
+            if (!$user) {
+                return $this->error('User not found for the given Stripe account ID', 404);
+            }
+            $payoutRecord = StripePayout::createFromStripeObject($user->id, $payout->toArray());
+
+            return $this->success($payoutRecord, 'Payout initiated successfully', 200);
+        } catch (\Throwable $th) {
+            throw $th;
+            return $this->error('Error creating payout', 500, $th->getMessage(), $th);
         }
     }
 }

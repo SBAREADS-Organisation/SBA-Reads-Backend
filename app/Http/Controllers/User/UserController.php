@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Spatie\Permission\Models\Role;
+use Stripe\StripeClient;
 
 class UserController extends Controller
 {
@@ -1143,6 +1144,55 @@ class UserController extends Controller
                 config('app.debug') ? $e->getMessage() : 'An error occurred while inviting the admin.',
                 $e
             );
+        }
+    }
+
+    /**
+     * Generates a Stripe onboarding link for the authenticated author.
+     *
+     * @param \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function onboard(Request $request)
+    {
+        // Get the authenticated user
+        $user = auth()->user();
+
+        // Ensure the user has a Stripe account ID
+        if (empty($user->kyc_account_id)) {
+            // In a real scenario, you would first create a Stripe account for the user here
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Stripe account not yet created.'
+            ], 400);
+        }
+
+        // Initialize the Stripe client
+        try {
+            $stripe = new StripeClient(config('services.stripe.secret'));
+
+            // Create the Account Link.
+            // Note: The return and refresh URLs must be deep links that your mobile app can handle.
+            $accountLink = $stripe->accountLinks->create([
+                'account' => $user->kyc_account_id,
+                'refresh_url' => config('app.url') . '/api/onboarding/refresh',
+                'return_url' => config('app.url') . '/api/onboarding/return',
+                'type' => 'account_onboarding',
+                'collect' => 'eventually_due',
+            ]);
+
+            // Return the URL to the mobile app
+            return response()->json([
+                'status' => 'success',
+                'url' => $accountLink->url
+            ]);
+
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            // Handle Stripe API errors
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 }

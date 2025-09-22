@@ -16,6 +16,7 @@ use App\Http\Controllers\Socials\SocialAuthController;
 use App\Http\Controllers\Stripe\StripeWebhookController;
 use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
+use App\Http\Controllers\Withdrawal\StripeWithdrawalController;
 use App\Http\Controllers\Withdrawal\WithdrawalController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
@@ -99,6 +100,7 @@ Route::prefix('user')->group(function () {
 
         // User KYC Routes
         Route::prefix('kyc')->group(function () {
+            Route::get('onboard', [UserController::class, 'onboard'])->name('onboard-account');
             Route::post('initiate', [KYCController::class, 'initiate_KYC'])->name('initiate-kyc');
             Route::post('upload-document', [KYCController::class, 'uploadDocument'])->name('upload-document');
             Route::get('status', [KYCController::class, 'kycStatus'])->name('kyc-status');
@@ -117,6 +119,11 @@ Route::prefix('user')->group(function () {
             Route::get('/', [NotificationsController::class, 'index'])->name('user-notifications');
             Route::post('{notification}/mark-as-read', [NotificationsController::class, 'markNotificationAsRead'])->name('mark-notification-as-read');
             Route::post('/mark-all-as-read', [NotificationsController::class, 'markAllNotificationsAsRead'])->name('mark-all-notifications-as-read');
+        });
+
+        Route::prefix('payouts')->group(function () {
+            Route::get('/balance', [StripeWithdrawalController::class, 'getAuthorAccountBalance'])->name('user-balance');
+            Route::post('/stripe/initiate', [StripeWithdrawalController::class, 'initiateStripePayout'])->name('stripe-payout');
         });
     });
 });

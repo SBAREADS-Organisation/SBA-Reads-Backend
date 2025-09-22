@@ -336,4 +336,53 @@ class PaymentService
         // For all other currencies (typically 2 decimal places), multiply by 100
         return (int) round($amount * 100);
     }
+
+    /**
+     * Converts a currency amount from its smallest subunit (e.g., cents)
+     * back to its major unit (e.g., dollars).
+     *
+     * This is the inverse of convertToSubunit.
+     *
+     * @param int|float|string $amount The amount in the smallest subunit (e.g., 1050 for $10.50).
+     * @param string $currency The 3-letter ISO currency code (e.g., 'USD', 'EUR', 'JPY').
+     * @return float The amount in the major currency unit (e.g., 10.50 for 1050 cents).
+     *
+     * @throws \InvalidArgumentException If the amount is not numeric.
+     */
+    public function convertFromSubunit(int|float|string $amount, string $currency = 'usd'): float
+    {
+        if (! is_numeric($amount)) {
+            throw new \InvalidArgumentException('Amount must be a numeric value.');
+        }
+
+        $currency = strtoupper($currency);
+
+        // Currencies with zero decimal places (e.g., JPY, KRW) as per Stripe documentation
+        $zeroDecimalCurrencies = [
+            'BIF',
+            'CLP',
+            'DJF',
+            'GNF',
+            'JPY',
+            'KMF',
+            'KRW',
+            'MGA',
+            'PYG',
+            'RWF',
+            'UGX',
+            'VND',
+            'VUV',
+            'XAF',
+            'XOF',
+            'XPF',
+        ];
+
+        // For zero-decimal currencies, the subunit equals the major unit
+        if (in_array($currency, $zeroDecimalCurrencies)) {
+            return (float) $amount;
+        }
+
+        // For typical 2-decimal currencies, divide by 100 and round to 2 decimals
+        return round(((float) $amount) / 100, 2);
+    }
 }

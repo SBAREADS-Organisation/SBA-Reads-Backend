@@ -248,6 +248,38 @@ class User extends Authenticatable
         return $this->hasMany(ReadingProgress::class);
     }
 
+    /**
+     * Get all Stripe payouts for the user.
+     */
+    public function stripePayouts(): HasMany
+    {
+        return $this->hasMany(StripePayout::class);
+    }
+
+    /**
+     * Get successful Stripe payouts.
+     */
+    public function successfulStripePayouts(): HasMany
+    {
+        return $this->stripePayouts()->where('status', 'paid');
+    }
+
+    /**
+     * Get pending Stripe payouts.
+     */
+    public function pendingStripePayouts(): HasMany
+    {
+        return $this->stripePayouts()->where('status', 'pending');
+    }
+
+    /**
+     * Get failed Stripe payouts.
+     */
+    public function failedStripePayouts(): HasMany
+    {
+        return $this->stripePayouts()->where('status', 'failed');
+    }
+
     protected static function booted()
     {
         static::created(function ($user) {

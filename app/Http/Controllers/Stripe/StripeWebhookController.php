@@ -79,6 +79,31 @@ class StripeWebhookController extends Controller
                 $this->service->handleAccountUpdated($account);
                 break;
 
+            case 'payout.created':
+                $payout = $event->data->object;
+                $this->service->handlePayoutCreated($payout);
+                break;
+
+            case 'payout.updated':
+                $payout = $event->data->object;
+                $this->service->handlePayoutUpdated($payout);
+                break;
+
+            case 'payout.paid':
+                $payout = $event->data->object;
+                $this->service->handlePayoutPaid($payout);
+                break;
+
+            case 'payout.failed':
+                $payout = $event->data->object;
+                $this->service->handlePayoutFailed($payout);
+                break;
+
+            case 'payout.canceled':
+                $payout = $event->data->object;
+                $this->service->handlePayoutCanceled($payout);
+                break;
+
             default:
                 break;
         }
