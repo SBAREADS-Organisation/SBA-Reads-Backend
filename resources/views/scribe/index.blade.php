@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <title>SBA READS API Documentation</title>
+    <title>Laravel API Documentation</title>
 
     <link href="https://fonts.googleapis.com/css?family=Open+Sans&display=swap" rel="stylesheet">
 
@@ -26,7 +26,7 @@
             </style>
 
     <script>
-        var tryItOutBaseUrl = "https://sba-reads-backend.test";
+        var tryItOutBaseUrl = "http://sba-reads-backend.test";
         var useCsrf = Boolean();
         var csrfUrl = "/sanctum/csrf-cookie";
     </script>
@@ -429,7 +429,7 @@ Returns revenue per month in format: { "January": 120, "February": 300, .</a>
     </ul>
 
     <ul class="toc-footer" id="last-updated">
-        <li>Last updated: September 22, 2025</li>
+        <li>Last updated: September 24, 2025</li>
     </ul>
 </div>
 
@@ -438,7 +438,7 @@ Returns revenue per month in format: { "January": 120, "February": 300, .</a>
     <div class="content">
         <h1 id="introduction">Introduction</h1>
 <aside>
-    <strong>Base URL</strong>: <code>https://sba-reads-backend.test</code>
+    <strong>Base URL</strong>: <code>http://sba-reads-backend.test</code>
 </aside>
 <pre><code>This documentation aims to provide all the information you need to work with our API.
 
@@ -465,14 +465,14 @@ You can switch the language used with the tabs at the top right (or from the nav
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/auth/login" \
+    "http://sba-reads-backend.test/api/auth/login" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/login"
+    "http://sba-reads-backend.test/api/auth/login"
 );
 
 const headers = {
@@ -573,14 +573,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/auth/forgot-password" \
+    "http://sba-reads-backend.test/api/auth/forgot-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/forgot-password"
+    "http://sba-reads-backend.test/api/auth/forgot-password"
 );
 
 const headers = {
@@ -681,14 +681,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/auth/reset-password" \
+    "http://sba-reads-backend.test/api/auth/reset-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/reset-password"
+    "http://sba-reads-backend.test/api/auth/reset-password"
 );
 
 const headers = {
@@ -789,14 +789,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/auth/verify-reset-password-otp" \
+    "http://sba-reads-backend.test/api/auth/verify-reset-password-otp" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/verify-reset-password-otp"
+    "http://sba-reads-backend.test/api/auth/verify-reset-password-otp"
 );
 
 const headers = {
@@ -897,7 +897,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/withdrawals/initiate" \
+    "http://sba-reads-backend.test/api/withdrawals/initiate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -912,7 +912,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/withdrawals/initiate"
+    "http://sba-reads-backend.test/api/withdrawals/initiate"
 );
 
 const headers = {
@@ -1082,14 +1082,14 @@ Must be one of:
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/withdrawals/history" \
+    --get "http://sba-reads-backend.test/api/withdrawals/history" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/withdrawals/history"
+    "http://sba-reads-backend.test/api/withdrawals/history"
 );
 
 const headers = {
@@ -1208,14 +1208,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/withdrawals/architecto" \
+    --get "http://sba-reads-backend.test/api/withdrawals/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/withdrawals/architecto"
+    "http://sba-reads-backend.test/api/withdrawals/architecto"
 );
 
 const headers = {
@@ -1346,14 +1346,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user" \
+    --get "http://sba-reads-backend.test/api/user" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user"
+    "http://sba-reads-backend.test/api/user"
 );
 
 const headers = {
@@ -1472,7 +1472,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/superadmin/create" \
+    "http://sba-reads-backend.test/api/user/superadmin/create" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -1484,7 +1484,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/superadmin/create"
+    "http://sba-reads-backend.test/api/user/superadmin/create"
 );
 
 const headers = {
@@ -1614,14 +1614,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/register" \
+    "http://sba-reads-backend.test/api/user/register" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/register"
+    "http://sba-reads-backend.test/api/user/register"
 );
 
 const headers = {
@@ -1722,7 +1722,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/verify-email" \
+    "http://sba-reads-backend.test/api/user/verify-email" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -1734,7 +1734,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/verify-email"
+    "http://sba-reads-backend.test/api/user/verify-email"
 );
 
 const headers = {
@@ -1864,7 +1864,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/resend-email-token" \
+    "http://sba-reads-backend.test/api/user/resend-email-token" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -1875,7 +1875,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/resend-email-token"
+    "http://sba-reads-backend.test/api/user/resend-email-token"
 );
 
 const headers = {
@@ -1993,14 +1993,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/all" \
+    --get "http://sba-reads-backend.test/api/user/all" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/all"
+    "http://sba-reads-backend.test/api/user/all"
 );
 
 const headers = {
@@ -2119,14 +2119,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/profile" \
+    --get "http://sba-reads-backend.test/api/user/profile" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile"
+    "http://sba-reads-backend.test/api/user/profile"
 );
 
 const headers = {
@@ -2245,14 +2245,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/profile" \
+    "http://sba-reads-backend.test/api/user/profile" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile"
+    "http://sba-reads-backend.test/api/user/profile"
 );
 
 const headers = {
@@ -2353,7 +2353,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/profile/564" \
+    --get "http://sba-reads-backend.test/api/user/profile/564" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -2364,7 +2364,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile/564"
+    "http://sba-reads-backend.test/api/user/profile/564"
 );
 
 const headers = {
@@ -2512,14 +2512,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/profile/action/architecto/architecto" \
+    "http://sba-reads-backend.test/api/user/profile/action/architecto/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile/action/architecto/architecto"
+    "http://sba-reads-backend.test/api/user/profile/action/architecto/architecto"
 );
 
 const headers = {
@@ -2643,14 +2643,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "https://sba-reads-backend.test/api/user/profile/preference" \
+    "http://sba-reads-backend.test/api/user/profile/preference" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile/preference"
+    "http://sba-reads-backend.test/api/user/profile/preference"
 );
 
 const headers = {
@@ -2751,14 +2751,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "https://sba-reads-backend.test/api/user/profile/settings" \
+    "http://sba-reads-backend.test/api/user/profile/settings" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile/settings"
+    "http://sba-reads-backend.test/api/user/profile/settings"
 );
 
 const headers = {
@@ -2859,14 +2859,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/address" \
+    "http://sba-reads-backend.test/api/user/address" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/address"
+    "http://sba-reads-backend.test/api/user/address"
 );
 
 const headers = {
@@ -2967,14 +2967,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/address/all" \
+    --get "http://sba-reads-backend.test/api/user/address/all" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/address/all"
+    "http://sba-reads-backend.test/api/user/address/all"
 );
 
 const headers = {
@@ -3093,14 +3093,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/subscriptions/history" \
+    --get "http://sba-reads-backend.test/api/user/subscriptions/history" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/subscriptions/history"
+    "http://sba-reads-backend.test/api/user/subscriptions/history"
 );
 
 const headers = {
@@ -3219,14 +3219,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/subscriptions/subscribe" \
+    "http://sba-reads-backend.test/api/user/subscriptions/subscribe" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/subscriptions/subscribe"
+    "http://sba-reads-backend.test/api/user/subscriptions/subscribe"
 );
 
 const headers = {
@@ -3327,14 +3327,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/token/refresh" \
+    "http://sba-reads-backend.test/api/user/token/refresh" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/token/refresh"
+    "http://sba-reads-backend.test/api/user/token/refresh"
 );
 
 const headers = {
@@ -3435,14 +3435,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/logout" \
+    "http://sba-reads-backend.test/api/user/logout" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/logout"
+    "http://sba-reads-backend.test/api/user/logout"
 );
 
 const headers = {
@@ -3543,14 +3543,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/profile/change-password" \
+    "http://sba-reads-backend.test/api/user/profile/change-password" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/profile/change-password"
+    "http://sba-reads-backend.test/api/user/profile/change-password"
 );
 
 const headers = {
@@ -3651,14 +3651,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/kyc/onboard" \
+    --get "http://sba-reads-backend.test/api/user/kyc/onboard" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/kyc/onboard"
+    "http://sba-reads-backend.test/api/user/kyc/onboard"
 );
 
 const headers = {
@@ -3777,14 +3777,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/kyc/initiate" \
+    "http://sba-reads-backend.test/api/user/kyc/initiate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/kyc/initiate"
+    "http://sba-reads-backend.test/api/user/kyc/initiate"
 );
 
 const headers = {
@@ -3885,14 +3885,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/kyc/upload-document" \
+    "http://sba-reads-backend.test/api/user/kyc/upload-document" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/kyc/upload-document"
+    "http://sba-reads-backend.test/api/user/kyc/upload-document"
 );
 
 const headers = {
@@ -3993,14 +3993,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/kyc/status" \
+    --get "http://sba-reads-backend.test/api/user/kyc/status" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/kyc/status"
+    "http://sba-reads-backend.test/api/user/kyc/status"
 );
 
 const headers = {
@@ -4119,14 +4119,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/payment_method/list" \
+    --get "http://sba-reads-backend.test/api/user/payment_method/list" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/payment_method/list"
+    "http://sba-reads-backend.test/api/user/payment_method/list"
 );
 
 const headers = {
@@ -4245,14 +4245,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/payment_method/add-card" \
+    "http://sba-reads-backend.test/api/user/payment_method/add-card" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/payment_method/add-card"
+    "http://sba-reads-backend.test/api/user/payment_method/add-card"
 );
 
 const headers = {
@@ -4353,14 +4353,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/payment_method/add-bank-account" \
+    "http://sba-reads-backend.test/api/user/payment_method/add-bank-account" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/payment_method/add-bank-account"
+    "http://sba-reads-backend.test/api/user/payment_method/add-bank-account"
 );
 
 const headers = {
@@ -4461,14 +4461,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/notifications" \
+    --get "http://sba-reads-backend.test/api/user/notifications" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/notifications"
+    "http://sba-reads-backend.test/api/user/notifications"
 );
 
 const headers = {
@@ -4587,14 +4587,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/user/payouts/balance" \
+    --get "http://sba-reads-backend.test/api/user/payouts/balance" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/payouts/balance"
+    "http://sba-reads-backend.test/api/user/payouts/balance"
 );
 
 const headers = {
@@ -4713,7 +4713,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/user/payouts/stripe/initiate" \
+    "http://sba-reads-backend.test/api/user/payouts/stripe/initiate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -4725,7 +4725,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/user/payouts/stripe/initiate"
+    "http://sba-reads-backend.test/api/user/payouts/stripe/initiate"
 );
 
 const headers = {
@@ -4855,14 +4855,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/subscriptions" \
+    --get "http://sba-reads-backend.test/api/subscriptions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/subscriptions"
+    "http://sba-reads-backend.test/api/subscriptions"
 );
 
 const headers = {
@@ -4981,14 +4981,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/webhooks/stripe" \
+    "http://sba-reads-backend.test/api/webhooks/stripe" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/webhooks/stripe"
+    "http://sba-reads-backend.test/api/webhooks/stripe"
 );
 
 const headers = {
@@ -5089,7 +5089,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/paystack/payment/initialize" \
+    "http://sba-reads-backend.test/api/paystack/payment/initialize" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -5104,7 +5104,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/paystack/payment/initialize"
+    "http://sba-reads-backend.test/api/paystack/payment/initialize"
 );
 
 const headers = {
@@ -5281,14 +5281,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/paystack/webhook" \
+    "http://sba-reads-backend.test/api/paystack/webhook" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/paystack/webhook"
+    "http://sba-reads-backend.test/api/paystack/webhook"
 );
 
 const headers = {
@@ -5389,14 +5389,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/paystack/callback" \
+    --get "http://sba-reads-backend.test/api/paystack/callback" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/paystack/callback"
+    "http://sba-reads-backend.test/api/paystack/callback"
 );
 
 const headers = {
@@ -5515,14 +5515,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books" \
+    "http://sba-reads-backend.test/api/books" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books"
+    "http://sba-reads-backend.test/api/books"
 );
 
 const headers = {
@@ -5623,14 +5623,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books" \
+    --get "http://sba-reads-backend.test/api/books" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books"
+    "http://sba-reads-backend.test/api/books"
 );
 
 const headers = {
@@ -5749,14 +5749,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/all" \
+    --get "http://sba-reads-backend.test/api/books/all" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/all"
+    "http://sba-reads-backend.test/api/books/all"
 );
 
 const headers = {
@@ -5875,14 +5875,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/architecto" \
+    --get "http://sba-reads-backend.test/api/books/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/architecto"
+    "http://sba-reads-backend.test/api/books/architecto"
 );
 
 const headers = {
@@ -6013,14 +6013,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/architecto/reviews" \
+    --get "http://sba-reads-backend.test/api/books/architecto/reviews" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/architecto/reviews"
+    "http://sba-reads-backend.test/api/books/architecto/reviews"
 );
 
 const headers = {
@@ -6151,14 +6151,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/preview" \
+    "http://sba-reads-backend.test/api/books/preview" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/preview"
+    "http://sba-reads-backend.test/api/books/preview"
 );
 
 const headers = {
@@ -6259,14 +6259,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "https://sba-reads-backend.test/api/books/1" \
+    "http://sba-reads-backend.test/api/books/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1"
+    "http://sba-reads-backend.test/api/books/16"
 );
 
 const headers = {
@@ -6359,10 +6359,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="id"                data-endpoint="PUTapi-books--id-"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -6379,14 +6379,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PATCH \
-    "https://sba-reads-backend.test/api/books/1/toggle-visibility" \
+    "http://sba-reads-backend.test/api/books/16/toggle-visibility" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/toggle-visibility"
+    "http://sba-reads-backend.test/api/books/16/toggle-visibility"
 );
 
 const headers = {
@@ -6479,10 +6479,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="book_id"                data-endpoint="PATCHapi-books--book_id--toggle-visibility"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -6499,14 +6499,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "https://sba-reads-backend.test/api/books/1" \
+    "http://sba-reads-backend.test/api/books/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1"
+    "http://sba-reads-backend.test/api/books/16"
 );
 
 const headers = {
@@ -6599,10 +6599,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="book_id"                data-endpoint="DELETEapi-books--book_id-"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -6619,14 +6619,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/purchase" \
+    "http://sba-reads-backend.test/api/books/purchase" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/purchase"
+    "http://sba-reads-backend.test/api/books/purchase"
 );
 
 const headers = {
@@ -6727,7 +6727,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/1/start-reading" \
+    "http://sba-reads-backend.test/api/books/16/start-reading" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -6738,7 +6738,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/start-reading"
+    "http://sba-reads-backend.test/api/books/16/start-reading"
 );
 
 const headers = {
@@ -6836,10 +6836,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="id"                data-endpoint="POSTapi-books--id--start-reading"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                             <h4 class="fancy-heading-panel"><b>Body Parameters</b></h4>
         <div style=" padding-left: 28px;  clear: unset;">
@@ -6890,14 +6890,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/user/reading-progress" \
+    --get "http://sba-reads-backend.test/api/books/user/reading-progress" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/user/reading-progress"
+    "http://sba-reads-backend.test/api/books/user/reading-progress"
 );
 
 const headers = {
@@ -7016,7 +7016,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/1/reviews" \
+    "http://sba-reads-backend.test/api/books/16/reviews" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -7028,7 +7028,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/reviews"
+    "http://sba-reads-backend.test/api/books/16/reviews"
 );
 
 const headers = {
@@ -7127,10 +7127,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="id"                data-endpoint="POSTapi-books--id--reviews"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                             <h4 class="fancy-heading-panel"><b>Body Parameters</b></h4>
         <div style=" padding-left: 28px;  clear: unset;">
@@ -7170,14 +7170,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/bookmarks/all" \
+    --get "http://sba-reads-backend.test/api/books/bookmarks/all" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/bookmarks/all"
+    "http://sba-reads-backend.test/api/books/bookmarks/all"
 );
 
 const headers = {
@@ -7296,14 +7296,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/1/bookmark" \
+    "http://sba-reads-backend.test/api/books/16/bookmark" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/bookmark"
+    "http://sba-reads-backend.test/api/books/16/bookmark"
 );
 
 const headers = {
@@ -7396,10 +7396,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="id"                data-endpoint="POSTapi-books--id--bookmark"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -7416,14 +7416,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/books/1/architecto" \
+    "http://sba-reads-backend.test/api/books/0/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/architecto"
+    "http://sba-reads-backend.test/api/books/0/architecto"
 );
 
 const headers = {
@@ -7516,10 +7516,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="action"                data-endpoint="POSTapi-books--action---bookId-"
-               value="1"
+               value="0"
                data-component="url">
     <br>
-<p>Example: <code>1</code></p>
+<p>Example: <code>0</code></p>
             </div>
                     <div style="padding-left: 28px; clear: unset;">
                 <b style="line-height: 2;"><code>bookId</code></b>&nbsp;&nbsp;
@@ -7547,14 +7547,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "https://sba-reads-backend.test/api/books/1/bookmark" \
+    "http://sba-reads-backend.test/api/books/16/bookmark" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/1/bookmark"
+    "http://sba-reads-backend.test/api/books/16/bookmark"
 );
 
 const headers = {
@@ -7647,10 +7647,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="id"                data-endpoint="DELETEapi-books--id--bookmark"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the book. Example: <code>1</code></p>
+<p>The ID of the book. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -7667,14 +7667,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/books/my-purchases" \
+    --get "http://sba-reads-backend.test/api/books/my-purchases" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/books/my-purchases"
+    "http://sba-reads-backend.test/api/books/my-purchases"
 );
 
 const headers = {
@@ -7793,14 +7793,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/author/my-books" \
+    --get "http://sba-reads-backend.test/api/author/my-books" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/author/my-books"
+    "http://sba-reads-backend.test/api/author/my-books"
 );
 
 const headers = {
@@ -7919,14 +7919,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/author/dashboard" \
+    --get "http://sba-reads-backend.test/api/author/dashboard" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/author/dashboard"
+    "http://sba-reads-backend.test/api/author/dashboard"
 );
 
 const headers = {
@@ -8046,14 +8046,14 @@ Returns all transactions for the authenticated author including payouts and earn
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/author/transactions" \
+    --get "http://sba-reads-backend.test/api/author/transactions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/author/transactions"
+    "http://sba-reads-backend.test/api/author/transactions"
 );
 
 const headers = {
@@ -8172,14 +8172,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/categories" \
+    --get "http://sba-reads-backend.test/api/categories" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/categories"
+    "http://sba-reads-backend.test/api/categories"
 );
 
 const headers = {
@@ -8298,14 +8298,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/categories/1" \
+    --get "http://sba-reads-backend.test/api/categories/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/categories/1"
+    "http://sba-reads-backend.test/api/categories/16"
 );
 
 const headers = {
@@ -8416,10 +8416,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="category_id"                data-endpoint="GETapi-categories--category_id-"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the category. Example: <code>1</code></p>
+<p>The ID of the category. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -8436,14 +8436,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/categories" \
+    "http://sba-reads-backend.test/api/categories" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/categories"
+    "http://sba-reads-backend.test/api/categories"
 );
 
 const headers = {
@@ -8544,14 +8544,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "https://sba-reads-backend.test/api/categories/1" \
+    "http://sba-reads-backend.test/api/categories/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/categories/1"
+    "http://sba-reads-backend.test/api/categories/16"
 );
 
 const headers = {
@@ -8644,10 +8644,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="category_id"                data-endpoint="PUTapi-categories--category_id-"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the category. Example: <code>1</code></p>
+<p>The ID of the category. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -8664,14 +8664,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "https://sba-reads-backend.test/api/categories/1" \
+    "http://sba-reads-backend.test/api/categories/16" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/categories/1"
+    "http://sba-reads-backend.test/api/categories/16"
 );
 
 const headers = {
@@ -8764,10 +8764,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="number" style="display: none"
                step="any"               name="category_id"                data-endpoint="DELETEapi-categories--category_id-"
-               value="1"
+               value="16"
                data-component="url">
     <br>
-<p>The ID of the category. Example: <code>1</code></p>
+<p>The ID of the category. Example: <code>16</code></p>
             </div>
                     </form>
 
@@ -8784,14 +8784,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/order" \
+    --get "http://sba-reads-backend.test/api/order" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order"
+    "http://sba-reads-backend.test/api/order"
 );
 
 const headers = {
@@ -8910,14 +8910,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/order" \
+    "http://sba-reads-backend.test/api/order" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order"
+    "http://sba-reads-backend.test/api/order"
 );
 
 const headers = {
@@ -9018,14 +9018,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/order/my-orders" \
+    --get "http://sba-reads-backend.test/api/order/my-orders" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order/my-orders"
+    "http://sba-reads-backend.test/api/order/my-orders"
 );
 
 const headers = {
@@ -9144,14 +9144,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/order/architecto" \
+    --get "http://sba-reads-backend.test/api/order/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order/architecto"
+    "http://sba-reads-backend.test/api/order/architecto"
 );
 
 const headers = {
@@ -9282,14 +9282,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/order/track/architecto" \
+    --get "http://sba-reads-backend.test/api/order/track/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order/track/architecto"
+    "http://sba-reads-backend.test/api/order/track/architecto"
 );
 
 const headers = {
@@ -9420,18 +9420,18 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "https://sba-reads-backend.test/api/order/architecto/status-update" \
+    "http://sba-reads-backend.test/api/order/architecto/status-update" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
-    \"status\": \"completed\"
+    \"status\": \"cancelled\"
 }"
 </code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/order/architecto/status-update"
+    "http://sba-reads-backend.test/api/order/architecto/status-update"
 );
 
 const headers = {
@@ -9440,7 +9440,7 @@ const headers = {
 };
 
 let body = {
-    "status": "completed"
+    "status": "cancelled"
 };
 
 fetch(url, {
@@ -9541,10 +9541,10 @@ You can check the Dev Tools console for debugging information.</code></pre>
  &nbsp;
                 <input type="text" style="display: none"
                               name="status"                data-endpoint="PUTapi-order--id--status-update"
-               value="completed"
+               value="cancelled"
                data-component="body">
     <br>
-<p>Example: <code>completed</code></p>
+<p>Example: <code>cancelled</code></p>
 Must be one of:
 <ul style="list-style-type: square;"><li><code>completed</code></li> <li><code>declined</code></li> <li><code>cancelled</code></li> <li><code>processing</code></li></ul>
         </div>
@@ -9563,14 +9563,14 @@ Must be one of:
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/transaction/verify" \
+    --get "http://sba-reads-backend.test/api/transaction/verify" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/transaction/verify"
+    "http://sba-reads-backend.test/api/transaction/verify"
 );
 
 const headers = {
@@ -9689,14 +9689,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/transaction/my-transactions" \
+    --get "http://sba-reads-backend.test/api/transaction/my-transactions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/transaction/my-transactions"
+    "http://sba-reads-backend.test/api/transaction/my-transactions"
 );
 
 const headers = {
@@ -9815,14 +9815,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/transaction/all" \
+    --get "http://sba-reads-backend.test/api/transaction/all" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/transaction/all"
+    "http://sba-reads-backend.test/api/transaction/all"
 );
 
 const headers = {
@@ -9941,14 +9941,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/transaction/architecto" \
+    --get "http://sba-reads-backend.test/api/transaction/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/transaction/architecto"
+    "http://sba-reads-backend.test/api/transaction/architecto"
 );
 
 const headers = {
@@ -10079,14 +10079,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/transaction/payment/status" \
+    "http://sba-reads-backend.test/api/transaction/payment/status" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/transaction/payment/status"
+    "http://sba-reads-backend.test/api/transaction/payment/status"
 );
 
 const headers = {
@@ -10187,14 +10187,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/analytics" \
+    --get "http://sba-reads-backend.test/api/analytics" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/analytics"
+    "http://sba-reads-backend.test/api/analytics"
 );
 
 const headers = {
@@ -10314,14 +10314,14 @@ Returns revenue per month in format: { &quot;January&quot;: 120, &quot;February&
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/analytics/monthly-revenue" \
+    --get "http://sba-reads-backend.test/api/analytics/monthly-revenue" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/analytics/monthly-revenue"
+    "http://sba-reads-backend.test/api/analytics/monthly-revenue"
 );
 
 const headers = {
@@ -10440,7 +10440,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/admin/invite-admin" \
+    "http://sba-reads-backend.test/api/admin/invite-admin" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json" \
     --data "{
@@ -10453,7 +10453,7 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/invite-admin"
+    "http://sba-reads-backend.test/api/admin/invite-admin"
 );
 
 const headers = {
@@ -10595,14 +10595,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/admin/app-versions-support" \
+    --get "http://sba-reads-backend.test/api/admin/app-versions-support" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/app-versions-support"
+    "http://sba-reads-backend.test/api/admin/app-versions-support"
 );
 
 const headers = {
@@ -10721,14 +10721,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/admin/app-versions-support" \
+    "http://sba-reads-backend.test/api/admin/app-versions-support" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/app-versions-support"
+    "http://sba-reads-backend.test/api/admin/app-versions-support"
 );
 
 const headers = {
@@ -10829,14 +10829,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "https://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
+    "http://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/app-versions-support/architecto"
+    "http://sba-reads-backend.test/api/admin/app-versions-support/architecto"
 );
 
 const headers = {
@@ -10949,14 +10949,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
+    --get "http://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/app-versions-support/architecto"
+    "http://sba-reads-backend.test/api/admin/app-versions-support/architecto"
 );
 
 const headers = {
@@ -11087,14 +11087,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "https://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
+    "http://sba-reads-backend.test/api/admin/app-versions-support/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/app-versions-support/architecto"
+    "http://sba-reads-backend.test/api/admin/app-versions-support/architecto"
 );
 
 const headers = {
@@ -11207,14 +11207,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/admin/subscriptions" \
+    --get "http://sba-reads-backend.test/api/admin/subscriptions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/subscriptions"
+    "http://sba-reads-backend.test/api/admin/subscriptions"
 );
 
 const headers = {
@@ -11333,14 +11333,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/admin/subscriptions/architecto" \
+    --get "http://sba-reads-backend.test/api/admin/subscriptions/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/subscriptions/architecto"
+    "http://sba-reads-backend.test/api/admin/subscriptions/architecto"
 );
 
 const headers = {
@@ -11471,14 +11471,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request POST \
-    "https://sba-reads-backend.test/api/admin/subscriptions" \
+    "http://sba-reads-backend.test/api/admin/subscriptions" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/subscriptions"
+    "http://sba-reads-backend.test/api/admin/subscriptions"
 );
 
 const headers = {
@@ -11579,14 +11579,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request PUT \
-    "https://sba-reads-backend.test/api/admin/subscriptions/architecto" \
+    "http://sba-reads-backend.test/api/admin/subscriptions/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/subscriptions/architecto"
+    "http://sba-reads-backend.test/api/admin/subscriptions/architecto"
 );
 
 const headers = {
@@ -11699,14 +11699,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request DELETE \
-    "https://sba-reads-backend.test/api/admin/subscriptions/architecto" \
+    "http://sba-reads-backend.test/api/admin/subscriptions/architecto" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/subscriptions/architecto"
+    "http://sba-reads-backend.test/api/admin/subscriptions/architecto"
 );
 
 const headers = {
@@ -11819,14 +11819,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/admin/dashboard" \
+    --get "http://sba-reads-backend.test/api/admin/dashboard" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/admin/dashboard"
+    "http://sba-reads-backend.test/api/admin/dashboard"
 );
 
 const headers = {
@@ -11945,14 +11945,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/auth/architecto/redirect" \
+    --get "http://sba-reads-backend.test/api/auth/architecto/redirect" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/architecto/redirect"
+    "http://sba-reads-backend.test/api/auth/architecto/redirect"
 );
 
 const headers = {
@@ -12083,14 +12083,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/auth/architecto/callback" \
+    --get "http://sba-reads-backend.test/api/auth/architecto/callback" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/architecto/callback"
+    "http://sba-reads-backend.test/api/auth/architecto/callback"
 );
 
 const headers = {
@@ -12221,14 +12221,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/auth/google" \
+    --get "http://sba-reads-backend.test/api/auth/google" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/google"
+    "http://sba-reads-backend.test/api/auth/google"
 );
 
 const headers = {
@@ -12347,14 +12347,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/auth/google/callback" \
+    --get "http://sba-reads-backend.test/api/auth/google/callback" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/auth/google/callback"
+    "http://sba-reads-backend.test/api/auth/google/callback"
 );
 
 const headers = {
@@ -12473,14 +12473,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/log-test" \
+    --get "http://sba-reads-backend.test/api/log-test" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/log-test"
+    "http://sba-reads-backend.test/api/log-test"
 );
 
 const headers = {
@@ -12599,14 +12599,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/scribe-generate" \
+    --get "http://sba-reads-backend.test/api/scribe-generate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/scribe-generate"
+    "http://sba-reads-backend.test/api/scribe-generate"
 );
 
 const headers = {
@@ -12725,14 +12725,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/migrate" \
+    --get "http://sba-reads-backend.test/api/migrate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/migrate"
+    "http://sba-reads-backend.test/api/migrate"
 );
 
 const headers = {
@@ -12851,14 +12851,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/migrate/rollback" \
+    --get "http://sba-reads-backend.test/api/migrate/rollback" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/migrate/rollback"
+    "http://sba-reads-backend.test/api/migrate/rollback"
 );
 
 const headers = {
@@ -12977,14 +12977,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/seed" \
+    --get "http://sba-reads-backend.test/api/seed" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/seed"
+    "http://sba-reads-backend.test/api/seed"
 );
 
 const headers = {
@@ -13103,14 +13103,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/clear" \
+    --get "http://sba-reads-backend.test/api/clear" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/clear"
+    "http://sba-reads-backend.test/api/clear"
 );
 
 const headers = {
@@ -13229,14 +13229,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/routes" \
+    --get "http://sba-reads-backend.test/api/routes" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/routes"
+    "http://sba-reads-backend.test/api/routes"
 );
 
 const headers = {
@@ -13355,14 +13355,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/storage-link" \
+    --get "http://sba-reads-backend.test/api/storage-link" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/storage-link"
+    "http://sba-reads-backend.test/api/storage-link"
 );
 
 const headers = {
@@ -13481,14 +13481,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/optimize" \
+    --get "http://sba-reads-backend.test/api/optimize" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/optimize"
+    "http://sba-reads-backend.test/api/optimize"
 );
 
 const headers = {
@@ -13607,14 +13607,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/key-generate" \
+    --get "http://sba-reads-backend.test/api/key-generate" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/key-generate"
+    "http://sba-reads-backend.test/api/key-generate"
 );
 
 const headers = {
@@ -13733,14 +13733,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/debug-db" \
+    --get "http://sba-reads-backend.test/api/debug-db" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/debug-db"
+    "http://sba-reads-backend.test/api/debug-db"
 );
 
 const headers = {
@@ -13859,14 +13859,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/show-db" \
+    --get "http://sba-reads-backend.test/api/show-db" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/show-db"
+    "http://sba-reads-backend.test/api/show-db"
 );
 
 const headers = {
@@ -13985,14 +13985,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/health" \
+    --get "http://sba-reads-backend.test/api/monitor/health" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/health"
+    "http://sba-reads-backend.test/api/monitor/health"
 );
 
 const headers = {
@@ -14111,14 +14111,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/queue" \
+    --get "http://sba-reads-backend.test/api/monitor/queue" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/queue"
+    "http://sba-reads-backend.test/api/monitor/queue"
 );
 
 const headers = {
@@ -14237,14 +14237,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/schedule" \
+    --get "http://sba-reads-backend.test/api/monitor/schedule" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/schedule"
+    "http://sba-reads-backend.test/api/monitor/schedule"
 );
 
 const headers = {
@@ -14363,14 +14363,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/webhooks/recent" \
+    --get "http://sba-reads-backend.test/api/monitor/webhooks/recent" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/webhooks/recent"
+    "http://sba-reads-backend.test/api/monitor/webhooks/recent"
 );
 
 const headers = {
@@ -14399,7 +14399,7 @@ access-control-allow-origin: *
  </code></pre></details>         <pre>
 
 <code class="language-json" style="max-height: 300px;">{
-    &quot;message&quot;: &quot;Unauthorized.&quot;
+    &quot;message&quot;: &quot;Monitoring API key not configured.&quot;
 }</code>
  </pre>
     </span>
@@ -14487,14 +14487,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/version" \
+    --get "http://sba-reads-backend.test/api/monitor/version" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/version"
+    "http://sba-reads-backend.test/api/monitor/version"
 );
 
 const headers = {
@@ -14613,14 +14613,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/stripe" \
+    --get "http://sba-reads-backend.test/api/monitor/stripe" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/stripe"
+    "http://sba-reads-backend.test/api/monitor/stripe"
 );
 
 const headers = {
@@ -14739,14 +14739,14 @@ You can check the Dev Tools console for debugging information.</code></pre>
 
 <div class="bash-example">
     <pre><code class="language-bash">curl --request GET \
-    --get "https://sba-reads-backend.test/api/monitor/cloudinary" \
+    --get "http://sba-reads-backend.test/api/monitor/cloudinary" \
     --header "Content-Type: application/json" \
     --header "Accept: application/json"</code></pre></div>
 
 
 <div class="javascript-example">
     <pre><code class="language-javascript">const url = new URL(
-    "https://sba-reads-backend.test/api/monitor/cloudinary"
+    "http://sba-reads-backend.test/api/monitor/cloudinary"
 );
 
 const headers = {

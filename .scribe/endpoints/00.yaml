@@ -1931,14 +1931,14 @@ endpoints:
         name: id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      id: 1
+      id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -1973,14 +1973,14 @@ endpoints:
         name: book_id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      book_id: 1
+      book_id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2015,14 +2015,14 @@ endpoints:
         name: book_id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      book_id: 1
+      book_id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2088,14 +2088,14 @@ endpoints:
         name: id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      id: 1
+      id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters:
@@ -2201,14 +2201,14 @@ endpoints:
         name: id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      id: 1
+      id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters:
@@ -2305,14 +2305,14 @@ endpoints:
         name: id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      id: 1
+      id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2347,7 +2347,7 @@ endpoints:
         name: action
         description: ''
         required: true
-        example: 1
+        example: 0
         type: integer
         enumValues: []
         exampleWasSpecified: false
@@ -2364,7 +2364,7 @@ endpoints:
         nullable: false
         custom: []
     cleanUrlParameters:
-      action: 1
+      action: 0
       bookId: architecto
     queryParameters: []
     cleanQueryParameters: []
@@ -2400,14 +2400,14 @@ endpoints:
         name: id
         description: 'The ID of the book.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      id: 1
+      id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2644,14 +2644,14 @@ endpoints:
         name: category_id
         description: 'The ID of the category.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      category_id: 1
+      category_id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2726,14 +2726,14 @@ endpoints:
         name: category_id
         description: 'The ID of the category.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      category_id: 1
+      category_id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -2768,14 +2768,14 @@ endpoints:
         name: category_id
         description: 'The ID of the category.'
         required: true
-        example: 1
+        example: 16
         type: integer
         enumValues: []
         exampleWasSpecified: false
         nullable: false
         custom: []
     cleanUrlParameters:
-      category_id: 1
+      category_id: 16
     queryParameters: []
     cleanQueryParameters: []
     bodyParameters: []
@@ -3038,7 +3038,7 @@ endpoints:
         name: status
         description: ''
         required: true
-        example: completed
+        example: cancelled
         type: string
         enumValues:
           - completed
@@ -3049,7 +3049,7 @@ endpoints:
         nullable: false
         custom: []
     cleanBodyParameters:
-      status: completed
+      status: cancelled
     fileParameters: []
     responses: []
     responseFields: []
@@ -4667,7 +4667,7 @@ endpoints:
     responses:
       -
         status: 401
-        content: '{"message":"Unauthorized."}'
+        content: '{"message":"Monitoring API key not configured."}'
         headers:
           cache-control: 'no-cache, private'
           content-type: application/json
