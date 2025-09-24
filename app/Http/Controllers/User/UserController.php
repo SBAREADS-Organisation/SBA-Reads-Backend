@@ -134,12 +134,12 @@ class UserController extends Controller
                 DB::beginTransaction();
                 $user = new User;
                 $user->fill([
-                    // 'name' => $request->fullname,
                     'email' => $request->email,
                     'password' => Hash::make($request->password),
                     'default_login' => 'email',
                     'account_type' => $request->account_type,
                     'status' => 'active',
+                    'preferences' => [],
                 ]);
                 $user->save();
 
@@ -391,7 +391,7 @@ class UserController extends Controller
 
             Cache::forget($cacheKey);
 
-            Mail::to($user->email)->queue(new WelcomeEmail($user->name || 'NO NAME', $user->account_type));
+            Mail::to($user->email)->queue(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -438,6 +438,7 @@ class UserController extends Controller
                 'profile_info.username' => 'nullable|string|max:255|unique:users,username,' . $user->id,
                 'profile_info.bio' => 'nullable|string|max:1000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
+                'preferences' => 'nullable|array',
                 // 'profile_picture' => 'nullable|array',
                 'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
                 // 'profile_picture.public_id' => 'nullable|string|max:255',
@@ -491,12 +492,13 @@ class UserController extends Controller
             $user->pronouns = $request->input('profile_info.pronouns', $user->pronouns);
             $user->profile_picture = $profilePicture;
 
+            // Handle preferences for both authors and readers
+            $existingPreferences = $user->preferences ?? [];
+            $newPreferences = $request->input('preferences', []);
+            $user->preferences = array_merge($existingPreferences, $newPreferences);
+
             if ($user->account_type === 'author') {
                 // $user->socials = $request->input('socials', $user->socials ?? []); // TODO - <!-- uncomment this when ready -->
-                $existingPreferences = $user->preferences ?? [];
-                $newPreferences = $request->input('preferences', []);
-                $user->preferences = array_merge($existingPreferences, $newPreferences);
-
                 // Merge settings if already exists, otherwise set new
                 $existingSettings = $user->settings ?? [];
                 $newSettings = $request->input('settings', []);
