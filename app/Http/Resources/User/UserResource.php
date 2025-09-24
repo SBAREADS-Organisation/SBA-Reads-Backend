@@ -66,14 +66,14 @@ class UserResource extends JsonResource
         // For non-authors (readers, etc.), return standard format
         return [
             'id' => $this->id,
-            'name' => $this->name,
+            'name' => $this->name ?? 'NO NAME',
             'email' => $this->email,
             'account_type' => $this->account_type,
             'status' => $this->status,
             'kyc_status' => $this->kyc_status,
             'profile_picture' => $this->formatProfilePicture($this->profile_picture ?? []),
             'bio' => $this->bio,
-            'preferences' => $this->preferences,
+            'preferences' => $this->preferences ?? [],
             'last_login_at' => $this->last_login_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
