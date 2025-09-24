@@ -715,8 +715,10 @@ class BookController extends Controller
         try {
             $user = $request->user();
 
-            // Authorization: Only book authors or admins can update books
-            if (!$book->authors()->where('users.id', $user->id)->exists() && !$user->hasRole(['admin', 'superadmin'])) {
+            // Authorization: Only book authors (original creator or co-authors) or admins can update books
+            $isOriginalAuthor = $book->author_id === $user->id;
+            $isCoAuthor = $book->authors()->where('users.id', $user->id)->exists();
+            if (!$isOriginalAuthor && !$isCoAuthor && !$user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only update your own books.', 403);
             }
 
@@ -863,8 +865,10 @@ class BookController extends Controller
         try {
             $user = $request->user();
 
-            // Authorization: Only book authors or admins can delete books
-            if (!$book->authors()->where('users.id', $user->id)->exists() && !$user->hasRole(['admin', 'superadmin'])) {
+            // Authorization: Only book authors (original creator or co-authors) or admins can delete books
+            $isOriginalAuthor = $book->author_id === $user->id;
+            $isCoAuthor = $book->authors()->where('users.id', $user->id)->exists();
+            if (!$isOriginalAuthor && !$isCoAuthor && !$user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
