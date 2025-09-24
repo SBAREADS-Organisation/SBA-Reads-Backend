@@ -70,9 +70,17 @@ class StripeWebhookController extends Controller
         switch ($event->type) {
             case 'payment_intent.succeeded':
                 $paymentIntent = $event->data->object;
-                // Example: Fulfill the order, update order status, send confirmation email
                 $this->service->handlePaymentIntentSucceeded($paymentIntent);
                 break;
+
+            case 'account.external_account.created':
+                $externalAccount = $event->data->object;
+                $this->service->handleExternalAccountCreated($externalAccount);
+                break;
+
+            case 'account.external_account.deleted':
+                $externalAccount = $event->data->object;
+                $this->service->handleExternalAccountRemoved($externalAccount);
 
             case 'account.updated':
                 $account = $event->data->object;
