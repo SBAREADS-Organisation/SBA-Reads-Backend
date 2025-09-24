@@ -81,6 +81,7 @@ class StripeWebhookController extends Controller
             case 'account.external_account.deleted':
                 $externalAccount = $event->data->object;
                 $this->service->handleExternalAccountRemoved($externalAccount);
+                break;
 
             case 'account.updated':
                 $account = $event->data->object;
