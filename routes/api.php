@@ -122,7 +122,7 @@ Route::prefix('user')->group(function () {
         });
 
         Route::prefix('payouts')->group(function () {
-            Route::get('/balance', [StripeWithdrawalController::class, 'getAuthorAccountBalance'])->name('user-balance');
+            Route::get('/stripe/balance', [StripeWithdrawalController::class, 'getAuthorAccountBalance'])->name('user-balance');
             Route::post('/stripe/initiate', [StripeWithdrawalController::class, 'initiateStripePayout'])->name('stripe-payout');
         });
     });
