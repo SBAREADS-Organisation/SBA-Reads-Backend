@@ -4,6 +4,7 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserResource;
+use App\Mail\Onboarding\StripeOnboardingMail;
 use App\Mail\Onboarding\WelcomeEmail;
 use App\Mail\Registration\AuthorVerificationToken;
 use App\Models\MediaUpload;
@@ -1182,6 +1183,9 @@ class UserController extends Controller
                 'type' => 'account_onboarding',
                 'collect' => 'eventually_due',
             ]);
+
+            // Dispatch mail to the user with the account onboarding link
+            Mail::to($user->email)->queue(new StripeOnboardingMail($user, $accountLink));;
 
             // Return the URL to the mobile app
             return response()->json([
