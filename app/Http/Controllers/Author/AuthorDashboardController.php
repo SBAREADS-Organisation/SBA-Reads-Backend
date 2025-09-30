@@ -159,7 +159,8 @@ class AuthorDashboardController extends Controller
         try {
             // Active readers - users who have reading progress on author's books
             $active_readers = ReadingProgress::whereIn('book_id', $authorBookIds)
-                ->distinct('user_id')
+                ->select('user_id')
+                ->distinct()
                 ->count();
 
             // Total reading sessions for author's books
