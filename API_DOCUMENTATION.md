@@ -3643,3 +3643,85 @@ Authorization: Bearer {token}
 
 
 
+
+
+
+## Book Creation — Postman form-data (Bulk Edit)
+
+Endpoint: POST /api/books
+
+Headers:
+- Authorization: Bearer <token>
+- Content-Type: multipart/form-data
+
+Notes:
+- The controller expects an array named books with one or more book objects.
+- cover_image must be a single File; files must be one or more Files. In Postman, after pasting the bulk edit keys, switch these rows to type File and attach actual files.
+- table_of_contents and drm_info are validated as JSON. Provide valid JSON strings (no single quotes, no trailing commas).
+- meta_data.pages is required and must be numeric.
+
+Postman Bulk Edit payload (copy-paste into form-data Bulk Edit):
+
+books[0][title]: The Pragmatic Programmer
+books[0][sub_title]: From Journeyman to Master
+books[0][description]: A classic book about pragmatic approaches to software development.
+books[0][author_id]: 12
+books[0][authors][]=12
+books[0][authors][]=34
+books[0][isbn]: 9780135957059
+books[0][table_of_contents]: {"chapters":[{"title":"A Pragmatic Philosophy","page":1},{"title":"A Pragmatic Approach","page":15}]}
+books[0][tags][]=software
+books[0][tags][]=craft
+books[0][categories][]=3
+books[0][genres][]=Nonfiction
+books[0][publication_date]: 1999-10-30
+books[0][language][]=en
+books[0][format]: pdf
+books[0][pricing][actual_price]: 29.99
+books[0][pricing][discounted_price]: 19.99
+books[0][actual_price]: 29.99
+books[0][discounted_price]: 19.99
+books[0][currency]: USD
+books[0][availability][]=global
+books[0][file_size]: 5MB
+books[0][drm_info]: {"provider":"cloudinary","restricted":true}
+books[0][meta_data][pages]: 320
+books[0][publisher]: Addison-Wesley
+books[0][archived]: false
+books[0][deleted]: false
+books[0][cover_image]: <FILE — switch this row to type File and attach an image/pdf>
+books[0][files][]= <FILE — switch this row to type File and attach a book file>
+books[0][files][]= <FILE — switch this row to type File and attach another book file>
+
+# Optional: add a second book in the same request
+books[1][title]: Clean Code
+books[1][sub_title]: A Handbook of Agile Software Craftsmanship
+books[1][description]: A book about writing clean, maintainable code.
+books[1][author_id]: 34
+books[1][authors][]=34
+books[1][isbn]: 9780132350884
+books[1][table_of_contents]: {"chapters":[{"title":"Meaningful Names","page":17},{"title":"Functions","page":31}]}
+books[1][tags][]=clean-code
+books[1][categories][]=5
+books[1][genres][]=Technical
+books[1][publication_date]: 2008-08-01
+books[1][language][]=en
+books[1][format]: pdf
+books[1][pricing][actual_price]: 24.99
+books[1][currency]: USD
+books[1][meta_data][pages]: 464
+books[1][publisher]: Prentice Hall
+books[1][cover_image]: <FILE — switch to File>
+books[1][files][]= <FILE — switch to File>
+
+Validation highlights (from server rules):
+- books.*.title: required string, max 255
+- books.*.description: required string
+- books.*.author_id: required, must exist in users table
+- books.*.authors: required array of user ids (authors.* must exist in users table)
+- books.*.isbn: required and unique in books
+- books.*.table_of_contents: required JSON string
+- books.*.cover_image: required file (jpg, jpeg, png, pdf) up to 5 MB
+- books.*.files.*: file(s) (jpg, jpeg, png, pdf) up to 20 MB each
+- books.*.meta_data.pages: required numeric
+- Optional arrays: tags[], categories[], genres[], language[], availability[]
