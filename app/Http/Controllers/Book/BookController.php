@@ -231,7 +231,7 @@ class BookController extends Controller
     {
         try {
             $book = Book::with([
-                'authors:id,name,email,profile_picture,bio',
+                'authors',
                 'categories',
                 'reviews.user:id,name,email,profile_picture',
                 'analytics',

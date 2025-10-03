@@ -82,6 +82,11 @@ class Book extends Model
         ];
     }
 
+    protected $with = [
+        'author',
+        'authors',
+    ];
+
     public function media()
     {
         return $this->morphMany(MediaUpload::class, 'mediable');
@@ -97,7 +102,7 @@ class Book extends Model
         return $this->belongsTo(User::class, 'author_id');
     }
 
-    public function authors()
+    public function authors(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'book_authors', 'book_id', 'author_id');
     }

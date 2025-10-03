@@ -98,6 +98,7 @@ class BookService
         // Upload cover image.
         if (isset($data['cover_image']) && $data['cover_image'] instanceof UploadedFile) {
             $upload = $this->cloudinaryMediaService->upload($data['cover_image'], 'book_cover');
+
             $data['cover_image'] = [
                 'public_url' => (string) $upload['url'],
                 'public_id' => (int) $upload['id'],

@@ -54,22 +54,33 @@ class PaystackWebhookService
      */
     protected function handleChargeSuccess(array $data): bool
     {
-        return DB::transaction(function () use ($data) {
+        Log::info('Paystack charge success handled', $data);
+
+        $transaction = Transaction::where('payment_provider', 'paystack')
+            ->where('reference', $data['reference'])
+            ->first();
+
+        return DB::transaction(function () use ($data, $transaction) {
             // Create or update Paystack transaction
             $paystackTransaction = PaystackTransaction::updateOrCreate(
-                ['reference' => $data['reference']],
+                ['paystack_reference' => $data['reference']],
                 [
-                    'transaction_id' => $data['id'],
-                    'amount' => $data['amount'] / 100, // Convert from kobo
-                    'currency' => $data['currency'],
+                    'transaction_id' => $transaction->id,
+                    'user_id' => $transaction->user_id ?? null,
+                    'paystack_transaction_id' => isset($data['id']) ? (string) $data['id'] : null,
+                    'amount_kobo' => $data['amount'] ?? 0,
+                    'amount_naira' => isset($data['amount']) ? ($data['amount'] / 100) : 0, // Convert from kobo
+                    'currency' => $data['currency'] ?? 'NGN',
                     'status' => 'success',
                     'paid_at' => $data['paid_at'] ?? now(),
                     'channel' => $data['channel'] ?? null,
                     'gateway_response' => $data['gateway_response'] ?? null,
-                    'customer_code' => $data['customer']['customer_code'] ?? null,
+                    'paystack_customer_code' => $data['customer']['customer_code'] ?? null,
                     'customer_email' => $data['customer']['email'] ?? null,
-                    'fees' => $data['fees'] / 100 ?? 0,
-                    'raw_data' => $data,
+                    'fees_kobo' => $data['fees'] ?? 0,
+                    'ip_address' => $data['ip_address'] ?? null,
+                    'metadata' => $data,
+                    'paystack_response' => $data,
                 ]
             );
 
@@ -81,8 +92,6 @@ class PaystackWebhookService
             if ($transaction) {
                 $transaction->update([
                     'status' => 'succeeded',
-                    'payment_method' => 'paystack',
-                    'transaction_reference' => $data['reference'],
                 ]);
 
                 // Process the successful transaction based on purpose
@@ -92,19 +101,22 @@ class PaystackWebhookService
             // Create payment audit
             PaymentAudit::create([
                 'transaction_id' => $paystackTransaction->transaction_id,
-                'payment_method' => 'paystack',
-                'amount' => $paystackTransaction->amount,
+                'transaction_reference' => $paystackTransaction->paystack_reference,
+                'total_amount' => $paystackTransaction->amount_naira,
+                'authors_pay' => 0,
+                'company_pay' => 0,
+                'vat_amount' => 0,
                 'currency' => $paystackTransaction->currency,
-                'status' => 'success',
-                'metadata' => $data,
+                'payment_status' => 'succeeded',
+                'audit_metadata' => (array) $data,
             ]);
 
             // Create webhook event
             WebhookEvent::create([
-                'service' => 'paystack',
-                'event_type' => 'charge.success',
+                'stripe_event_id' => $data['id'],
+                'type' => 'Paystack charge.success',
                 'payload' => $data,
-                'processed' => true,
+                'status' => 'success',
             ]);
 
             return true;

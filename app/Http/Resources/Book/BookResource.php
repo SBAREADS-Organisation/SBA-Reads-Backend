@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Book;
 
+use App\Http\Resources\User\UserResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -83,15 +84,8 @@ class BookResource extends JsonResource
                 ];
             }),
             'average_rate' => $this->reviews->avg('rating') ?? 0,
-            'authors' => $this->authors->map(function ($author) {
-                return [
-                    'id' => $author->id,
-                    'name' => $author->name,
-                    'email' => $author->email,
-                    'profile_picture' => $this->formatProfilePicture($author->profile_picture ?? []),
-                    'bio' => $author->bio,
-                ];
-            }),
+            'authors' => UserResource::collection($this->whenLoaded('authors')),
+            'author' => new UserResource($this->whenLoaded('author')),
             'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
             'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
         ];

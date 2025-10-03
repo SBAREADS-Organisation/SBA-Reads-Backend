@@ -83,6 +83,10 @@ class User extends Authenticatable
         ];
     }
 
+    protected $with = [
+        'purchasedBooks'
+    ];
+
     public function media()
     {
         return $this->morphMany(MediaUpload::class, 'mediable');

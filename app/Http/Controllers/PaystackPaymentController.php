@@ -18,9 +18,10 @@ class PaystackPaymentController extends Controller
     protected $currencyService;
 
     public function __construct(
-        PaystackService $paystackService,
+        PaystackService           $paystackService,
         CurrencyConversionService $currencyService
-    ) {
+    )
+    {
         $this->paystackService = $paystackService;
         $this->currencyService = $currencyService;
     }
@@ -59,7 +60,7 @@ class PaystackPaymentController extends Controller
                         $paystackAmount = $nairaAmount;
                         $paystackCurrency = 'NGN';
                         $exchangeRate = $nairaAmount / $amount;
-                        
+
                         // Log the conversion for transparency
                         Log::info("Currency conversion: $amount USD = $nairaAmount NGN at rate $exchangeRate");
                     } catch (\Exception $e) {
@@ -76,9 +77,9 @@ class PaystackPaymentController extends Controller
                     'amount_naira' => $paystackCurrency === 'NGN' ? $paystackAmount : null,
                     'exchange_rate' => $exchangeRate,
                     'currency' => $paystackCurrency,
-                    'payment_vendor' => 'paystack',
+                    'payment_provider' => 'paystack',
                     'status' => 'pending',
-                    'purpose' => $request->purpose,
+                    'purpose_type' => $request->purpose,
                     'purpose_id' => $request->purpose_id,
                     'description' => $request->description,
                     'meta_data' => $metaData, // Store metadata
@@ -100,7 +101,7 @@ class PaystackPaymentController extends Controller
                 // Update transaction with Paystack response data
                 $transaction->update([
                     'meta_data' => array_merge(
-                        (array) $metaData,
+                        (array)$metaData,
                         ['paystack_response' => $paystackResponse]
                     ), // Store as array, not JSON string
                 ]);
@@ -143,7 +144,7 @@ class PaystackPaymentController extends Controller
                 'message' => "You will be charged ₦" . number_format($convertedAmount, 2) . " NGN (equivalent to $$originalAmount USD at current exchange rate)"
             ];
         }
-        
+
         return [
             'original' => number_format($originalAmount, 2) . ' ' . $originalCurrency,
             'converted' => null,
@@ -167,6 +168,7 @@ class PaystackPaymentController extends Controller
 
         $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
         $webhookService->handleWebhook($payload);
+        Log::info('Paystack webhook received: ' . json_encode($payload));
 
         return response()->json(['message' => 'Webhook processed']);
     }
@@ -186,21 +188,25 @@ class PaystackPaymentController extends Controller
             $verification = $this->paystackService->verifyPayment($reference);
 
             if (!$verification['status'] || $verification['data']['status'] !== 'success') {
-                return redirect()->route('payment.failed')->with('error', 'Payment verification failed');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment processing failed',
+                    'error' => $verification['message'] ?? 'Payment verification failed']);
             }
 
             // Update transaction
-            $transaction = Transaction::where('payment_vendor', 'paystack')
+            $transaction = Transaction::where('payment_provider', 'paystack')
                 ->where('status', 'pending')
-                ->where('id', str_replace('paystack_', '', explode('_', $reference)[1]))
+                ->where('reference', $verification['data']['reference'])
                 ->first();
 
             if ($transaction) {
                 $transaction->update([
                     'status' => 'succeeded',
-                    'transaction_reference' => $reference,
-                    'paid_at' => now(),
-                ]);
+                    'meta_data' => array_merge(
+                        (array)$transaction->meta_data,
+                        ['paystack_verification' => $verification]
+                    ),]);
 
                 // Process the successful transaction using the same logic as the webhook
                 $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
@@ -211,10 +217,17 @@ class PaystackPaymentController extends Controller
                 $webhookService->handleWebhook($webhookPayload);
             }
 
-            return redirect()->route('payment.success')->with('success', 'Payment completed successfully');
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment completed successfully'
+            ]);
         } catch (\Exception $e) {
             Log::error('Paystack callback error: ' . $e->getMessage());
-            return redirect()->route('payment.failed')->with('error', 'Payment processing failed');
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment processing failed',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -223,9 +236,9 @@ class PaystackPaymentController extends Controller
      */
     protected function verifyWebhookSignature(string $payload, string $signature): bool
     {
-        $secret = config('services.paystack.webhook_secret');
+        $secret = config('services.paystack.secret');
         if (!$secret) {
-            return true; // Skip verification if no secret configured
+            return false; // Skip verification if no secret configured
         }
 
         $computedSignature = hash_hmac('sha512', $payload, $secret);

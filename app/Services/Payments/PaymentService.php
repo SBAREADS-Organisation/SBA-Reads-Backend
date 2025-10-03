@@ -103,7 +103,6 @@ class PaymentService
     protected function createPaystackPayment($data, $user, $reference): JsonResponse|Transaction
     {
         try{
-        // For Paystack, we need to handle the payment differently
         // Create transaction record first, then initialize payment
         $transaction = Transaction::create([
             'id' => Str::uuid(),
