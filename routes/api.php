@@ -32,6 +32,7 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Stripe\StripeClient;
+use App\Services\Paystack\CurrencyConversionService;
 
 // Authentication Routes
 Route::prefix('auth')->group(function () {
@@ -619,3 +620,52 @@ Route::middleware(['monitor.auth'])->prefix('monitor')->group(function () {
         ], $responseCode);
     });
 });
+
+
+// Currency conversion endpoint
+Route::get('/currency/convert', function (Request $request) {
+    $validated = $request->validate([
+        'amount' => 'required|numeric|min:0.0000001',
+        'from' => 'required|string|size:3',
+        'to' => 'required|string|size:3',
+    ]);
+
+    $amount = (float) $validated['amount'];
+    $from = strtoupper($validated['from']);
+    $to = strtoupper($validated['to']);
+
+    try {
+        /** @var CurrencyConversionService $svc */
+        $svc = app(CurrencyConversionService::class);
+
+        if ($from === $to) {
+            $rate = 1.0;
+            $converted = $amount;
+        } else {
+            $rate = $svc->getExchangeRate($from, $to);
+            $converted = $svc->convert($amount, $from, $to);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'amount' => $amount,
+                'from' => $from,
+                'to' => $to,
+                'rate' => $rate,
+                'converted_amount' => $converted,
+                'formatted' => [
+                    'from' => $svc->formatAmount($amount, $from),
+                    'to' => $svc->formatAmount($converted, $to),
+                ],
+            ],
+            'timestamp' => now()->toIso8601String(),
+        ], 200);
+    } catch (\Throwable $e) {
+        Log::error('Currency conversion endpoint error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to convert currency: ' . $e->getMessage(),
+        ], 502);
+    }
+})->name('currency.convert');
