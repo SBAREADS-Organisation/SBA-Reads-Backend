@@ -18,6 +18,7 @@ class DigitalBookPurchaseItem extends Model
         'payout_status',
         'payout_error',
         'stripe_transfer_id',
+        'currency'
     ];
 
     protected $casts = [

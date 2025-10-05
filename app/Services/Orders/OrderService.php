@@ -5,6 +5,7 @@ namespace App\Services\Orders;
 use App\Models\Book;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Services\Paystack\CurrencyConversionService;
 use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\JsonResponse;
@@ -15,10 +16,12 @@ class OrderService
     use ApiResponse;
 
     protected $paymentService;
+    protected $currencyConversionService;
 
-    public function __construct(PaymentService $paymentService)
+    public function __construct(PaymentService $paymentService, CurrencyConversionService $currencyConversionService)
     {
         $this->paymentService = $paymentService;
+        $this->currencyConversionService = $currencyConversionService;
     }
 
     public function create($user, $payload)
@@ -65,11 +68,23 @@ class OrderService
             // Get currency from payload, default to USD if not provided
             $currency = isset($payload->currency) ? strtoupper($payload->currency) : 'USD';
 
+            // Convert total amount from USD to requested currency if needed
+            $payableAmount = $total;
+            if ($currency !== 'USD') {
+                try {
+                    $payableAmount = $this->currencyConversionService->convert((float) $total, 'USD', $currency);
+                } catch (\Exception $e) {
+                    // If conversion fails, rethrow to be handled by outer catch/rollback
+                    throw new \Exception('Unable to convert currency at this time: ' . $e->getMessage(), 0, $e);
+                }
+            }
+
             // Determine the appropriate payment provider based on currency
             $provider = $this->getPaymentProvider($currency);
 
+
             $transaction = $this->paymentService->createPayment([
-                'amount' => $total,
+                'amount' => $payableAmount,
                 'currency' => $currency,
                 'description' => 'Book order',
                 'purpose' => 'order',
@@ -80,6 +95,8 @@ class OrderService
                     'user_id' => $user->id,
                     'provider' => $provider,
                     'currency' => $currency,
+                    'amount_usd' => $total,
+                    'amount_converted' => $payableAmount,
                 ],
             ], $user);
 

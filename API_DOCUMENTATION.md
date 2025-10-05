@@ -3725,3 +3725,41 @@ Validation highlights (from server rules):
 - books.*.files.*: file(s) (jpg, jpeg, png, pdf) up to 20 MB each
 - books.*.meta_data.pages: required numeric
 - Optional arrays: tags[], categories[], genres[], language[], availability[]
+
+
+## Currency Conversion
+
+- Endpoint: GET /api/currency/convert
+- Description: Convert an amount from one currency to another using the configured ExchangeRate API service.
+- Query Parameters:
+  - amount (required, number): The amount to convert.
+  - from (required, string, 3 letters): The source currency code (e.g., USD).
+  - to (required, string, 3 letters): The target currency code (e.g., NGN).
+- Response (200):
+```
+{
+  "success": true,
+  "data": {
+    "amount": 25.5,
+    "from": "USD",
+    "to": "NGN",
+    "rate": 1600.25,
+    "converted_amount": 40806.375,
+    "formatted": {
+      "from": "$25.50",
+      "to": "₦40,806.38"
+    }
+  },
+  "timestamp": "2025-10-04T21:30:00Z"
+}
+```
+- Errors (502):
+```
+{
+  "success": false,
+  "message": "Failed to convert currency: <details>"
+}
+```
+- Notes:
+  - Exchange rates are cached for 1 hour.
+  - If from and to are the same, rate is 1 and converted_amount equals amount.

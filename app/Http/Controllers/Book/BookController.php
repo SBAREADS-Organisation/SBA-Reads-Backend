@@ -19,6 +19,7 @@ use App\Notifications\Book\Milestone\MilestoneReachedNotification;
 use App\Services\Book\BookService;
 use App\Services\Book\PdfTocExtractorService;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
+use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -35,16 +36,19 @@ class BookController extends Controller
 
     public ?CloudinaryMediaUploadService $cloudinaryService;
 
+    private CurrencyConversionService $currencyConversionService;
+
     private $rules;
 
     // use ApiResponse;
 
-    public function __construct(BookService $service, CloudinaryMediaUploadService $cloudinaryService)
+    public function __construct(BookService $service, CloudinaryMediaUploadService $cloudinaryService, CurrencyConversionService $currencyConversionService)
     {
         // $this->middleware('auth:sanctum');
         // $this->middleware('role:admin')->except(['index','show']);
         $this->service = $service;
         $this->cloudinaryService = $cloudinaryService;
+        $this->currencyConversionService = $currencyConversionService;
 
         $this->rules = [
             'books' => 'required|array|min:1',
@@ -888,10 +892,10 @@ class BookController extends Controller
                 }
 
                 $reason = $request->input('reason');
-        } else {
-            // For authors, no payload required
-            $reason = 'Author requested deletion';
-        }
+            } else {
+                // For authors, no payload required
+                $reason = 'Author requested deletion';
+            }
 
             $deleted = $this->service->deleteBook($book, $reason);
 
@@ -1202,7 +1206,7 @@ class BookController extends Controller
             // Fetch books data
             $books = Book::whereIn('id', $bookIds)->get();
 
-            // Calculate total amount
+            // Calculate total amount (assumed USD baseline)
             $totalAmount = $books->sum('actual_price');
             $platformFeeAmount = $totalAmount * 0.3; // 30% platform fee
 
@@ -1214,8 +1218,8 @@ class BookController extends Controller
             // Create single digital book purchase record
             $purchase = DigitalBookPurchase::create([
                 'user_id' => $user->id,
-                'total_amount' => (float) $totalAmount,
-                'platform_fee_amount' => (float) $platformFeeAmount,
+                'total_amount' => (float) $this->currencyConversionService->convert((float) $totalAmount, 'USD', $currency),
+                'platform_fee_amount' => (float) $this->currencyConversionService->convert((float) $platformFeeAmount, 'USD', $currency),
                 'currency' => $currency,
                 'status' => 'pending',
             ]);
@@ -1230,18 +1234,29 @@ class BookController extends Controller
                     'book_id' => $bookId,
                     'author_id' => $book->author_id,
                     'quantity' => 1,
-                    'price_at_purchase' => $book->actual_price,
-                    'author_payout_amount' => $authorPayoutAmount,
-                    'platform_fee_amount' => $book->actual_price - $authorPayoutAmount,
+                    'price_at_purchase' => (float) $this->currencyConversionService->convert((float) $book->actual_price, 'USD', $currency),
+                    'author_payout_amount' => (float) $this->currencyConversionService->convert((float) $authorPayoutAmount, 'USD', $currency),
+                    'platform_fee_amount' => (float) $this->currencyConversionService->convert((float) ($book->actual_price - $authorPayoutAmount), 'USD', $currency),
                     'payout_status' => 'pending',
                     'payment_provider' => $provider,
                     'provider_transfer_id' => null,
+                    'currency' => $currency,
                 ]);
+            }
+
+            // Convert total from USD to requested currency for payment amount when needed
+            $payableAmount = (float) $totalAmount;
+            if ($currency !== 'USD') {
+                try {
+                    $payableAmount = $this->currencyConversionService->convert((float) $totalAmount, 'USD', $currency);
+                } catch (\Exception $e) {
+                    return $this->error('Unable to convert currency at this time.', 500, $e->getMessage());
+                }
             }
 
             // Create payment transaction (books will be added to library after successful payment confirmation via webhook)
             $transaction = app(\App\Services\Payments\PaymentService::class)->createPayment([
-                'amount' => $totalAmount,
+                'amount' => $payableAmount,
                 'currency' => $currency,
                 'description' => 'Digital books purchase',
                 'purpose' => 'digital_book_purchase',
@@ -1251,6 +1266,8 @@ class BookController extends Controller
                     'user_id' => $user->id,
                     'purchase_id' => $purchase->id,
                     'provider' => $provider,
+                    'amount_usd' => (float) $totalAmount,
+                    'amount_converted' => (float) $payableAmount,
                 ],
             ], $user);
 
