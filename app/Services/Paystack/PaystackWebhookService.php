@@ -353,7 +353,7 @@ class PaystackWebhookService
                 // Update author wallet (only after successful payment)
                 $author = $item->book->author;
                 if ($author) {
-                    $author->increment('wallet_balance', $item->author_payout_amount);
+                    $author->increment('wallet_balance', $item->author_payout_amount_usd);
 
                     // Create payout transaction record
                     \App\Models\Transaction::create([
@@ -413,9 +413,8 @@ class PaystackWebhookService
 
                     // Immediately update author wallet balance
                     $author = $item->book->author;
-                    if ($author && isset($item->author_payout_amount)) {
-                        $authorPayoutAmount = $item->author_payout_amount * $item->quantity;
-                        $author->increment('wallet_balance', $authorPayoutAmount);
+                    if ($author && isset($item->author_payout_amount_usd)) {
+                        $author->increment('wallet_balance', $item->author_payout_amount_usd);;
 
                         // Create immediate payout transaction record
                         \App\Models\Transaction::create([
@@ -424,7 +423,7 @@ class PaystackWebhookService
                             'reference' => uniqid('pay_immediate_'),
                             'status' => 'succeeded',
                             'currency' => $order->currency ?? 'NGN',
-                            'amount' => $authorPayoutAmount,
+                            'amount' => $item->author_payout_amount,
                             'payment_provider' => 'app',
                             'description' => "Immediate author payout for Order ID: {$order->id}",
                             'type' => 'payout',

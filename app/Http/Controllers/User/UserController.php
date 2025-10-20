@@ -1178,8 +1178,8 @@ class UserController extends Controller
             // Note: The return and refresh URLs must be deep links that your mobile app can handle.
             $accountLink = $stripe->accountLinks->create([
                 'account' => $user->kyc_account_id,
-                'refresh_url' => config('app.url') . '/api/onboarding/refresh',
-                'return_url' => config('app.url') . '/api/onboarding/return',
+                'refresh_url' => "https://sbareads.surprises.ng/api/stripe/onboard/refresh",
+                'return_url' => "https://sbareads.surprises.ng/api/stripe/onboard/successful",
                 'type' => 'account_onboarding',
                 'collect' => 'eventually_due',
             ]);

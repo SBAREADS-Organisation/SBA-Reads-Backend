@@ -21,6 +21,9 @@ class OrderItem extends Model
         'platform_fee_amount',
         'payout_status', // 'pending', 'paid', 'failed'
         'payout_error', // Error message if payout fails
+        'total_price_usd',
+        'author_payout_amount_usd',
+        'platform_fee_amount_usd',
     ];
 
     protected $casts = [

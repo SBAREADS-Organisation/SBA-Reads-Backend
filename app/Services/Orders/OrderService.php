@@ -32,12 +32,16 @@ class OrderService
             // Create or find address from string
             $addressId = $this->handleDeliveryAddress($user, $payload->delivery_address);
 
+            // Get currency from payload, default to USD if not provided
+            $currency = isset($payload->currency) ? strtoupper($payload->currency) : 'USD';
+
             $order = Order::create([
                 'user_id' => $user->id,
                 'delivery_address_id' => $addressId,
                 'total_amount' => 0,
                 'status' => 'pending',
                 'tracking_number' => Order::generateTrackingNumber(),
+                'currency' => $currency,
             ]);
 
             $total = 0;
@@ -47,7 +51,7 @@ class OrderService
                 $price = $book->pricing['actual_price'];
                 $quantity = $item['quantity'];
                 $totalPrice = $price * $quantity;
-                $authorPayout = $totalPrice * 0.8;
+                $authorPayout = $totalPrice * 0.7;
 
                 OrderItem::create([
                     'order_id' => $order->id,
@@ -55,18 +59,18 @@ class OrderService
                     'author_id' => $book->author_id,
                     'quantity' => $quantity,
                     'unit_price' => $price,
-                    'total_price' => $totalPrice,
-                    'author_payout_amount' => $authorPayout,
-                    'platform_fee_amount' => $totalPrice - $authorPayout,
+                    'total_price' => $this->currencyConversionService->convert((float) $totalPrice, 'USD', $currency),
+                    'total_price_usd' => $totalPrice,
+                    'author_payout_amount' => $this->currencyConversionService->convert($authorPayout, 'USD', $currency),
+                    'author_payout_amount_usd' => $authorPayout,
+                    'platform_fee_amount' => $this->currencyConversionService->convert($totalPrice - $authorPayout, 'USD', $currency),
+                    'platform_fee_amount_usd' => $totalPrice - $authorPayout,
                 ]);
 
                 $total += $totalPrice;
             }
 
-            $order->update(['total_amount' => $total]);
 
-            // Get currency from payload, default to USD if not provided
-            $currency = isset($payload->currency) ? strtoupper($payload->currency) : 'USD';
 
             // Convert total amount from USD to requested currency if needed
             $payableAmount = $total;
@@ -79,9 +83,10 @@ class OrderService
                 }
             }
 
+            $order->update(['total_amount' => $payableAmount]);
+
             // Determine the appropriate payment provider based on currency
             $provider = $this->getPaymentProvider($currency);
-
 
             $transaction = $this->paymentService->createPayment([
                 'amount' => $payableAmount,
