@@ -23,7 +23,7 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email',
                 'password' => 'required|string|min:8',
-                'account_type' => 'nullable|string|in:author,reader,admin,superadmin',
+                //'account_type' => 'nullable|string|in:author,reader,admin,superadmin',
             ]);
 
             if ($validator->fails()) {
