@@ -120,7 +120,11 @@ class BookController extends Controller
         }
 
         if ($request->filled('search')) {
-            $query->where('title', 'like', "%" . $request->search . "%");
+            //check title, sub_title
+            $query = $query->where(function ($q) use ($request) {
+                $q->where('title', 'like', "%" . $request->search . "%")
+                  ->orWhere('sub_title', 'like', "%" . $request->search . "%");
+            });
         }
 
         $books = $query->with([
@@ -261,7 +265,7 @@ class BookController extends Controller
                 200
             );
         } catch (\Exception $e) {
-            Log::error('Error retrieving book details: ' . $e->getMessage());
+            Log::info('Error retrieving book details: ' . $e->getMessage());
             return $this->error(
                 'Failed to retrieve book details.'. $e->getMessage(),
                 500,
