@@ -33,9 +33,9 @@ class AuthController extends Controller
             // Check if User Exists
             $userQuery = User::where('email', $request->email);
 
-            if ($request->has('account_type')) {
-                $userQuery->where('account_type', $request->account_type);
-            }
+            // if ($request->has('account_type')) {
+            //     $userQuery->where('account_type', $request->account_type);
+            // }
 
             $user = $userQuery->first();
             // dd('User Password', $user->password, Hash::check($request->password, $user->password));
