@@ -122,7 +122,7 @@ class BookController extends Controller
             //check title, sub_title
             $query = $query->where(function ($q) use ($request) {
                 $q->where('title', 'like', "%" . $request->search . "%")
-                  ->orWhere('sub_title', 'like', "%" . $request->search . "%");
+                    ->orWhere('sub_title', 'like', "%" . $request->search . "%");
             });
         }
 
@@ -133,7 +133,15 @@ class BookController extends Controller
         ])->paginate($request->get('items_per_page', 10));
 
         if ($books->isEmpty()) {
-            return $this->success([], 'No books found for the specified criteria');
+            return $this->success([
+                'data' => [],
+                'current_page' => $books->currentPage(),
+                'last_page' => $books->lastPage(),
+                'per_page' => $books->perPage(),
+                'total' => $books->total(),
+                'from' => $books->firstItem(),
+                'to' => $books->lastItem()
+            ], 'No books found for the specified criteria');
         }
 
         // Extract items from paginator first, then create Resource collection to avoid double nesting
@@ -266,7 +274,7 @@ class BookController extends Controller
         } catch (\Exception $e) {
             Log::info('Error retrieving book details: ' . $e->getMessage());
             return $this->error(
-                'Failed to retrieve book details.'. $e->getMessage(),
+                'Failed to retrieve book details.' . $e->getMessage(),
                 500,
                 null,
                 $e->getMessage()
