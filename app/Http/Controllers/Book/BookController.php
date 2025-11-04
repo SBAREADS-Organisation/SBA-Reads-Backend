@@ -261,8 +261,9 @@ class BookController extends Controller
                 200
             );
         } catch (\Exception $e) {
+            Log::error('Error retrieving book details: ' . $e->getMessage());
             return $this->error(
-                'Failed to retrieve book details.',
+                'Failed to retrieve book details.'. $e->getMessage(),
                 500,
                 null,
                 $e->getMessage()
