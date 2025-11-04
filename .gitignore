@@ -26,3 +26,4 @@ hidden.md
 .env.dev
 .env.prod
 sbareads-apis
+SBA_reads.pem
