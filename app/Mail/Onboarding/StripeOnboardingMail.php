@@ -2,6 +2,7 @@
 
 namespace App\Mail\Onboarding;
 
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -9,21 +10,21 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class WelcomeEmail extends Mailable // implements ShouldQueue
+class StripeOnboardingMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public string $name;
-
-    public string $accountType;
+    public User $user;
+    public string $url;
 
     /**
      * Create a new message instance.
      */
-    public function __construct(string $name, string $accountType)
+    public function __construct(User $user, $url)
     {
-        $this->name = $name;
-        $this->accountType = $accountType;
+        $this->user = $user;
+        // Accept either a string URL or a Stripe AccountLink object
+        $this->url = is_string($url) ? $url : ($url->url ?? '');
     }
 
     /**
@@ -32,7 +33,7 @@ class WelcomeEmail extends Mailable // implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Welcome to Sbareads-Library',
+            subject: 'Complete your Stripe onboarding',
         );
     }
 
@@ -42,16 +43,18 @@ class WelcomeEmail extends Mailable // implements ShouldQueue
     public function content(): Content
     {
         return new Content(
-            markdown: 'emails.onboarding.welcome',
+            markdown: 'emails.onboarding.stripe-onboarding-mail',
             with: [
-                'name' => $this->name,
-                'accountType' => $this->accountType,
+                'user' => $this->user,
+                'url' => $this->url,
             ]
         );
     }
 
     /**
      * Get the attachments for the message.
+     *
+     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
      */
     public function attachments(): array
     {

@@ -20,7 +20,7 @@ class CurrencyConversionService
     /**
      * Convert currency from one to another
      */
-    public function convert(float $amount, string $fromCurrency, string $toCurrency): float
+    public function convert(float|int $amount, string $fromCurrency, string $toCurrency): float
     {
         if ($fromCurrency === $toCurrency) {
             return $amount;

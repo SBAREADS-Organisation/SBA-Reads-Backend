@@ -216,6 +216,71 @@ class StripeWebhookService
         }
     }
 
+    public function handleExternalAccountCreated($externalAccount): void
+    {
+        try {
+            $user = User::where('kyc_account_id', $externalAccount->account)->first();
+
+            if ($user) {
+                // Create PaymentMethod record
+                $user->paymentMethods()->create([
+                    'provider' => 'stripe',
+                    'provider_payment_method_id' => $externalAccount->id,
+                    'type' => 'bank', // Change to static 'bank' type
+                    'purpose' => 'payout',
+                    'country_code' => $externalAccount->country ?? null,
+                    'payment_method_data' => [
+                        'last4' => $externalAccount->last4 ?? null,
+                        'bank_name' => $externalAccount->bank_name ?? null,
+                        'country_code' => $externalAccount->country ?? null,
+                        'currency' => $externalAccount->currency ?? null,
+                        'status' => $externalAccount->status ?? 'active',
+                    ],
+                    'default' => $externalAccount->default_for_currency ?? false,
+                ]);
+            } else {
+                Log::warning('User not found for external account', [
+                    'account_id' => $externalAccount->account
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to handle external account creation', [
+                'error' => $e->getMessage(),
+                'external_account_id' => $externalAccount->id ?? null
+            ]);
+        }
+    }
+
+    public function handleExternalAccountRemoved($externalAccount): void
+    {
+        try {
+            $user = User::where('kyc_account_id', $externalAccount->account)->first();
+
+            if ($user) {
+                // Remove the payment method
+                $user->paymentMethods()
+                    ->where('provider', 'stripe')
+                    ->where('provider_payment_method_id', $externalAccount->id)
+                    ->where('purpose', 'payout')
+                    ->delete();
+
+                Log::info('External account removed successfully', [
+                    'user_id' => $user->id,
+                    'external_account_id' => $externalAccount->id
+                ]);
+            } else {
+                Log::warning('User not found for external account removal', [
+                    'account_id' => $externalAccount->account
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('Failed to handle external account removal', [
+                'error' => $e->getMessage(),
+                'external_account_id' => $externalAccount->id ?? null
+            ]);
+        }
+    }
+
     /**
      * Handle when a payout is created in Stripe
      */

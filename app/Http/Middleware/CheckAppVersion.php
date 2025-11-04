@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\AppVersion;
 use App\Traits\ApiResponse;
+use App\Traits\Slack\SlackNotifiable;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -11,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckAppVersion
 {
-    use ApiResponse;
+    use ApiResponse, SlackNotifiable;
 
     /**
      * Handle an incoming request.
@@ -47,7 +48,7 @@ class CheckAppVersion
             //     return $next($request);
             // }
             // $is_webhook = $request->route() === '/webhooks/stripe';
-            $is_webhook = str_contains($request->path(), 'webhooks');
+            $is_webhook = str_contains($request->path(), 'stripe') || str_contains($request->path(), 'paystack');
 
             // allow webhook requests to pass without any headers check
             if ($is_webhook) {
@@ -56,6 +57,22 @@ class CheckAppVersion
             }
 
             if (! $appVersion || ! $deviceId || ! $platform || ! $appId) {
+                $this->notifySlack(
+                    '🔐 Invalid Request Detected',
+                    [
+                        'app_version' => $appVersion,
+                        'device_id' => $deviceId,
+                        'platform' => $platform,
+                        'app_id' => $appId,
+                        'allow_guest_access' => $allowGuestAccess,
+                        'ip' => $request->ip(),
+                        'user_agent' => $request->header('User-Agent'),
+                        'url' => $request->fullUrl(),
+                        'headers' => $request->header(),
+                        'body' => $request->all(),
+                    ],
+                    'info'
+                );
                 throw new \InvalidArgumentException('Invalid request.');
             }
 

@@ -754,7 +754,23 @@ class StripeConnectService
                         if ($currency === '') {
                             continue;
                         }
-                        $result[$currency] = ($result[$currency] ?? 0) + (int)($item->amount ?? 0);
+                        $amount = (int)($item->amount ?? 0);
+                        // Look for existing entry with this currency
+                        $found = false;
+                        foreach ($result as &$entry) {
+                            if ($entry['currency'] === $currency) {
+                                $entry['amount'] += $amount;
+                                $found = true;
+                                break;
+                            }
+                        }
+                        unset($entry);
+                        if (!$found) {
+                            $result[] = [
+                                'currency' => $currency,
+                                'amount' => $amount,
+                            ];
+                        }
                     }
                 }
                 return $result;
@@ -767,11 +783,46 @@ class StripeConnectService
             $availableMain = $available;
             $pendingMain = $pending;
 
-            foreach ($available as $currency => $amount) {
-                $availableMain[$currency] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+            foreach ($available as $item) {
+                $currency = $item['currency'];
+                $amount = $item['amount'];
+                // Update existing entry in $availableMain if currency matches, else append new entry
+                $updated = false;
+                foreach ($availableMain as &$entry) {
+                    if (is_array($entry) && ($entry['currency'] ?? null) === $currency) {
+                        $entry['amount'] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+                        $updated = true;
+                        break;
+                    }
+                }
+                unset($entry);
+                if (!$updated) {
+                    $availableMain[] = [
+                        'currency' => $currency,
+                        'amount' => app(PaymentService::class)->convertFromSubunit($amount, $currency),
+                    ];
+                }
             }
-            foreach ($pending as $currency => $amount) {
-                $pendingMain[$currency] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+            
+            foreach ($pending as $item) {
+                $currency = $item['currency'];
+                $amount = $item['amount'];
+                // Update existing entry in $pendingMain if currency matches, else append new entry
+                $updated = false;
+                foreach ($pendingMain as &$entry) {
+                    if (is_array($entry) && ($entry['currency'] ?? null) === $currency) {
+                        $entry['amount'] = app(PaymentService::class)->convertFromSubunit($amount, $currency);
+                        $updated = true;
+                        break;
+                    }
+                }
+                unset($entry);
+                if (!$updated) {
+                    $pendingMain[] = [
+                        'currency' => $currency,
+                        'amount' => app(PaymentService::class)->convertFromSubunit($amount, $currency),
+                    ];
+                }
             }
 
             $data = [

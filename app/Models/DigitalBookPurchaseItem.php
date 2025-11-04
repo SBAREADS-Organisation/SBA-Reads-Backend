@@ -15,9 +15,13 @@ class DigitalBookPurchaseItem extends Model
         'price_at_purchase',
         'author_payout_amount',
         'platform_fee_amount',
+        'price_at_purchase_usd',
+        'author_payout_amount_usd',
+        'platform_fee_amount_usd',
         'payout_status',
         'payout_error',
         'stripe_transfer_id',
+        'currency'
     ];
 
     protected $casts = [

@@ -27,6 +27,7 @@ class Order extends Model
         'tracking_number',
         'delivery_address_id',
         'delivered_at',
+        'currency'
     ];
 
     protected function casts(): array
