@@ -104,7 +104,6 @@ class BookController extends Controller
      */
     public function index(Request $request)
     {
-        Log::info('Fetching books with parameters: ', $request->all());
         // Filter for visible books (public visibility and any status except rejected)
         $query = Book::query()
             ->where('visibility', 'public')
