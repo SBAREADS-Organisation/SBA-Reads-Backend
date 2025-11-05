@@ -119,7 +119,11 @@ class BookController extends Controller
         }
 
         if ($request->filled('search')) {
-            $query->where('title', 'like', "%{$request->search}%");
+            //check title, sub_title
+            $query = $query->where(function ($q) use ($request) {
+                $q->where('title', 'like', "%" . $request->search . "%")
+                    ->orWhere('sub_title', 'like', "%" . $request->search . "%");
+            });
         }
 
         $books = $query->with([
@@ -129,7 +133,15 @@ class BookController extends Controller
         ])->paginate($request->get('items_per_page', 10));
 
         if ($books->isEmpty()) {
-            return $this->success([], 'No books found for the specified criteria');
+            return $this->success([
+                'data' => [],
+                'current_page' => $books->currentPage(),
+                'last_page' => $books->lastPage(),
+                'per_page' => $books->perPage(),
+                'total' => $books->total(),
+                'from' => $books->firstItem(),
+                'to' => $books->lastItem()
+            ], 'No books found for the specified criteria');
         }
 
         // Extract items from paginator first, then create Resource collection to avoid double nesting
@@ -260,8 +272,9 @@ class BookController extends Controller
                 200
             );
         } catch (\Exception $e) {
+            Log::info('Error retrieving book details: ' . $e->getMessage());
             return $this->error(
-                'Failed to retrieve book details.',
+                'Failed to retrieve book details.' . $e->getMessage(),
                 500,
                 null,
                 $e->getMessage()
@@ -1404,9 +1417,9 @@ class BookController extends Controller
             }
             $user = $request->user();
             $perPage = $request->input('items_per_page', 10000);
-            $search = $request->input('search');
-            $sortBy = $request->input('sort_by', 'purchase_date');
-            $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
+            // $search = $request->input('search');
+            // $sortBy = $request->input('sort_by', 'purchase_date');
+            // $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
             $query = Book::query()
                 ->whereHas('purchasedBy', function ($q) use ($user) {
@@ -1421,31 +1434,6 @@ class BookController extends Controller
                     'analytics:id,book_id,views,downloads,likes',
                     'readingProgress' => fn($q) => $q->where('user_id', $user->id),
                 ]);
-
-            if ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('title', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%");
-                });
-            }
-
-            // Join with purchase items to sort by purchase date
-            if ($sortBy === 'purchase_date') {
-                $query->join('digital_book_purchase_items as dpi', 'books.id', '=', 'dpi.book_id')
-                    ->join('digital_book_purchases as dp', 'dpi.digital_book_purchase_id', '=', 'dp.id')
-                    ->where('dp.user_id', $user->id)
-                    ->where('dp.status', 'completed')
-                    ->orderBy('dp.created_at', $sortDir)
-                    ->select('books.*');
-            } else {
-                // Other sorting options
-                if (in_array($sortBy, ['title', 'created_at'])) {
-                    $query->orderBy("books.{$sortBy}", $sortDir);
-                } else {
-                    // Default sorting
-                    $query->orderBy('books.created_at', 'desc');
-                }
-            }
 
             $books = $query->paginate($perPage);
 

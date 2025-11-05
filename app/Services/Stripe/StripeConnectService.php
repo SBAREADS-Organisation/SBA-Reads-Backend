@@ -128,14 +128,14 @@ class StripeConnectService
                     'tos_acceptance' => [
                         'date' => time(),
                         'ip' => request()->ip(),
-                        'service_agreement' => 'recipient',
+                        'service_agreement' => $isNigeria ? 'recipient' : 'full',
                         'user_agent' => request()->header('User-Agent'),
                     ],
                     'capabilities' => $isNigeria
-                        ? [ // 🇳🇬 For Nigeria, only transfers
+                        ? [ // For Nigeria, only allow transfers
                             'transfers' => ['requested' => true],
                         ]
-                        : [ // 🌎 For other countries, allow transfers + card payments
+                        : [ // For other countries, allow transfers + card payments
                             'transfers' => ['requested' => true],
                             'card_payments' => ['requested' => true],
                         ],
@@ -415,7 +415,7 @@ class StripeConnectService
             // Handle $intent_purpose === 'subscription'
             if ($intent_purpose === 'subscription') {
                 // Find the user subscription by the purpose_id
-                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */ 'subscription'])->where('id', $intent_purpose_id)->first();
+                $userSubscription = \App\Models\UserSubscription::with([/* 'user', */'subscription'])->where('id', $intent_purpose_id)->first();
                 $txn = \App\Models\Transaction::where('payment_intent_id', $paymentIntent->id)->first();
                 if ($userSubscription) {
                     // Update the subscription status to active
@@ -803,7 +803,7 @@ class StripeConnectService
                     ];
                 }
             }
-            
+
             foreach ($pending as $item) {
                 $currency = $item['currency'];
                 $amount = $item['amount'];
