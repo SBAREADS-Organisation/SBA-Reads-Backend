@@ -40,7 +40,7 @@ class AuthController extends Controller
             $user = $userQuery->first();
             // dd('User Password', $user->password, Hash::check($request->password, $user->password));
             if (! $user || ! Hash::check($request->password, $user->password)) {
-                return $this->error('Invalid credentials', 401);
+                return $this->error('Invalid credentials', 400);
             }
 
             // throw new \RuntimeException('Test Exception'); // Uncomment to test exception handling

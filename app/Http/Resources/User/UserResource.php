@@ -53,6 +53,7 @@ class UserResource extends JsonResource
                 'last_name' => $this->last_name ?? '',
                 'mfa_secret' => $this->mfa_secret ?? '',
                 'name' => $this->name,
+                'username' => $this->username,
                 'preferences' => $this->preferences ?? [],
                 'bio' => $this->bio ?? '',
                 'profile_info' => $this->profile_info ?? [],
@@ -77,7 +78,7 @@ class UserResource extends JsonResource
             'last_login_at' => $this->last_login_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-
+            'username' => $this->username,
             // Return only IDs instead of full book objects
             'purchased_books' => $this->whenLoaded('purchasedBooks', function () {
                 return $this->purchasedBooks->pluck('id')->toArray();
