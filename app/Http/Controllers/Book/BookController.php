@@ -1422,11 +1422,8 @@ class BookController extends Controller
             // $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
             $query = Book::query()
-                ->whereHas('purchasedBy', function ($q) use ($user) {
-                    $q->where('user_id', $user->id)
-                        ->whereHas('purchase', function ($pq) {
-                            $pq->where('status', 'completed');
-                        });
+                ->whereHas('purchasers', function ($q) use ($user) {
+                    $q->where('user_id', $user->id);
                 })
                 ->with([
                     'authors:id,name',

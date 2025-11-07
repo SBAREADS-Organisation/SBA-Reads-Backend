@@ -150,6 +150,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books', [BookController::class, 'store']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
     Route::get('books/search', [BookController::class, 'search']);
+    //get my purchased books
+    Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
     Route::get('books/{id}/reviews', [BookController::class, 'getReviews']);
     Route::post('books/preview', [BookController::class, 'extractPreview']);
@@ -167,8 +169,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
-    //get my purchased books
-    Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
 
     // Author-specific endpoints (only for account_type = 'author')
     Route::middleware(['role:author'])->prefix('author')->group(function () {

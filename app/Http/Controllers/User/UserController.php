@@ -462,11 +462,10 @@ class UserController extends Controller
             $validator = Validator::make($request->all(), $rules);
 
             if ($validator->fails()) {
-                return $this->error(
-                    'Validation failed',
-                    400,
-                    $validator->errors()
-                );
+                return response()->json([
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors(),
+                ]);
             }
 
             // Handle profile picture upload if present
