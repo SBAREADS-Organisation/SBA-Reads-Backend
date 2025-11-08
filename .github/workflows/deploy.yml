@@ -23,20 +23,18 @@ jobs:
       run: |
         composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
-    - name: Skip tests and key generation
-      run: echo "Skipping tests and key generation - using existing .env on server"
-
-    - name: Deploy to EC2
-      uses: appleboy/scp-action@v0.1.3
+    - name: Deploy via RSYNC
+      uses: burnett01/rsync-deployments@7.0.1
       with:
-        host: ${{ secrets.EC2_HOST }}
-        username: ${{ secrets.EC2_USERNAME }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        source: ".,!node_modules,!vendor,!storage/framework/views/*,!storage/logs/*,.env,!*.env.example"
-        target: "/var/www/laravel/SBA-Reads-Backend-temp"
+        switches: -avzr --delete
+        path: ./
+        remote_path: /var/www/laravel/SBA-Reads-Backend-temp/
+        remote_host: ${{ secrets.EC2_HOST }}
+        remote_user: ${{ secrets.EC2_USERNAME }}
+        remote_key: ${{ secrets.EC2_SSH_KEY }}
 
-    - name: Execute deployment script on EC2
-      uses: appleboy/ssh-action@v0.1.0
+    - name: Run deployment commands
+      uses: appleboy/ssh-action@v1.0.0
       with:
         host: ${{ secrets.EC2_HOST }}
         username: ${{ secrets.EC2_USERNAME }}
@@ -44,42 +42,28 @@ jobs:
         script: |
           cd /var/www/laravel
           
-          # Backup current deployment
+          # Backup and deploy
           if [ -d "SBA-Reads-Backend" ]; then
             cp SBA-Reads-Backend/.env SBA-Reads-Backend-temp/
             mv SBA-Reads-Backend SBA-Reads-Backend-backup-$(date +%Y%m%d-%H%M%S)
           fi
           
-          # Deploy new version
           mv SBA-Reads-Backend-temp SBA-Reads-Backend
           cd SBA-Reads-Backend
           
-          # Set proper permissions
+          # Set permissions and deploy
           sudo chown -R www-data:www-data .
-          sudo chmod -R 755 storage
-          sudo chmod -R 755 bootstrap/cache
-          
-          # Install production dependencies
+          sudo chmod -R 755 storage bootstrap/cache
           composer install --no-dev --optimize-autoloader --no-interaction
-          
-          # Run Laravel deployment commands
           php artisan config:cache
           php artisan route:cache
           php artisan view:cache
           
-          # ✅ DATABASE MIGRATIONS (with safety check)
-          if php artisan migrate:status | grep -q "No"; then
-            echo "No pending migrations"
-          else
-            echo "Running database migrations..."
-            php artisan migrate --force
-          fi
+          # Run migrations if needed
+          php artisan migrate --force
           
-          # Reload PHP-FPM and Nginx
           sudo systemctl reload php8.3-fpm
           sudo systemctl reload nginx
-          
-          # Restart supervisor
           sudo supervisorctl restart all
           
-          echo "Deployment completed successfully!"
+          echo "Deployment successful!"
