@@ -1,0 +1,20 @@
+{
+    "mcpServers": {
+        "laravel-boost": {
+            "command": "C:\\Users\\Admin\\.config\\herd\\bin\\php84\\php.exe",
+            "args": [
+                "C:\\Users\\Admin\\Herd\\SBA-Reads-Backend\\artisan",
+                "boost:mcp"
+            ]
+        },
+        "herd": {
+            "command": "C:\\Users\\Admin\\.config\\herd\\bin\\php84\\php.exe",
+            "args": [
+                "C:/Users/Admin/.config/herd/bin/herd-mcp.phar"
+            ],
+            "env": {
+                "SITE_PATH": "C:\\Users\\Admin\\Herd\\SBA-Reads-Backend"
+            }
+        }
+    }
+}

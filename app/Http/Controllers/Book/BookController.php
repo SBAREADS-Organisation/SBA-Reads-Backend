@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\JsonResponse;
 
 // use App\Services\Notification\NotificationService;
 
@@ -119,17 +120,17 @@ class BookController extends Controller
         }
 
         if ($request->filled('search')) {
-            //check title, sub_title
+            // check title, sub_title
             $query = $query->where(function ($q) use ($request) {
-                $q->where('title', 'like', "%" . $request->search . "%")
-                    ->orWhere('sub_title', 'like', "%" . $request->search . "%");
+                $q->where('title', 'like', '%' . $request->search . '%')
+                    ->orWhere('sub_title', 'like', '%' . $request->search . '%');
             });
         }
 
         $books = $query->with([
             'categories:id,name',
             'authors:id,name',
-            'reviews:id,book_id,rating'
+            'reviews:id,book_id,rating',
         ])->paginate($request->get('items_per_page', 10));
 
         if ($books->isEmpty()) {
@@ -140,7 +141,7 @@ class BookController extends Controller
                 'per_page' => $books->perPage(),
                 'total' => $books->total(),
                 'from' => $books->firstItem(),
-                'to' => $books->lastItem()
+                'to' => $books->lastItem(),
             ], 'No books found for the specified criteria');
         }
 
@@ -154,7 +155,7 @@ class BookController extends Controller
             'per_page' => $books->perPage(),
             'total' => $books->total(),
             'from' => $books->firstItem(),
-            'to' => $books->lastItem()
+            'to' => $books->lastItem(),
         ], 'Books retrieved successfully');
     }
 
@@ -252,7 +253,7 @@ class BookController extends Controller
                 'reviews.user:id,name,email,profile_picture',
                 'analytics',
                 'bookmarkedBy:id',
-                'purchasers:id'
+                'purchasers:id',
             ])->findOrFail($id);
 
             // Fetch similar books (by shared categories)
@@ -273,6 +274,7 @@ class BookController extends Controller
             );
         } catch (\Exception $e) {
             Log::info('Error retrieving book details: ' . $e->getMessage());
+
             return $this->error(
                 'Failed to retrieve book details.' . $e->getMessage(),
                 500,
@@ -321,7 +323,7 @@ class BookController extends Controller
         $books = $query->with([
             'authors:id,name,email,profile_picture,bio',
             'categories:id,name',
-            'analytics'
+            'analytics',
         ])->paginate($request->input('per_page', 20));
 
         if ($books->isEmpty()) {
@@ -610,10 +612,10 @@ class BookController extends Controller
             'data' => [
                 'book_id' => (int) $bookId,
                 'user_id' => $user->id,
-                'bookmarked' => true
+                'bookmarked' => true,
             ],
             'code' => 200,
-            'message' => 'Book bookmarked successfully'
+            'message' => 'Book bookmarked successfully',
         ]);
     }
 
@@ -709,10 +711,10 @@ class BookController extends Controller
                 'data' => [
                     'book_id' => (int) $bookId,
                     'user_id' => $user->id,
-                    'bookmarked' => false
+                    'bookmarked' => false,
                 ],
                 'code' => 200,
-                'message' => 'Bookmark removed successfully'
+                'message' => 'Bookmark removed successfully',
             ]);
         } catch (\Throwable $th) {
             return $this->error(
@@ -734,8 +736,8 @@ class BookController extends Controller
 
             // Authorization: Only book authors (original creator or co-authors) or admins can update books
             $isOriginalAuthor = $book->author_id === $user->id;
-            $isCoAuthor = $book->authors()->where('id', $user->id)->exists();
-            if (!$isOriginalAuthor && !$isCoAuthor && !$user->hasRole(['admin', 'superadmin'])) {
+            $isCoAuthor = $book->authors()->where('users.id', $user->id)->exists();
+            if (! $isOriginalAuthor && ! $isCoAuthor && ! $user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only update your own books.', 403);
             }
 
@@ -786,13 +788,19 @@ class BookController extends Controller
 
                 // Upload new cover image
                 $upload = $this->cloudinaryService->upload($request->file('cover_image'), 'book_cover');
+
+                if ($upload instanceof JsonResponse) {
+                    $errorData = $upload->getData(true);
+                    throw new \Exception('Failed to upload cover image: ' . ($errorData['error'] ?? 'Unknown error'));
+                }
+
                 $validated['cover_image'] = json_encode([
                     'public_url' => (string) $upload['url'],
-                    'public_id' => (int) $upload['id'],
+                    'public_id' => $upload['public_id'],
                 ]);
 
                 // Attach media to book
-                \App\Models\MediaUpload::where('id', $upload['id'])->update([
+                \App\Models\MediaUpload::where('public_id', $upload['public_id'])->update([
                     'mediable_type' => 'book',
                     'mediable_id' => $book->id,
                 ]);
@@ -835,14 +843,14 @@ class BookController extends Controller
 
             // Authorization: Only book authors (original creator or co-authors) or admins can toggle visibility
             $isOriginalAuthor = $book->author_id === $user->id;
-            $isCoAuthor = $book->authors()->where('id', $user->id)->exists();
-            if (!$isOriginalAuthor && !$isCoAuthor && !$user->hasRole(['admin', 'superadmin'])) {
+            $isCoAuthor = $book->authors()->where('users.id', $user->id)->exists();
+            if (! $isOriginalAuthor && ! $isCoAuthor && ! $user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only toggle visibility of your own books.', 403);
             }
 
             // Validation for visibility value
             $validator = Validator::make($request->all(), [
-                'visibility' => 'sometimes|in:public,private'
+                'visibility' => 'sometimes|in:public,private',
             ]);
 
             if ($validator->fails()) {
@@ -867,7 +875,7 @@ class BookController extends Controller
                 [
                     'book' => new BookResource($book),
                     'previous_visibility' => $book->visibility === 'public' ? 'private' : 'public',
-                    'current_visibility' => $newVisibility
+                    'current_visibility' => $newVisibility,
                 ],
                 "Book visibility updated to {$newVisibility} successfully."
             );
@@ -886,8 +894,8 @@ class BookController extends Controller
 
             // Authorization: Only book authors (original creator or co-authors) or admins can delete books
             $isOriginalAuthor = $book->author_id === $user->id;
-            $isCoAuthor = $book->authors()->where('id', $user->id)->exists();
-            if (!$isOriginalAuthor && !$isCoAuthor && !$user->hasRole(['admin', 'superadmin'])) {
+            $isCoAuthor = $book->authors()->where('users.id', $user->id)->exists();
+            if (! $isOriginalAuthor && ! $isCoAuthor && ! $user->hasRole(['admin', 'superadmin'])) {
                 return $this->error('Unauthorized. You can only delete your own books.', 403);
             }
 
@@ -1119,7 +1127,7 @@ class BookController extends Controller
             }
 
             if ($action === 'decline' || $action === 'decline_with_review') {
-                if (! $reviewNotes && !$rejectionNote) {
+                if (! $reviewNotes && ! $rejectionNote) {
                     return $this->error('Review notes or rejection note are required to decline a book.');
                 }
                 $book->status = 'declined';
@@ -1289,6 +1297,7 @@ class BookController extends Controller
 
             if ($transaction instanceof \Illuminate\Http\JsonResponse) {
                 $responseData = $transaction->getData(true);
+
                 return $this->error(
                     'An error occurred while initiating the books purchase process.',
                     $transaction->getStatusCode(),
@@ -1365,9 +1374,6 @@ class BookController extends Controller
 
     /**
      * Determine the appropriate payment provider based on currency
-     *
-     * @param string $currency
-     * @return string
      */
     private function getPaymentProvider(string $currency): string
     {

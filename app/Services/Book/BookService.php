@@ -99,9 +99,14 @@ class BookService
         if (isset($data['cover_image']) && $data['cover_image'] instanceof UploadedFile) {
             $upload = $this->cloudinaryMediaService->upload($data['cover_image'], 'book_cover');
 
+            if ($upload instanceof JsonResponse) {
+                $errorData = $upload->getData(true);
+                throw new \Exception('Failed to upload cover image: ' . ($errorData['error'] ?? 'Unknown error'));
+            }
+
             $data['cover_image'] = [
                 'public_url' => (string) $upload['url'],
-                'public_id' => (int) $upload['id'],
+                'public_id' => $upload['public_id'],
             ];
 
             $mediaUploadIds[] = $upload['id'];
@@ -113,9 +118,15 @@ class BookService
             foreach ($data['files'] as $file) {
                 if ($file instanceof UploadedFile) {
                     $upload = $this->cloudinaryMediaService->upload($file, 'book_content');
+
+                    if ($upload instanceof JsonResponse) {
+                        $errorData = $upload->getData(true);
+                        throw new \Exception('Failed to upload book content file: ' . ($errorData['error'] ?? 'Unknown error'));
+                    }
+
                     $uploadedFiles[] = [
                         'public_url' => (string) $upload['url'],
-                        'public_id' => (int) $upload['id'],
+                        'public_id' => $upload['public_id'],
                     ];
 
                     $mediaUploadIds[] = $upload['id'];
@@ -152,7 +163,7 @@ class BookService
     public function deleteBook(Book $book, string $reason)
     {
         // Check if book has purchases
-        $hasPurchases = DigitalBookPurchase::whereHas('items', function($q) use ($book) {
+        $hasPurchases = DigitalBookPurchase::whereHas('items', function ($q) use ($book) {
             $q->where('book_id', $book->id);
         })->where('status', 'completed')->exists();
 
@@ -175,6 +186,7 @@ class BookService
         }
 
         $book->delete();
+
         return true;
     }
 
@@ -232,6 +244,7 @@ class BookService
 
         if ($transaction instanceof JsonResponse) {
             $responseData = $transaction->getData(true);
+
             return $this->error(
                 'An error occurred while initiating the books purchase process.',
                 $transaction->getStatusCode(),
@@ -246,7 +259,3 @@ class BookService
         ], 'Purchase initiated successfully. Complete payment to access books.');
     }
 }
-
-
-
-
