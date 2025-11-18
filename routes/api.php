@@ -149,7 +149,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
     Route::post('books', [BookController::class, 'store']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
-    Route::get('books/search', [BookController::class, 'search']);
+
     //get my purchased books
     Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
@@ -186,6 +186,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/{category}', [CategoryController::class, 'destroy']);
     });
 });
+
 Route::get('books', [BookController::class, 'index']);
 
 // Order Routes

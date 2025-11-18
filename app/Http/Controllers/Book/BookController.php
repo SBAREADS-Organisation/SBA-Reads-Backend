@@ -119,13 +119,20 @@ class BookController extends Controller
             $query = $this->applyClassification($query, $request->classification);
         }
 
+        // Search filter
         if ($request->filled('search')) {
-            // check title, sub_title
-            $query = $query->where(function ($q) use ($request) {
-                $q->where('title', 'like', '%' . $request->search . '%')
-                    ->orWhere('sub_title', 'like', '%' . $request->search . '%');
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->whereRaw('LOWER(title) LIKE ?', ['%' . strtolower($search) . '%'])
+                    ->orWhereRaw('LOWER(description) LIKE ?', ['%' . strtolower($search) . '%'])
+                    ->orWhereRaw('LOWER(isbn) LIKE ?', ['%' . strtolower($search) . '%']);
             });
         }
+
+        // Sorting
+        $sortBy = $request->input('sort_by', 'created_at');
+        $sortDir = $request->input('sort_dir', 'desc');
+        $query->orderBy($sortBy, $sortDir);
 
         $books = $query->with([
             'categories:id,name',
