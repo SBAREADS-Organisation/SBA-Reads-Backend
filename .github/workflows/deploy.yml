@@ -144,10 +144,33 @@ jobs:
             fi
 
             # Set file permissions
+            # Create necessary directories
+            sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/framework/{sessions,views,cache}
+            sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/logs
+            sudo touch /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
+            
+            # Set proper ownership
+            sudo chown -R ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
-            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage
-            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            
+            # Set directory and file permissions
+            sudo find /home/ubuntu/SBA-Reads-Backend -type d -exec chmod 775 {} \;
+            sudo find /home/ubuntu/SBA-Reads-Backend -type f -exec chmod 664 {} \;
+            
+            # Special permissions for storage and bootstrap/cache
+            sudo chmod -R ug+rwx /home/ubuntu/SBA-Reads-Backend/storage
+            sudo chmod -R ug+rwx /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            
+            # Set proper permissions for Laravel log file
+            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage/logs/
+            sudo chmod 664 /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
+            
+            # Set proper group permissions and enable new files to inherit
+            sudo chmod g+s /home/ubuntu/SBA-Reads-Backend/storage
+            sudo chmod g+s /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo setfacl -R -d -m g::rwx /home/ubuntu/SBA-Reads-Backend/storage
+            sudo setfacl -R -d -m g::rwx /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
 
             # Configure Nginx
             sudo tee /etc/nginx/sites-available/sba-reads > /dev/null << 'EOF'
