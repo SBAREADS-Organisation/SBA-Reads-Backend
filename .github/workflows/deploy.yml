@@ -36,7 +36,11 @@ jobs:
         
       - name: Install Node dependencies and build
         run: |
-          npm ci
+          if [ -f "package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
           npm run build
           
       - name: Create .env file
