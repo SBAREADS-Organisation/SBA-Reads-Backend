@@ -107,6 +107,11 @@ jobs:
               cd /home/ubuntu/SBA-Reads-Backend
             fi
             
+            # Clean .env file and recreate from template
+            cp .env.example .env.production
+            rm .env
+            mv .env.production .env
+            
             # Pull latest changes
             git pull origin main
             
