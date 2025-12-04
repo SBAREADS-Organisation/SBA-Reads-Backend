@@ -79,6 +79,12 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_KEY }}
           script: |
+            # Immediately clean any corrupted .env files first
+            cd /home/ubuntu/SBA-Reads-Backend 2>/dev/null || cd /home/ubuntu
+            
+            # Remove all .env files and recreate clean one
+            rm -f .env .env.backup .env.local .env.production 2>/dev/null || true
+            
             # Check if project directory exists, if not clone with PAT
             if [ ! -d "/home/ubuntu/SBA-Reads-Backend" ]; then
               cd /home/ubuntu
@@ -107,16 +113,16 @@ jobs:
               cd /home/ubuntu/SBA-Reads-Backend
             fi
             
-            # Clean .env file and recreate from template
+            # Ensure clean .env file
             cp .env.example .env.production
-            rm .env
+            rm -f .env .env.backup .env.local
             mv .env.production .env
             
             # Pull latest changes
             git pull origin main
             
-            # Stop containers
-            docker-compose -f docker-compose.prod.yml down
+            # Stop containers before they try to read corrupted .env
+            docker-compose -f docker-compose.prod.yml down || true
             
             # Build and start containers
             docker-compose -f docker-compose.prod.yml up -d --build
