@@ -1,0 +1,134 @@
+name: Deploy to AWS EC2
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          
+      - name: Cache Composer dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.composer/cache
+          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          
+      - name: Cache NPM dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          
+      - name: Install PHP dependencies
+        run: composer install --no-dev --optimize-autoloader --no-progress --no-interaction
+        
+      - name: Install Node dependencies and build
+        run: |
+          npm ci
+          npm run build
+          
+      - name: Create .env file
+        run: |
+          echo "APP_NAME=SBA Reads" > .env
+          echo "APP_ENV=production" >> .env
+          echo "APP_DEBUG=false" >> .env
+          echo "APP_URL=${{ secrets.APP_URL }}" >> .env
+          echo "DB_CONNECTION=pgsql" >> .env
+          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
+          echo "DB_PORT=5432" >> .env
+          echo "DB_DATABASE=${{ secrets.DB_DATABASE }}" >> .env
+          echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
+          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+          echo "CACHE_STORE=redis" >> .env
+          echo "REDIS_HOST=redis" >> .env
+          echo "REDIS_PORT=6379" >> .env
+          echo "QUEUE_CONNECTION=redis" >> .env
+          echo "SESSION_DRIVER=database" >> .env
+          echo "LOG_CHANNEL=stack" >> .env
+          echo "LOG_LEVEL=error" >> .env
+          
+      - name: Generate app key
+        run: php artisan key:generate --force
+        
+      - name: Optimize Laravel
+        run: |
+          php artisan config:cache
+          php artisan route:cache
+          php artisan view:cache
+          
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Check if project directory exists, if not clone with PAT
+            if [ ! -d "/home/ubuntu/SBA-Reads-Backend" ]; then
+              cd /home/ubuntu
+              git clone https://${{ secrets.PAT }}@github.com/SBAREADS-Organisation/SBA-Reads-Backend.git
+              cd SBA-Reads-Backend
+              
+              # Create environment file from template
+              cp .env.example .env
+              
+              # Create SSL directory
+              mkdir -p ssl
+              
+              # Install Docker if not present
+              if ! command -v docker &> /dev/null; then
+                curl -fsSL https://get.docker.com -o get-docker.sh
+                sudo sh get-docker.sh
+                sudo usermod -aG docker ubuntu
+              fi
+              
+              # Install Docker Compose if not present
+              if ! command -v docker-compose &> /dev/null; then
+                sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+              fi
+            else
+              cd /home/ubuntu/SBA-Reads-Backend
+            fi
+            
+            # Pull latest changes
+            git pull origin main
+            
+            # Stop containers
+            docker-compose -f docker-compose.prod.yml down
+            
+            # Build and start containers
+            docker-compose -f docker-compose.prod.yml up -d --build
+            
+            # Wait for containers to be ready
+            sleep 30
+            
+            # Run migrations
+            docker-compose -f docker-compose.prod.yml exec app php artisan migrate --force
+            
+            # Clear and cache configs
+            docker-compose -f docker-compose.prod.yml exec app php artisan config:cache
+            docker-compose -f docker-compose.prod.yml exec app php artisan route:cache
+            docker-compose -f docker-compose.prod.yml exec app php artisan view:cache
+            docker-compose -f docker-compose.prod.yml exec app php artisan cache:clear
+            
+            # Create storage link
+            docker-compose -f docker-compose.prod.yml exec app php artisan storage:link
+            
+            # Restart queue workers
+            docker-compose -f docker-compose.prod.yml exec app php artisan queue:restart
+            
+            # Show status
+            docker-compose -f docker-compose.prod.yml ps
