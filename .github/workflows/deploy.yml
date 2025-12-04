@@ -95,8 +95,8 @@ jobs:
             # Pull latest changes
             git pull origin main
             
-            # Install PHP dependencies
-            composer install --no-dev --optimize-autoloader --no-interaction
+            # Install PHP dependencies using php8.2 explicitly
+            php8.2 /usr/bin/composer install --no-dev --optimize-autoloader --no-interaction
             
             # Create .env file
             sudo cp .env.example .env
@@ -122,11 +122,11 @@ jobs:
             EOF
             
             # Generate app key
-            php artisan key:generate --force
+            php8.2 artisan key:generate --force
             
             # Run migrations and seed
-            php artisan migrate --force
-            php artisan db:seed --force
+            php8.2 artisan migrate --force
+            php8.2 artisan db:seed --force
             
             # Set up Nginx
             sudo tee /etc/nginx/sites-available/sba-reads > /dev/null << 'EOF'
@@ -169,16 +169,16 @@ jobs:
             sudo systemctl enable php8.2-fpm
             
             # Optimize Laravel
-            php artisan config:cache
-            php artisan route:cache
-            php artisan view:cache
-            php artisan cache:clear
+            php8.2 artisan config:cache
+            php8.2 artisan route:cache
+            php8.2 artisan view:cache
+            php8.2 artisan cache:clear
             
             # Create storage link
-            php artisan storage:link
+            php8.2 artisan storage:link
             
             # Restart queue workers
-            php artisan queue:restart
+            php8.2 artisan queue:restart
             
             # Test the application
             curl -f http://localhost/api/subscriptions || exit 1
