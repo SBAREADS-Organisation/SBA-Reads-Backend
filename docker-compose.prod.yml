@@ -77,3 +77,6 @@ networks:
 
 volumes:
   redis_data:
+    depends_on:
+      - app
+      - redis

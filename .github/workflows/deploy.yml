@@ -43,35 +43,6 @@ jobs:
           fi
           npm run build
           
-      - name: Create .env file
-        run: |
-          echo "APP_NAME=\"SBA Reads\"" > .env
-          echo "APP_ENV=production" >> .env
-          echo "APP_DEBUG=false" >> .env
-          echo "APP_URL=${{ secrets.APP_URL }}" >> .env
-          echo "DB_CONNECTION=pgsql" >> .env
-          echo "DB_HOST=${{ secrets.DB_HOST }}" >> .env
-          echo "DB_PORT=5432" >> .env
-          echo "DB_DATABASE=${{ secrets.DB_DATABASE }}" >> .env
-          echo "DB_USERNAME=${{ secrets.DB_USERNAME }}" >> .env
-          echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
-          echo "CACHE_STORE=redis" >> .env
-          echo "REDIS_HOST=redis" >> .env
-          echo "REDIS_PORT=6379" >> .env
-          echo "QUEUE_CONNECTION=redis" >> .env
-          echo "SESSION_DRIVER=database" >> .env
-          echo "LOG_CHANNEL=stack" >> .env
-          echo "LOG_LEVEL=error" >> .env
-          
-      - name: Generate app key
-        run: php artisan key:generate --force
-        
-      - name: Optimize Laravel
-        run: |
-          php artisan config:cache
-          php artisan route:cache
-          php artisan view:cache
-          
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -79,71 +50,114 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Immediately clean any corrupted .env files first
-            cd /home/ubuntu/SBA-Reads-Backend 2>/dev/null || cd /home/ubuntu
-            
-            # Remove all .env files and recreate clean one
-            rm -f .env .env.backup .env.local .env.production 2>/dev/null || true
-            
-            # Check if project directory exists, if not clone with PAT
-            if [ ! -d "/home/ubuntu/SBA-Reads-Backend" ]; then
-              cd /home/ubuntu
-              git clone https://${{ secrets.PAT }}@github.com/SBAREADS-Organisation/SBA-Reads-Backend.git
-              cd SBA-Reads-Backend
-              
-              # Create environment file from template
-              cp .env.example .env
-              
-              # Create SSL directory
-              mkdir -p ssl
-              
-              # Install Docker if not present
-              if ! command -v docker &> /dev/null; then
-                curl -fsSL https://get.docker.com -o get-docker.sh
-                sudo sh get-docker.sh
-                sudo usermod -aG docker ubuntu
-              fi
-              
-              # Install Docker Compose if not present
-              if ! command -v docker-compose &> /dev/null; then
-                sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-                sudo chmod +x /usr/local/bin/docker-compose
-              fi
-            else
-              cd /home/ubuntu/SBA-Reads-Backend
+            # Install system dependencies if not present
+            if ! command -v php &> /dev/null; then
+              sudo apt update
+              sudo apt install -y php8.2 php8.2-fpm php8.2-pgsql php8.2-mbstring php8.2-xml php8.2-curl php8.2-zip php8.2-bcmath php8.2-gd php8.2-redis php8.2-pcntl php8.2-exif php8.2-cli composer unzip nginx
             fi
             
-            # Ensure clean .env file
-            cp .env.example .env.production
-            rm -f .env .env.backup .env.local
-            mv .env.production .env
+            # Install Redis if not present
+            if ! command -v redis-server &> /dev/null; then
+              sudo apt install -y redis-server
+              sudo systemctl start redis-server
+              sudo systemctl enable redis-server
+            fi
+            
+            # Install PostgreSQL client if not present
+            if ! command -v psql &> /dev/null; then
+              sudo apt install -y postgresql-client
+            fi
+            
+            # Use existing directory
+            cd /home/ubuntu/SBA-Reads-Backend
             
             # Pull latest changes
             git pull origin main
             
-            # Stop containers before they try to read corrupted .env
-            docker-compose -f docker-compose.prod.yml down || true
+            # Install PHP dependencies
+            composer install --no-dev --optimize-autoloader --no-interaction
             
-            # Build and start containers
-            docker-compose -f docker-compose.prod.yml up -d --build
+            # Create .env file
+            sudo cp .env.example .env
+            sudo chown ubuntu:ubuntu .env
+            cat > .env << EOF
+            APP_NAME="SBA Reads"
+            APP_ENV=production
+            APP_DEBUG=false
+            APP_URL=${{ secrets.APP_URL }}
+            DB_CONNECTION=pgsql
+            DB_HOST=${{ secrets.DB_HOST }}
+            DB_PORT=5432
+            DB_DATABASE=${{ secrets.DB_DATABASE }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            CACHE_STORE=redis
+            REDIS_HOST=127.0.0.1
+            REDIS_PORT=6379
+            QUEUE_CONNECTION=redis
+            SESSION_DRIVER=database
+            LOG_CHANNEL=stack
+            LOG_LEVEL=error
+            EOF
             
-            # Wait for containers to be ready
-            sleep 30
+            # Generate app key
+            php artisan key:generate --force
             
-            # Run migrations
-            docker-compose -f docker-compose.prod.yml exec app php artisan migrate --force
+            # Run migrations and seed
+            php artisan migrate --force
+            php artisan db:seed --force
             
-            # Clear and cache configs
-            docker-compose -f docker-compose.prod.yml exec app php artisan config:cache
-            docker-compose -f docker-compose.prod.yml exec app php artisan route:cache
-            docker-compose -f docker-compose.prod.yml exec app php artisan view:cache
-            docker-compose -f docker-compose.prod.yml exec app php artisan cache:clear
+            # Set up Nginx
+            sudo tee /etc/nginx/sites-available/sba-reads > /dev/null << 'EOF'
+            server {
+                listen 80;
+                server_name ${{ secrets.EC2_HOST }};
+                root /home/ubuntu/SBA-Reads-Backend/public;
+                index index.php index.html;
+
+                location / {
+                    try_files $uri $uri/ /index.php?$query_string;
+                }
+
+                location ~ \.php$ {
+                    fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+                    fastcgi_index index.php;
+                    include fastcgi_params;
+                    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                }
+
+                location ~ /\.ht {
+                    deny all;
+                }
+            }
+            EOF
+            
+            # Enable the site
+            sudo ln -sf /etc/nginx/sites-available/sba-reads /etc/nginx/sites-enabled/
+            sudo rm -f /etc/nginx/sites-enabled/default
+            sudo nginx -t
+            sudo systemctl restart nginx
+            
+            # Set permissions
+            sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/SBA-Reads-Backend
+            
+            # Start PHP-FPM
+            sudo systemctl start php8.2-fpm
+            sudo systemctl enable php8.2-fpm
+            
+            # Optimize Laravel
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+            php artisan cache:clear
             
             # Create storage link
-            docker-compose -f docker-compose.prod.yml exec app php artisan storage:link
+            php artisan storage:link
             
             # Restart queue workers
-            docker-compose -f docker-compose.prod.yml exec app php artisan queue:restart
+            php artisan queue:restart
             
-            # Show status
-            docker-compose -f docker-compose.prod.yml ps
+            # Test the application
+            curl -f http://localhost/api/subscriptions || exit 1
