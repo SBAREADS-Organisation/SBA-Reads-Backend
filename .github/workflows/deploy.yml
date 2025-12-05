@@ -1,232 +1,232 @@
-name: Deploy to AWS EC2
+# name: Deploy to AWS EC2
 
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main]
+# on:
+#   push:
+#     branches: [main, develop]
+#   pull_request:
+#     branches: [main]
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
     
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
         
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: '18'
           
-      - name: Cache Composer dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.composer/cache
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+#       - name: Cache Composer dependencies
+#         uses: actions/cache@v3
+#         with:
+#           path: ~/.composer/cache
+#           key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
           
-      - name: Cache NPM dependencies
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+#       - name: Cache NPM dependencies
+#         uses: actions/cache@v3
+#         with:
+#           path: ~/.npm
+#           key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
           
-      - name: Install PHP dependencies
-        run: composer install --no-dev --optimize-autoloader --no-progress --no-interaction
+#       - name: Install PHP dependencies
+#         run: composer install --no-dev --optimize-autoloader --no-progress --no-interaction
 
-      - name: Install Node dependencies and build
-        run: |
-          if [ -f "package-lock.json" ]; then
-            npm ci
-          else
-            npm install
-          fi
-          npm run build
+#       - name: Install Node dependencies and build
+#         run: |
+#           if [ -f "package-lock.json" ]; then
+#             npm ci
+#           else
+#             npm install
+#           fi
+#           npm run build
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            # Update and upgrade packages
-            sudo apt update && sudo apt upgrade -y
+#       - name: Deploy to EC2
+#         uses: appleboy/ssh-action@v1.0.0
+#         with:
+#           host: ${{ secrets.EC2_HOST }}
+#           username: ubuntu
+#           key: ${{ secrets.SSH_KEY }}
+#           script: |
+#             # Update and upgrade packages
+#             sudo apt update && sudo apt upgrade -y
 
-            # Install required packages
-            sudo apt install -y software-properties-common
-            sudo add-apt-repository -y ppa:ondrej/php
-            sudo apt update
+#             # Install required packages
+#             sudo apt install -y software-properties-common
+#             sudo add-apt-repository -y ppa:ondrej/php
+#             sudo apt update
 
-            # Install PHP 8.2 and all required extensions
-            sudo apt install -y \
-              php8.2 \
-              php8.2-fpm \
-              php8.2-pgsql \
-              php8.2-mbstring \
-              php8.2-xml \
-              php8.2-curl \
-              php8.2-zip \
-              php8.2-bcmath \
-              php8.2-gd \
-              php8.2-redis \
-              php8.2-exif \
-              php8.2-cli \
-              php8.2-intl \
-              php8.2-common \
-              php8.2-opcache \
-              composer \
-              nginx \
-              redis-server \
-              postgresql-client \
-              unzip
+#             # Install PHP 8.2 and all required extensions
+#             sudo apt install -y \
+#               php8.2 \
+#               php8.2-fpm \
+#               php8.2-pgsql \
+#               php8.2-mbstring \
+#               php8.2-xml \
+#               php8.2-curl \
+#               php8.2-zip \
+#               php8.2-bcmath \
+#               php8.2-gd \
+#               php8.2-redis \
+#               php8.2-exif \
+#               php8.2-cli \
+#               php8.2-intl \
+#               php8.2-common \
+#               php8.2-opcache \
+#               composer \
+#               nginx \
+#               redis-server \
+#               postgresql-client \
+#               unzip
 
-            # Install Node.js 18.x
-            curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-            sudo apt-get install -y nodejs
+#             # Install Node.js 18.x
+#             curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+#             sudo apt-get install -y nodejs
 
-            # Install Redis if not present
-            if ! command -v redis-server &> /dev/null; then
-              sudo apt install -y redis-server
-            fi
+#             # Install Redis if not present
+#             if ! command -v redis-server &> /dev/null; then
+#               sudo apt install -y redis-server
+#             fi
 
-            # Clone or update repository
-            if [ ! -d "/home/ubuntu/SBA-Reads-Backend" ]; then
-              git clone https://${{ secrets.PAT }}@github.com/SBAREADS-Organisation/SBA-Reads-Backend.git
-            else
-              cd /home/ubuntu/SBA-Reads-Backend
-              git fetch origin
-              git reset --hard origin/main
-            fi
+#             # Clone or update repository
+#             if [ ! -d "/home/ubuntu/SBA-Reads-Backend" ]; then
+#               git clone https://${{ secrets.PAT }}@github.com/SBAREADS-Organisation/SBA-Reads-Backend.git
+#             else
+#               cd /home/ubuntu/SBA-Reads-Backend
+#               git fetch origin
+#               git reset --hard origin/main
+#             fi
 
-            cd /home/ubuntu/SBA-Reads-Backend
+#             cd /home/ubuntu/SBA-Reads-Backend
 
-            # Install PHP dependencies
-            composer install --no-dev --optimize-autoloader --no-interaction
+#             # Install PHP dependencies
+#             composer install --no-dev --optimize-autoloader --no-interaction
 
-            # Install Node.js dependencies and build assets
-            npm install
-            npm run build
+#             # Install Node.js dependencies and build assets
+#             npm install
+#             npm run build
 
-            # Create .env file if it doesn't exist
-            if [ ! -f ".env" ]; then
-              cp .env.example .env
+#             # Create .env file if it doesn't exist
+#             if [ ! -f ".env" ]; then
+#               cp .env.example .env
 
-              # Set up .env with secrets
-              sed -i "s|^APP_NAME=.*|APP_NAME=\"SBA Reads\"|" .env
-              sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
-              sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
-              sed -i "s|^APP_URL=.*|APP_URL=${{ secrets.APP_URL }}|" .env
+#               # Set up .env with secrets
+#               sed -i "s|^APP_NAME=.*|APP_NAME=\"SBA Reads\"|" .env
+#               sed -i "s|^APP_ENV=.*|APP_ENV=production|" .env
+#               sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env
+#               sed -i "s|^APP_URL=.*|APP_URL=${{ secrets.APP_URL }}|" .env
 
-              # Database configuration
-              sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
-              sed -i "s|^DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
-              sed -i "s|^DB_PORT=.*|DB_PORT=5432|" .env
-              sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
-              sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
-              sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD='${{ secrets.DB_PASSWORD }}'|" .env
+#               # Database configuration
+#               sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=pgsql|" .env
+#               sed -i "s|^DB_HOST=.*|DB_HOST=${{ secrets.DB_HOST }}|" .env
+#               sed -i "s|^DB_PORT=.*|DB_PORT=5432|" .env
+#               sed -i "s|^DB_DATABASE=.*|DB_DATABASE=${{ secrets.DB_DATABASE }}|" .env
+#               sed -i "s|^DB_USERNAME=.*|DB_USERNAME=${{ secrets.DB_USERNAME }}|" .env
+#               sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD='${{ secrets.DB_PASSWORD }}'|" .env
 
-              # Redis configuration
-              sed -i "s|^REDIS_HOST=.*|REDIS_HOST=127.0.0.1|" .env
-              sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=null|" .env
-              sed -i "s|^REDIS_PORT=.*|REDIS_PORT=6379|" .env
+#               # Redis configuration
+#               sed -i "s|^REDIS_HOST=.*|REDIS_HOST=127.0.0.1|" .env
+#               sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=null|" .env
+#               sed -i "s|^REDIS_PORT=.*|REDIS_PORT=6379|" .env
 
-              # Other settings
-              sed -i "s|^BROADCAST_DRIVER=.*|BROADCAST_DRIVER=log|" .env
-              sed -i "s|^CACHE_DRIVER=.*|CACHE_DRIVER=redis|" .env
-              sed -i "s|^FILESYSTEM_DISK=.*|FILESYSTEM_DISK=public|" .env
-              sed -i "s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=redis|" .env
-              sed -i "s|^SESSION_DRIVER=.*|SESSION_DRIVER=database|" .env
-              sed -i "s|^SESSION_LIFETIME=.*|SESSION_LIFETIME=120|" .env
+#               # Other settings
+#               sed -i "s|^BROADCAST_DRIVER=.*|BROADCAST_DRIVER=log|" .env
+#               sed -i "s|^CACHE_DRIVER=.*|CACHE_DRIVER=redis|" .env
+#               sed -i "s|^FILESYSTEM_DISK=.*|FILESYSTEM_DISK=public|" .env
+#               sed -i "s|^QUEUE_CONNECTION=.*|QUEUE_CONNECTION=redis|" .env
+#               sed -i "s|^SESSION_DRIVER=.*|SESSION_DRIVER=database|" .env
+#               sed -i "s|^SESSION_LIFETIME=.*|SESSION_LIFETIME=120|" .env
 
-              # Generate application key
-              php8.2 artisan key:generate
-            fi
+#               # Generate application key
+#               php8.2 artisan key:generate
+#             fi
 
-            # Set file permissions
-            # Create necessary directories
-            sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/framework/{sessions,views,cache}
-            sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/logs
-            sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
-            sudo touch /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
+#             # Set file permissions
+#             # Create necessary directories
+#             sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/framework/{sessions,views,cache}
+#             sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/storage/logs
+#             sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+#             sudo touch /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
             
-            # Set proper ownership - www-data needs to own these directories
-            sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage
-            sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
-            sudo chown -R ubuntu:www-data /home/ubuntu/SBA-Reads-Backend/vendor
-            sudo chown ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
+#             # Set proper ownership - www-data needs to own these directories
+#             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage
+#             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+#             sudo chown -R ubuntu:www-data /home/ubuntu/SBA-Reads-Backend/vendor
+#             sudo chown ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
             
-            # Set directory and file permissions
-            sudo find /home/ubuntu/SBA-Reads-Backend -type d -exec chmod 755 {} \;
-            sudo find /home/ubuntu/SBA-Reads-Backend -type f -exec chmod 644 {} \;
+#             # Set directory and file permissions
+#             sudo find /home/ubuntu/SBA-Reads-Backend -type d -exec chmod 755 {} \;
+#             sudo find /home/ubuntu/SBA-Reads-Backend -type f -exec chmod 644 {} \;
             
-            # Special permissions for storage and bootstrap/cache
-            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
-            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/vendor
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/logs
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/cache
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/sessions
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/views
+#             # Special permissions for storage and bootstrap/cache
+#             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage
+#             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+#             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/vendor
+#             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/logs
+#             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/cache
+#             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/sessions
+#             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/views
             
-            # Set proper permissions for Laravel log file
-            sudo chmod 664 /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
+#             # Set proper permissions for Laravel log file
+#             sudo chmod 664 /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
             
-            # Make artisan executable
-            sudo chmod +x /home/ubuntu/SBA-Reads-Backend/artisan
+#             # Make artisan executable
+#             sudo chmod +x /home/ubuntu/SBA-Reads-Backend/artisan
 
-            # Configure Nginx
-            sudo tee /etc/nginx/sites-available/sba-reads > /dev/null << 'EOF'
-            server {
-                listen 80;
-                server_name _;
-                root /home/ubuntu/SBA-Reads-Backend/public;
+#             # Configure Nginx
+#             sudo tee /etc/nginx/sites-available/sba-reads > /dev/null << 'EOF'
+#             server {
+#                 listen 80;
+#                 server_name _;
+#                 root /home/ubuntu/SBA-Reads-Backend/public;
 
-                add_header X-Frame-Options "SAMEORIGIN";
-                add_header X-Content-Type-Options "nosniff";
+#                 add_header X-Frame-Options "SAMEORIGIN";
+#                 add_header X-Content-Type-Options "nosniff";
 
-                index index.php;
+#                 index index.php;
 
-                charset utf-8;
+#                 charset utf-8;
 
-                location / {
-                    try_files $uri $uri/ /index.php?$query_string;
-                }
+#                 location / {
+#                     try_files $uri $uri/ /index.php?$query_string;
+#                 }
 
-                location ~ \.php$ {
-                    fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
-                    fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-                    include fastcgi_params;
-                }
+#                 location ~ \.php$ {
+#                     fastcgi_pass unix:/var/run/php/php8.2-fpm.sock;
+#                     fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+#                     include fastcgi_params;
+#                 }
 
-                location ~ /\.(?!well-known).* {
-                    deny all;
-                }
-            }
-            EOF
+#                 location ~ /\.(?!well-known).* {
+#                     deny all;
+#                 }
+#             }
+#             EOF
 
             
-            # Enable site and restart Nginx
-            sudo ln -sf /etc/nginx/sites-available/sba-reads /etc/nginx/sites-enabled/
-            sudo rm -f /etc/nginx/sites-enabled/default
-            sudo nginx -t
-            sudo systemctl restart nginx
+#             # Enable site and restart Nginx
+#             sudo ln -sf /etc/nginx/sites-available/sba-reads /etc/nginx/sites-enabled/
+#             sudo rm -f /etc/nginx/sites-enabled/default
+#             sudo nginx -t
+#             sudo systemctl restart nginx
 
-            # Configure PHP-FPM
-            sudo systemctl enable php8.2-fpm
-            sudo systemctl start php8.2-fpm
+#             # Configure PHP-FPM
+#             sudo systemctl enable php8.2-fpm
+#             sudo systemctl start php8.2-fpm
 
-            # Run database migrations and seed
-            php8.2 artisan migrate --force
-            php8.2 artisan db:seed --force
+#             # Run database migrations and seed
+#             php8.2 artisan migrate --force
+#             php8.2 artisan db:seed --force
 
-            # Skip caching to avoid permission issues
-            # php8.2 artisan config:cache
-            # php8.2 artisan route:cache  
-            # php8.2 artisan view:cache
+#             # Skip caching to avoid permission issues
+#             # php8.2 artisan config:cache
+#             # php8.2 artisan route:cache  
+#             # php8.2 artisan view:cache
 
-            # Restart queue workers
-            php8.2 artisan queue:restart
+#             # Restart queue workers
+#             php8.2 artisan queue:restart
 
-            # Test the application
-            curl -f http://localhost || exit 1
+#             # Test the application
+#             curl -f http://localhost || exit 1
