@@ -162,7 +162,7 @@ jobs:
             
             # Special permissions for storage and bootstrap/cache
             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage
-            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/vendor
             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/logs
             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/cache
