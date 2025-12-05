@@ -1,0 +1,49 @@
+name: Simple Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Go to app directory
+            cd /home/ubuntu/SBA-Reads-Backend
+            
+            # Pull latest code
+            git pull origin main
+            
+            # Install dependencies
+            composer install --no-dev --optimize-autoloader --no-interaction
+            npm install
+            npm run build
+            
+            # Run migrations
+            php artisan migrate --force
+            
+            # Set simple permissions
+            sudo chown -R ubuntu:ubuntu /home/ubuntu/SBA-Reads-Backend
+            sudo chmod -R 755 /home/ubuntu/SBA-Reads-Backend
+            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage
+            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            
+            # Restart services
+            sudo systemctl restart nginx
+            sudo systemctl restart php8.2-fpm
+            
+            # Clear caches without writing new ones
+            php artisan cache:clear 2>/dev/null || true
+            
+            echo "Deployment completed!"
