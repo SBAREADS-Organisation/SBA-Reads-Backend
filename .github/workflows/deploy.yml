@@ -220,15 +220,10 @@ jobs:
             php8.2 artisan migrate --force
             php8.2 artisan db:seed --force
 
-            # Clear and cache configuration with proper user
-            sudo -u ubuntu php8.2 artisan cache:clear
-            sudo -u ubuntu php8.2 artisan config:clear
-            sudo -u ubuntu php8.2 artisan route:clear
-            sudo -u ubuntu php8.2 artisan view:clear
-            sudo -u ubuntu php8.2 artisan config:cache
-            sudo -u ubuntu php8.2 artisan route:cache
-            sudo -u ubuntu php8.2 artisan view:cache
-            sudo -u ubuntu php8.2 artisan storage:link
+            # Skip caching to avoid permission issues
+            # php8.2 artisan config:cache
+            # php8.2 artisan route:cache  
+            # php8.2 artisan view:cache
 
             # Restart queue workers
             php8.2 artisan queue:restart
