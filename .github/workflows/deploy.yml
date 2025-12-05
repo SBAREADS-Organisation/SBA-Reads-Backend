@@ -202,6 +202,7 @@ jobs:
             }
             EOF
 
+            
             # Enable site and restart Nginx
             sudo ln -sf /etc/nginx/sites-available/sba-reads /etc/nginx/sites-enabled/
             sudo rm -f /etc/nginx/sites-enabled/default
