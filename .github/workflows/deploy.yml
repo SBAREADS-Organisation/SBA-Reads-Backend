@@ -150,10 +150,10 @@ jobs:
             sudo mkdir -p /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
             sudo touch /home/ubuntu/SBA-Reads-Backend/storage/logs/laravel.log
             
-            # Set proper ownership
-            sudo chown -R ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
+            # Set proper ownership - www-data needs to own these directories
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chown ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
             
             # Set directory and file permissions
             sudo find /home/ubuntu/SBA-Reads-Backend -type d -exec chmod 755 {} \;
@@ -218,15 +218,15 @@ jobs:
             php8.2 artisan migrate --force
             php8.2 artisan db:seed --force
 
-            # Clear and cache configuration
-            php8.2 artisan cache:clear
-            php8.2 artisan config:clear
-            php8.2 artisan route:clear
-            php8.2 artisan view:clear
-            php8.2 artisan config:cache
-            php8.2 artisan route:cache
-            php8.2 artisan view:cache
-            php8.2 artisan storage:link
+            # Clear and cache configuration with proper user
+            sudo -u www-data php8.2 artisan cache:clear
+            sudo -u www-data php8.2 artisan config:clear
+            sudo -u www-data php8.2 artisan route:clear
+            sudo -u www-data php8.2 artisan view:clear
+            sudo -u www-data php8.2 artisan config:cache
+            sudo -u www-data php8.2 artisan route:cache
+            sudo -u www-data php8.2 artisan view:cache
+            sudo -u www-data php8.2 artisan storage:link
 
             # Restart queue workers
             php8.2 artisan queue:restart
