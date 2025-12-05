@@ -153,6 +153,7 @@ jobs:
             # Set proper ownership - www-data needs to own these directories
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/storage
             sudo chown -R www-data:www-data /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chown -R ubuntu:www-data /home/ubuntu/SBA-Reads-Backend/vendor
             sudo chown ubuntu:www-data /home/ubuntu/SBA-Reads-Backend
             
             # Set directory and file permissions
@@ -162,6 +163,7 @@ jobs:
             # Special permissions for storage and bootstrap/cache
             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/storage
             sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            sudo chmod -R 775 /home/ubuntu/SBA-Reads-Backend/vendor
             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/logs
             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/cache
             sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage/framework/sessions
@@ -219,14 +221,14 @@ jobs:
             php8.2 artisan db:seed --force
 
             # Clear and cache configuration with proper user
-            sudo -u www-data php8.2 artisan cache:clear
-            sudo -u www-data php8.2 artisan config:clear
-            sudo -u www-data php8.2 artisan route:clear
-            sudo -u www-data php8.2 artisan view:clear
-            sudo -u www-data php8.2 artisan config:cache
-            sudo -u www-data php8.2 artisan route:cache
-            sudo -u www-data php8.2 artisan view:cache
-            sudo -u www-data php8.2 artisan storage:link
+            sudo -u ubuntu php8.2 artisan cache:clear
+            sudo -u ubuntu php8.2 artisan config:clear
+            sudo -u ubuntu php8.2 artisan route:clear
+            sudo -u ubuntu php8.2 artisan view:clear
+            sudo -u ubuntu php8.2 artisan config:cache
+            sudo -u ubuntu php8.2 artisan route:cache
+            sudo -u ubuntu php8.2 artisan view:cache
+            sudo -u ubuntu php8.2 artisan storage:link
 
             # Restart queue workers
             php8.2 artisan queue:restart
