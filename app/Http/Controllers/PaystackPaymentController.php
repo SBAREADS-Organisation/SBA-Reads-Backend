@@ -20,8 +20,7 @@ class PaystackPaymentController extends Controller
     public function __construct(
         PaystackService           $paystackService,
         CurrencyConversionService $currencyService
-    )
-    {
+    ) {
         $this->paystackService = $paystackService;
         $this->currencyService = $currencyService;
     }
@@ -181,7 +180,11 @@ class PaystackPaymentController extends Controller
         $reference = $request->query('reference');
 
         if (!$reference) {
-            return redirect()->route('payment.failed')->with('error', 'Invalid payment reference');
+            // return redirect()->route('payment.failed')->with('error', 'Invalid payment reference');
+            return response()->json([
+                'success' => false,
+                'message' => 'Invalid payment reference'
+            ], 400);
         }
 
         try {
@@ -191,7 +194,8 @@ class PaystackPaymentController extends Controller
                 return response()->json([
                     'success' => false,
                     'message' => 'Payment processing failed',
-                    'error' => $verification['message'] ?? 'Payment verification failed']);
+                    'error' => $verification['message'] ?? 'Payment verification failed'
+                ]);
             }
 
             // Update transaction
@@ -206,7 +210,8 @@ class PaystackPaymentController extends Controller
                     'meta_data' => array_merge(
                         (array)$transaction->meta_data,
                         ['paystack_verification' => $verification]
-                    ),]);
+                    ),
+                ]);
 
                 // Process the successful transaction using the same logic as the webhook
                 $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
@@ -217,10 +222,11 @@ class PaystackPaymentController extends Controller
                 $webhookService->handleWebhook($webhookPayload);
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment completed successfully'
-            ]);
+            // return response()->json([
+            //     'success' => true,
+            //     'message' => 'Payment completed successfully'
+            // ]);
+            return redirect()->route('payment.success')->with('success', 'Payment completed successfully');
         } catch (\Exception $e) {
             Log::error('Paystack callback error: ' . $e->getMessage());
             return response()->json([

@@ -1158,7 +1158,7 @@ class UserController extends Controller
     public function onboard(Request $request)
     {
         // Get the authenticated user
-        $user = auth()->user();
+        $user = $request->user();
 
         // Ensure the user has a Stripe account ID
         if (empty($user->kyc_account_id)) {

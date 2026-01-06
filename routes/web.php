@@ -31,3 +31,7 @@ Route::get('/preview/mail/stripe-onboarding', function () {
 
     return (new StripeOnboardingMail($user, $url))->render();
 });
+
+Route::get('/payment/success', function () {
+    return redirect('https://web-checkout-zkhz.onrender.com/payment-successful?success=true');
+})->name('payment.success');
