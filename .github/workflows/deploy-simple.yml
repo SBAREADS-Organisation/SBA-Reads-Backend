@@ -25,15 +25,21 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Go to app directory
-            cd /var/www/html
-            
-            # Create backup of current version
-            sudo cp -r /var/www/html /var/www/html_backup_$(date +%Y%m%d_%H%M%S) || true
+            # Go to development directory
+            cd /home/ubuntu/SBA-Reads-Backend
             
             # Pull latest code
             git fetch origin
             git reset --hard origin/main
+            
+            # Copy files to production directory (excluding .env)
+            sudo rsync -av --exclude='.env' --exclude='.git' --exclude='node_modules' --exclude='vendor' /home/ubuntu/SBA-Reads-Backend/ /var/www/html/
+            
+            # Create backup of current production version
+            sudo cp -r /var/www/html /var/www/html_backup_$(date +%Y%m%d_%H%M%S) || true
+            
+            # Go to production directory for remaining commands
+            cd /var/www/html
             
             # Install PHP dependencies
             composer install --no-dev --optimize-autoloader --no-interaction
