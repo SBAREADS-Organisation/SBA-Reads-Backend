@@ -257,6 +257,17 @@ Route::get('log-test', function () {
     return response()->json(['message' => 'Log test successful']);
 });
 
+// Simple ping endpoint for connectivity testing
+Route::get('ping', function () {
+    return response()->json([
+        'message' => 'Pong! Server is responding.',
+        'timestamp' => now()->toIso8601String(),
+        'server_time' => now()->format('Y-m-d H:i:s'),
+        'uptime' => 'Server is running',
+        'version' => '1.0.0'
+    ]);
+});
+
 //configure scribe
 Route::get('scribe-generate', function () {
     //Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
