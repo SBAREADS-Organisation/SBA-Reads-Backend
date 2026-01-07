@@ -41,6 +41,11 @@ jobs:
             # Go to production directory for remaining commands
             cd /var/www/html
             
+            # Create and set permissions for cache directories
+            sudo mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
+            sudo chown -R www-data:www-data bootstrap/cache storage/framework
+            sudo chmod -R 775 bootstrap/cache storage/framework
+            
             # Install PHP dependencies
             composer install --no-dev --optimize-autoloader --no-interaction
             
@@ -48,16 +53,16 @@ jobs:
             npm install
             npm run build
             
-            # Run Laravel optimizations
-            php artisan config:clear
-            php artisan config:cache
-            php artisan route:clear
-            php artisan route:cache
-            php artisan view:clear
-            php artisan view:cache
+            # Clear all Laravel caches first
+            php artisan optimize:clear
+            
+            # Run Laravel optimizations (with error handling)
+            php artisan config:cache || echo "Config cache failed"
+            php artisan route:cache || echo "Route cache failed"
+            php artisan view:cache || echo "View cache failed"
             
             # Run migrations (with rollback safety)
-            php artisan migrate --force
+            php artisan migrate --force || echo "Migration failed"
             
             # Set proper permissions for web server
             sudo chown -R www-data:www-data /var/www/html

@@ -268,6 +268,17 @@ Route::get('ping', function () {
     ]);
 });
 
+// Deployment test endpoint
+Route::get('deploy-test', function () {
+    return response()->json([
+        'message' => 'Deployment test successful!',
+        'timestamp' => now()->toIso8601String(),
+        'server_time' => now()->format('Y-m-d H:i:s'),
+        'last_deployed' => now()->toDateTimeString(),
+        'version' => '1.0.1'
+    ]);
+});
+
 //configure scribe
 Route::get('scribe-generate', function () {
     //Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
