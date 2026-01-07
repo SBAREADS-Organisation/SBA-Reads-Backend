@@ -17,7 +17,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          cache: 'npm'
           
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
