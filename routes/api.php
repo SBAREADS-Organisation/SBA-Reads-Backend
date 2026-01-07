@@ -264,7 +264,7 @@ Route::get('ping', function () {
         'timestamp' => now()->toIso8601String(),
         'server_time' => now()->format('Y-m-d H:i:s'),
         'uptime' => 'Server is running',
-        'version' => '1.0.0'
+        'version' => '1.0.1'
     ]);
 });
 
