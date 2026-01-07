@@ -1,0 +1,82 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop, staging]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, dom, filter, gd, hash, json, pcre, session, simplexml, spl, tokenizer, curl
+          
+      - name: Copy environment file
+        run: cp .env.example .env
+        
+      - name: Install dependencies
+        run: composer install --no-interaction --prefer-dist
+        
+      - name: Generate application key
+        run: php artisan key:generate
+        
+      - name: Run tests
+        run: php artisan test --env=testing
+
+  deploy-staging:
+    needs: test
+    runs-on: ubuntu-latest
+    if: success()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to Staging Server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Go to staging directory
+            cd /var/www/staging
+            
+            # Pull latest code
+            git fetch origin
+            git reset --hard origin/${{ github.ref_name }}
+            
+            # Install dependencies
+            composer install --no-dev --optimize-autoloader --no-interaction
+            npm install
+            npm run build
+            
+            # Clear and cache Laravel
+            php artisan config:clear
+            php artisan config:cache
+            php artisan route:clear
+            php artisan route:cache
+            php artisan view:clear
+            php artisan view:cache
+            
+            # Run migrations on staging database
+            php artisan migrate --force
+            
+            # Set permissions
+            sudo chown -R www-data:www-data /var/www/staging
+            sudo chmod -R 775 /var/www/staging/storage
+            sudo chmod -R 775 /var/www/staging/bootstrap/cache
+            
+            # Restart services
+            sudo systemctl reload nginx
+            sudo systemctl restart php8.2-fpm
+            
+            echo "Staging deployment completed!"

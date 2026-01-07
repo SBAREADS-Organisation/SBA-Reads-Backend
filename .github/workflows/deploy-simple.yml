@@ -1,8 +1,9 @@
-name: Simple Deploy to EC2
+name: Deploy to Production Server
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -12,6 +13,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -20,30 +27,46 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             # Go to app directory
-            cd /home/ubuntu/SBA-Reads-Backend
+            cd /var/www/html
+            
+            # Create backup of current version
+            sudo cp -r /var/www/html /var/www/html_backup_$(date +%Y%m%d_%H%M%S) || true
             
             # Pull latest code
-            git pull origin main
+            git fetch origin
+            git reset --hard origin/main
             
-            # Install dependencies
+            # Install PHP dependencies
             composer install --no-dev --optimize-autoloader --no-interaction
+            
+            # Install Node dependencies and build
             npm install
             npm run build
             
-            # Run migrations
+            # Run Laravel optimizations
+            php artisan config:clear
+            php artisan config:cache
+            php artisan route:clear
+            php artisan route:cache
+            php artisan view:clear
+            php artisan view:cache
+            
+            # Run migrations (with rollback safety)
             php artisan migrate --force
             
-            # Set simple permissions
-            sudo chown -R ubuntu:ubuntu /home/ubuntu/SBA-Reads-Backend
-            sudo chmod -R 755 /home/ubuntu/SBA-Reads-Backend
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/storage
-            sudo chmod -R 777 /home/ubuntu/SBA-Reads-Backend/bootstrap/cache
+            # Set proper permissions for web server
+            sudo chown -R www-data:www-data /var/www/html
+            sudo find /var/www/html -type f -exec chmod 644 {} \;
+            sudo find /var/www/html -type d -exec chmod 755 {} \;
+            sudo chmod -R 775 /var/www/html/storage
+            sudo chmod -R 775 /var/www/html/bootstrap/cache
             
-            # Restart services
-            sudo systemctl restart nginx
+            # Restart web services
+            sudo systemctl reload nginx
             sudo systemctl restart php8.2-fpm
             
-            # Clear caches without writing new ones
-            php artisan cache:clear 2>/dev/null || true
+            # Clear Laravel caches
+            php artisan cache:clear
+            php artisan queue:restart || true
             
-            echo "Deployment completed!"
+            echo "Deployment completed successfully!"

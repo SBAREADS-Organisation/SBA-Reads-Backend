@@ -1,0 +1,45 @@
+name: Automated Backup
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Create Backup
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Create backup directory with date
+            BACKUP_DIR="/var/backups/sba-reads/$(date +%Y%m%d_%H%M%S)"
+            sudo mkdir -p $BACKUP_DIR
+            
+            # Backup application files
+            sudo cp -r /var/www/html $BACKUP_DIR/application
+            
+            # Backup database
+            cd /var/www/html
+            php artisan db:show > $BACKUP_DIR/database_info.txt
+            mysqldump -u root -p${{ secrets.DB_PASSWORD }} sba_reads > $BACKUP_DIR/database.sql || true
+            
+            # Backup environment file
+            sudo cp /var/www/html/.env $BACKUP_DIR/.env.backup
+            
+            # Compress backup
+            sudo tar -czf /var/backups/sba-reads/backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /var/backups/sba-reads $(basename $BACKUP_DIR)
+            
+            # Remove uncompressed backup
+            sudo rm -rf $BACKUP_DIR
+            
+            # Keep only last 7 days of backups
+            sudo find /var/backups/sba-reads -name "backup_*.tar.gz" -mtime +7 -delete
+            
+            echo "Backup completed: backup_$(date +%Y%m%d_%H%M%S).tar.gz"
