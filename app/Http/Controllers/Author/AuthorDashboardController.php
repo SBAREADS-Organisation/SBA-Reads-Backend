@@ -38,7 +38,7 @@ class AuthorDashboardController extends Controller
             $revenue = Transaction::where('user_id', $author->id)
                 ->whereIn('type', ['payout', 'earning'])
                 ->where('status', 'succeeded')
-                ->sum('amount');
+                ->sum('amount_usd');
 
             // Books metrics - Enhanced with proper counting
             $books_published = Book::whereHas('authors', function ($q) use ($author) {
