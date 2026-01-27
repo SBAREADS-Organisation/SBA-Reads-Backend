@@ -10,26 +10,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.2'
+          php-version: '8.4'
           extensions: mbstring, xml, ctype, iconv, intl, pdo, pdo_mysql, dom, filter, gd, hash, json, pcre, session, simplexml, spl, tokenizer, curl
-          
+
       - name: Copy environment file
         run: cp .env.example .env
-        
+
       - name: Install dependencies
         run: composer install --no-interaction --prefer-dist
-        
+
       - name: Generate application key
         run: php artisan key:generate
-        
+
       - name: Run tests
         run: php artisan test --env=testing
 
@@ -37,16 +37,16 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: success()
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          
+
       - name: Deploy to Staging Server
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -58,15 +58,15 @@ jobs:
             BRANCH="staging"
             DEPLOY_DIR="/var/www"
             APP_DIR="/var/www/html"
-            
+
             # Go to deployment directory
             cd $DEPLOY_DIR
-            
+
             # Create backup of current version
             if [ -d "$APP_DIR" ]; then
               sudo cp -r $APP_DIR $APP_DIR_backup_$(date +%Y%m%d_%H%M%S) || true
             fi
-            
+
             # Check if repository exists, clone if not
             if ! [ -d "$APP_DIR" ]; then
               echo "Cloning repository for the first time..."
@@ -79,24 +79,24 @@ jobs:
               echo "Repository exists. Pulling latest changes..."
               cd $APP_DIR
             fi
-            
+
             # Switch to staging branch and pull latest changes
             sudo git fetch origin
             sudo git checkout $BRANCH
             sudo git reset --hard origin/$BRANCH
-            
+
             # Install PHP dependencies
             composer install --no-dev --optimize-autoloader --no-interaction
-            
+
             # Install Node dependencies and build
             npm install
             npm run build
-            
+
             # Setup environment file
             if [ ! -f .env ]; then
               sudo cp .env.example .env
             fi
-            
+
             # Add staging database credentials to .env
             sudo chmod 777 .env
             sudo echo 'DB_HOST="${{ secrets.DB_HOST }}"' >> .env
@@ -108,10 +108,10 @@ jobs:
             sudo echo "APP_ENV=staging" >> .env
             sudo echo "APP_DEBUG=true" >> .env
             sudo chmod 775 .env
-            
+
             # Generate application key
             php artisan key:generate
-            
+
             # Run Laravel optimizations
             php artisan config:clear
             php artisan config:cache
@@ -119,24 +119,24 @@ jobs:
             php artisan route:cache
             php artisan view:clear
             php artisan view:cache
-            
+
             # Run migrations on staging database
             php artisan migrate --force
-            
+
             # Set proper permissions
             sudo chown -R www-data:www-data $APP_DIR
             sudo find $APP_DIR -type f -exec chmod 644 {} \;
             sudo find $APP_DIR -type d -exec chmod 755 {} \;
             sudo chmod -R 775 $APP_DIR/storage
             sudo chmod -R 775 $APP_DIR/bootstrap/cache
-            
+
             # Restart web services
             sudo systemctl reload nginx
-            sudo systemctl restart php8.2-fpm
-            
+            sudo systemctl restart php8.4-fpm
+
             # Clear Laravel caches
             php artisan cache:clear
             php artisan queue:restart || true
-            
+
             echo "Staging deployment completed successfully!"
             echo "Test staging: curl https://api-staging.sbareads.com/ping"
