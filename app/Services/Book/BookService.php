@@ -87,6 +87,7 @@ class BookService
         $slugBase = Str::slug($data['title']);
         $count = Book::where('slug', 'like', "{$slugBase}%")->count();
         $data['slug'] = $count ? "{$slugBase}-{$count}" : $slugBase;
+        $data['product_id'] = "com.sbareads.book." . $data['slug'];
         $mediaUploadIds = [];
 
         // Merge pricing fields (if any)

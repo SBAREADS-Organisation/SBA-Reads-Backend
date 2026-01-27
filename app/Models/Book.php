@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Services\Dashboard\DashboardCacheService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Services\Dashboard\DashboardCacheService;
 
 class Book extends Model
 {
@@ -21,6 +21,7 @@ class Book extends Model
         'author_id',
         'description',
         'isbn',
+        'product_id',
         'table_of_contents',
         'tags',
         'category',
