@@ -6,7 +6,7 @@
     "keywords": ["laravel", "framework"],
     "license": "MIT",
     "require": {
-        "php": "^8.2",
+        "php": "^8.4",
         "cloudinary-labs/cloudinary-laravel": "^3.0",
         "imdhemy/laravel-purchases": "^1.19",
         "knuckleswtf/scribe": "^5.3",
