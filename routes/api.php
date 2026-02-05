@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Author\AuthorDashboardController;
 use App\Http\Controllers\Book\BookController;
 use App\Http\Controllers\Category\CategoryController;
+use App\Http\Controllers\IAP\AppStorePurchaseController;
 use App\Http\Controllers\KYC\KYCController;
 use App\Http\Controllers\Notification\NotificationsController;
 use App\Http\Controllers\Order\OrderController;
@@ -136,6 +137,10 @@ Route::prefix('subscriptions')->group(function () {
 
 // Stripe Webhook Route
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
+
+Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
+    Route::post('appstore/verify-purchase', [AppStorePurchaseController::class, 'verifyPurchase'])->name('verify-appstore-purchase');
+});
 
 // Paystack Routes
 Route::prefix('paystack')->group(function () {

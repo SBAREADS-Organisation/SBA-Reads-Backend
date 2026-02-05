@@ -3,7 +3,6 @@
 namespace App\Http\Resources\Book;
 
 use App\Http\Resources\User\UserResource;
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class BookResource extends JsonResource
@@ -32,6 +31,7 @@ class BookResource extends JsonResource
             'sub_title' => $this->sub_title,
             'description' => $this->description,
             'isbn' => $this->isbn,
+            'product_id' => $this->product_id,
             'cover_image' => $this->cover_image,
             'language' => $this->language,
             'tags' => $this->tags,

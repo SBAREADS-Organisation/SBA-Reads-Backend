@@ -73,7 +73,7 @@ jobs:
             
             # Restart web services
             sudo systemctl reload nginx
-            sudo systemctl restart php8.2-fpm
+            sudo systemctl restart php8.4-fpm
             
             # Clear Laravel caches
             php artisan cache:clear

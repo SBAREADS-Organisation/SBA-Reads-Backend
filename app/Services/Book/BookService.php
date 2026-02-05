@@ -157,6 +157,8 @@ class BookService
             'mediable_id' => $book->id,
         ]);
 
+        $book->update(['product_id' => "com.sbareads.book." . $book->id]);
+
         return $book;
     }
 
