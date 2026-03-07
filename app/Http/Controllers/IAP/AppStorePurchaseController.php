@@ -23,6 +23,8 @@ class AppStorePurchaseController extends Controller
             'password' => 'nullable|string',
         ]);
 
+        Log::info('Purchase verification started', ['user_id' => $user->id]);
+
         try {
             $receiptResponse = Product::appStore()
                 ->receiptData($request->receipt_data)
@@ -30,14 +32,28 @@ class AppStorePurchaseController extends Controller
                 ->verifyReceipt();
 
             if (! $receiptResponse->getStatus()->isValid()) {
+                Log::warning('Receipt validation failed', [
+                    'user_id' => $user->id,
+                    'status' => $receiptResponse->getStatus(),
+                ]);
+
                 return response()->json(['error' => 'Invalid receipt'], 400);
             }
+
+            Log::info('Receipt verified successfully', ['user_id' => $user->id]);
 
             $receiptInfo = $receiptResponse->getReceipt()->getInApp();
 
             if (empty($receiptInfo)) {
+                Log::warning('No in-app purchases found in receipt', ['user_id' => $user->id]);
+
                 return response()->json(['error' => 'No purchase items found in receipt'], 400);
             }
+
+            Log::info('Processing in-app purchases', [
+                'user_id' => $user->id,
+                'item_count' => count($receiptInfo),
+            ]);
 
             return DB::transaction(function () use ($user, $receiptInfo) {
                 $grantedBooks = [];
@@ -61,9 +77,24 @@ class AppStorePurchaseController extends Controller
 
                     $existingTransaction = Transaction::where('payment_intent_id', $originalTransId)->first();
 
+                    if ($existingTransaction) {
+                        Log::info('Transaction already exists, skipping creation', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                            'original_transaction_id' => $originalTransId,
+                        ]);
+                    }
+
                     if (! $existingTransaction) {
                         $amount = $book->actual_price ?? $book->discounted_price ?? 0;
                         $currency = strtolower($book->currency ?? 'usd');
+
+                        Log::info('Creating transaction for in-app purchase', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                            'product_id' => $productId,
+                            'original_transaction_id' => $originalTransId,
+                        ]);
 
                         Transaction::create([
                             'id' => Str::uuid(),
@@ -87,7 +118,20 @@ class AppStorePurchaseController extends Controller
 
                     $alreadyPurchased = $user->purchasedBooks()->where('books.id', $book->id)->exists();
 
+                    if ($alreadyPurchased) {
+                        Log::info('Book already in user library, skipping grant', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                            'product_id' => $productId,
+                        ]);
+                    }
+
                     if (! $alreadyPurchased) {
+                        Log::info('Granting book to user library', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                            'product_id' => $productId,
+                        ]);
                         $bookIdsToGrant[] = $book->id;
                         $grantedBooks[] = [
                             'id' => $book->id,
@@ -98,8 +142,18 @@ class AppStorePurchaseController extends Controller
                 }
 
                 if (! empty($bookIdsToGrant)) {
+                    Log::info('Adding books to user library', [
+                        'user_id' => $user->id,
+                        'book_ids' => $bookIdsToGrant,
+                        'count' => count($bookIdsToGrant),
+                    ]);
                     $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
                 }
+
+                Log::info('Purchase verification completed', [
+                    'user_id' => $user->id,
+                    'books_granted_count' => count($grantedBooks),
+                ]);
 
                 return response()->json([
                     'status' => 'success',
