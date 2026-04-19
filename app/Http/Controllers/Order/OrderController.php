@@ -135,11 +135,16 @@ class OrderController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'books' => 'required|array|min:1',
-                'books.*.book_id' => 'required|exists:books,id',
-                'books.*.quantity' => 'required|integer|min:1',
-                'delivery_address' => 'required|string|max:500',
-                'currency' => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
+                'books'              => 'required|array|min:1',
+                'books.*.book_id'    => 'required|exists:books,id',
+                'books.*.quantity'   => 'required|integer|min:1',
+                'delivery_type'      => 'sometimes|string|in:delivery,pickup',
+                'delivery_address'   => 'required_if:delivery_type,delivery|nullable|string|max:500',
+                'delivery_state'     => 'required_if:delivery_type,delivery|nullable|string|max:100',
+                'delivery_country'   => 'required_if:delivery_type,delivery|nullable|string|max:100',
+                'contact_name'       => 'required|string|max:255',
+                'contact_phone'      => 'required|string|max:20',
+                'currency'           => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
             ]);
 
             if ($validator->fails()) {
@@ -211,8 +216,14 @@ class OrderController extends Controller
      */
     public function updateStatus(Request $request, $id)
     {
+        $isAdmin = $request->user()->hasRole(['admin', 'superadmin']);
+
+        $allowedStatuses = $isAdmin
+            ? 'required|string|in:pending,processing,paid,delivered,completed,declined,cancelled'
+            : 'required|string|in:completed,declined,cancelled,processing';
+
         $validator = Validator::make($request->all(), [
-            'status' => 'required|string|in:completed,declined,cancelled,processing',
+            'status' => $allowedStatuses,
         ]);
 
         if ($validator->fails()) {
@@ -220,25 +231,32 @@ class OrderController extends Controller
         }
 
         try {
-            $order = $request->user()->orders()->where('tracking_id', $id)->first();
+            $order = $isAdmin
+                ? Order::where('tracking_number', $id)->first()
+                : $request->user()->orders()->where('tracking_number', $id)->first();
 
             if (! $order) {
                 return $this->error('Order not found', 404);
             }
 
-            // Only allow the user who created the order to update its status
-            if ($order->user_id !== $request->user()->id) {
+            // Non-admins can only update their own orders
+            if (! $isAdmin && $order->user_id !== $request->user()->id) {
                 return $this->error('You do not have permission to update this order status.', 403);
             }
 
-            // prevent status updates for orders that are already completed or cancelled and also prevent status reupdates for orders that are already in the requested status
-            if (in_array($order->status, ['completed', 'cancelled']) || $order->status === $request->status) {
-                return $this->error('Order status cannot be updated as it is already in the requested status or has been completed or cancelled.', 400);
+            // prevent status reupdates for orders already in the requested status
+            if ($order->status === $request->status) {
+                return $this->error('Order is already in the requested status.', 400);
             }
 
-            // Only allow status to be set to 'completed' if current status is 'processing'
-            if ($request->status === 'completed' && $order->status !== 'processing') {
-                return $this->error('Order can only be marked as completed if it is in processing status.', 400);
+            // Non-admins: prevent updates on completed/cancelled orders and enforce 'completed' flow
+            if (! $isAdmin) {
+                if (in_array($order->status, ['completed', 'cancelled'])) {
+                    return $this->error('Order status cannot be updated as it has been completed or cancelled.', 400);
+                }
+                if ($request->status === 'completed' && $order->status !== 'processing') {
+                    return $this->error('Order can only be marked as completed if it is in processing status.', 400);
+                }
             }
 
             if ($request->status === 'completed') {

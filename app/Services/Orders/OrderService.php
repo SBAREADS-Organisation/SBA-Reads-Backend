@@ -29,19 +29,33 @@ class OrderService
         DB::beginTransaction();
 
         try {
-            // Create or find address from string
-            $addressId = $this->handleDeliveryAddress($user, $payload->delivery_address);
-
-            // Get currency from payload, default to USD if not provided
+            $deliveryType = $payload->input('delivery_type', 'delivery');
             $currency = isset($payload->currency) ? strtoupper($payload->currency) : 'USD';
 
+            // For pickup orders use the store address; for delivery use the provided address
+            $addressString = $deliveryType === 'pickup'
+                ? 'SBAreads Store, Lagos, Nigeria'
+                : $payload->delivery_address;
+
+            $addressId = $this->handleDeliveryAddress(
+                $user,
+                $addressString,
+                $deliveryType === 'delivery' ? $payload->input('delivery_state', 'Not specified') : 'Lagos',
+                $deliveryType === 'delivery' ? $payload->input('delivery_country', 'Not specified') : 'Nigeria'
+            );
+
             $order = Order::create([
-                'user_id' => $user->id,
+                'user_id'             => $user->id,
                 'delivery_address_id' => $addressId,
-                'total_amount' => 0,
-                'status' => 'pending',
-                'tracking_number' => Order::generateTrackingNumber(),
-                'currency' => $currency,
+                'delivery_type'       => $deliveryType,
+                'contact_name'        => $payload->contact_name,
+                'contact_phone'       => $payload->contact_phone,
+                'delivery_state'      => $deliveryType === 'delivery' ? $payload->input('delivery_state') : 'Lagos',
+                'delivery_country'    => $deliveryType === 'delivery' ? $payload->input('delivery_country') : 'Nigeria',
+                'total_amount'        => 0,
+                'status'              => 'pending',
+                'tracking_number'     => Order::generateTrackingNumber(),
+                'currency'            => $currency,
             ]);
 
             $total = 0;
@@ -137,16 +151,15 @@ class OrderService
     /**
      * Handle delivery address - create new address from string
      */
-    private function handleDeliveryAddress($user, $addressString)
+    private function handleDeliveryAddress($user, $addressString, $state = 'Not specified', $country = 'Not specified')
     {
-        // Create a new address record from the string
         $address = \App\Models\Address::create([
-            'user_id' => $user->id,
-            'address' => $addressString,
-            'city' => 'Not specified', // Default values
-            'country' => 'Not specified',
+            'user_id'     => $user->id,
+            'address'     => $addressString,
+            'city'        => $state,
+            'country'     => $country,
             'postal_code' => '00000',
-            'is_default' => false,
+            'is_default'  => false,
         ]);
 
         return $address->id;
