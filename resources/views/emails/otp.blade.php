@@ -13,7 +13,7 @@
     <tr>
       <td align="center" style="background:#f5f0eb;border:2px dashed #D8B99C;border-radius:12px;padding:28px;">
         <p style="margin:0 0 6px;font-size:12px;color:#9e8272;text-transform:uppercase;letter-spacing:2px;">Your OTP Code</p>
-        <span style="font-size:42px;font-weight:700;color:#160c08;letter-spacing:10px;">{{ $otp }}</span>
+        <span style="font-size:32px;font-weight:700;color:#160c08;letter-spacing:8px;">{{ $otp }}</span>
         <p style="margin:10px 0 0;font-size:12px;color:#9e8272;">Expires in <strong style="color:#c0392b;">10 minutes</strong></p>
       </td>
     </tr>
