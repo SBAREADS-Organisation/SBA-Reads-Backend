@@ -24,10 +24,15 @@ class AuthController extends Controller
                 'email' => 'required|email',
                 'password' => 'required|string|min:8',
                 //'account_type' => 'nullable|string|in:author,reader,admin,superadmin',
+            ], [
+                'email.required' => 'Please enter your email address.',
+                'email.email'    => 'Please enter a valid email address.',
+                'password.required' => 'Please enter your password.',
+                'password.min'      => 'Your password must be at least 8 characters.',
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                return $this->error('Please check your login details and try again.', 400, $validator->errors());
             }
 
             // Check if User Exists
@@ -119,10 +124,14 @@ class AuthController extends Controller
         try {
             $validator = Validator::make($request->all(), [
                 'email' => 'required|email|exists:users,email',
+            ], [
+                'email.required' => 'Please enter your email address.',
+                'email.email'    => 'Please enter a valid email address.',
+                'email.exists'   => 'We couldn\'t find an account with that email address.',
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                return $this->error('Please check your email and try again.', 400, $validator->errors());
             }
 
             $user = User::where('email', $request->email)->first();
@@ -160,10 +169,13 @@ class AuthController extends Controller
             $validator = Validator::make($request->all(), [
                 // 'email' => 'required|email|exists:users,email',
                 'otp' => 'required|digits:6',
+            ], [
+                'otp.required' => 'Please enter the OTP sent to your email.',
+                'otp.digits'   => 'The OTP must be exactly 6 digits.',
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                return $this->error('Please enter a valid 6-digit OTP.', 400, $validator->errors());
             }
 
             // $user = User::where('email', $request->email)->first();
@@ -213,10 +225,18 @@ class AuthController extends Controller
                     // Regex pattern: lookahead for lowercase, uppercase, digit, and special character
                     'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/',
                 ],
+            ], [
+                'email.required'    => 'Please enter your email address.',
+                'email.email'       => 'Please enter a valid email address.',
+                'email.exists'      => 'We couldn\'t find an account with that email address.',
+                'password.required' => 'Please enter a new password.',
+                'password.min'      => 'Your password must be at least 8 characters long.',
+                'password.confirmed' => 'The passwords you entered do not match.',
+                'password.regex'    => 'Your password must include at least one uppercase letter, one lowercase letter, one number, and one special character.',
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                return $this->error('Please fix the errors below and try again.', 400, $validator->errors());
             }
 
             // Verify reset password permissions

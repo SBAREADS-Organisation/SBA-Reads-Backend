@@ -41,6 +41,8 @@ class BookController extends Controller
 
     private $rules;
 
+    private $messages;
+
     // use ApiResponse;
 
     public function __construct(BookService $service, CloudinaryMediaUploadService $cloudinaryService, CurrencyConversionService $currencyConversionService)
@@ -51,6 +53,48 @@ class BookController extends Controller
         $this->cloudinaryService = $cloudinaryService;
         $this->currencyConversionService = $currencyConversionService;
 
+        $this->messages = [
+            'books.required'                          => 'No books were submitted. Please try again.',
+            'books.array'                             => 'Invalid book data format.',
+            'books.min'                               => 'Please include at least one book.',
+            'books.*.title.required'                  => 'Please enter a title for your book.',
+            'books.*.title.string'                    => 'The book title must be plain text.',
+            'books.*.title.max'                       => 'Your book title is too long (max 255 characters).',
+            'books.*.description.required'            => 'Please add a description for your book.',
+            'books.*.description.string'              => 'The book description must be plain text.',
+            'books.*.author_id.required'              => 'Author information is missing. Please log in again.',
+            'books.*.author_id.exists'                => 'The author account could not be verified.',
+            'books.*.authors.required'                => 'Authors list is required.',
+            'books.*.authors.array'                   => 'Invalid authors format.',
+            'books.*.authors.*.required'              => 'One or more author entries are invalid.',
+            'books.*.authors.*.exists'                => 'One or more selected authors do not exist.',
+            'books.*.isbn.string'                     => 'The ISBN must be a text value.',
+            'books.*.isbn.unique'                     => 'This ISBN is already registered to another book. Leave the ISBN field blank if you\'re unsure.',
+            'books.*.table_of_contents.json'          => 'The table of contents format is invalid.',
+            'books.*.tags.*.max'                      => 'Each tag must be 50 characters or fewer.',
+            'books.*.genres.*.max'                    => 'Each genre name must be 50 characters or fewer.',
+            'books.*.cover_image.required'            => 'Please upload a cover image for your book.',
+            'books.*.cover_image.file'                => 'The cover image must be a valid file.',
+            'books.*.cover_image.mimes'               => 'The cover image must be a JPG, JPEG, or PNG file.',
+            'books.*.cover_image.max'                 => 'The cover image is too large. Please use an image under 5 MB.',
+            'books.*.files.required'                  => 'Please upload your book file (PDF).',
+            'books.*.files.array'                     => 'Invalid book files format.',
+            'books.*.files.*.file'                    => 'One or more uploaded files are invalid.',
+            'books.*.files.*.mimes'                   => 'Book files must be in PDF, JPG, JPEG, or PNG format.',
+            'books.*.files.*.max'                     => 'Your book file is too large. Maximum allowed size is 20 MB.',
+            'books.*.pricing.actual_price.required_with' => 'Please enter a price for your book.',
+            'books.*.pricing.actual_price.numeric'    => 'The book price must be a number.',
+            'books.*.pricing.actual_price.min'        => 'The book price cannot be negative.',
+            'books.*.pricing.discounted_price.numeric' => 'The discounted price must be a number.',
+            'books.*.pricing.discounted_price.min'    => 'The discounted price cannot be negative.',
+            'books.*.meta_data.pages.required'        => 'The number of pages is required.',
+            'books.*.meta_data.pages.numeric'         => 'The number of pages must be a number.',
+            'books.*.meta_data.pages.min'             => 'The page count cannot be negative.',
+            'books.*.publication_date.date'           => 'Please enter a valid publication date.',
+            'books.*.language.*.max'                  => 'Each language entry must be 50 characters or fewer.',
+            'books.*.target_audience.*.max'           => 'Each audience entry must be 50 characters or fewer.',
+        ];
+
         $this->rules = [
             'books' => 'required|array|min:1',
             'books.*.title' => 'required|string|max:255',
@@ -59,8 +103,8 @@ class BookController extends Controller
             'books.*.author_id' => 'required|exists:users,id',
             'books.*.authors' => 'required|array',
             'books.*.authors.*' => 'required|exists:users,id',
-            'books.*.isbn' => 'required|string|unique:books,isbn',
-            'books.*.table_of_contents' => 'required|json',
+            'books.*.isbn' => 'nullable|string|unique:books,isbn',
+            'books.*.table_of_contents' => 'nullable|json',
             'books.*.tags' => 'nullable|array',
             'books.*.tags.*' => 'string|max:50',
             'books.*.category' => 'nullable|array',
@@ -200,10 +244,10 @@ class BookController extends Controller
     public function store(Request $request)
     {
         try {
-            $validator = Validator::make($request->all(), $this->rules);
+            $validator = Validator::make($request->all(), $this->rules, $this->messages);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                return $this->error('Some required information is missing or incorrect. Please review your submission.', 400, $validator->errors());
             }
 
             $created = $this->service->createMultiple($validator->validated()['books']);

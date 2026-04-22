@@ -68,13 +68,21 @@ class UserController extends Controller
                 'account_type' => 'required|string|in:reader,author',
                 // 'role' => 'string|exists:roles, name',
                 // 'confirm_password' => 'required|same:password',
+            ], [
+                'email.required'        => 'Please enter your email address.',
+                'email.unique'          => 'An account with this email already exists. Try logging in instead.',
+                'password.required'     => 'Please create a password.',
+                'password.min'          => 'Your password must be at least 8 characters long.',
+                'password.regex'        => 'Your password must include at least one uppercase letter, one lowercase letter, one number, and one special character.',
+                'account_type.required' => 'Please select an account type (reader or author).',
+                'account_type.in'       => 'Account type must be either "reader" or "author".',
             ]);
 
             // NOTE: set fullname to concatenate first_name and last_name
 
             if ($validator->fails()) {
                 return $this->error(
-                    'Validation failed',
+                    'Please fix the errors below to create your account.',
                     400,
                     $validator->errors()
                 );

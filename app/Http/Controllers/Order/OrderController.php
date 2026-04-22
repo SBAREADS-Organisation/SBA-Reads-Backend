@@ -149,11 +149,29 @@ class OrderController extends Controller
                 'contact_name'       => 'required|string|max:255',
                 'contact_phone'      => 'required|string|max:20',
                 'currency'           => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
+            ], [
+                'books.required'                   => 'Please add at least one book to your order.',
+                'books.min'                        => 'Please add at least one book to your order.',
+                'books.*.book_id.required'         => 'One or more books in your order are invalid.',
+                'books.*.book_id.exists'           => 'One or more books in your order could not be found.',
+                'books.*.quantity.required'        => 'Please specify a quantity for each book.',
+                'books.*.quantity.integer'         => 'The quantity must be a whole number.',
+                'books.*.quantity.min'             => 'The quantity must be at least 1.',
+                'delivery_type.in'                 => 'Delivery type must be either "delivery" or "pickup".',
+                'delivery_address.required_if'     => 'Please enter your delivery address.',
+                'delivery_address.max'             => 'Delivery address is too long (max 500 characters).',
+                'delivery_state.required_if'       => 'Please enter your delivery state.',
+                'delivery_country.required_if'     => 'Please enter your delivery country.',
+                'contact_name.required'            => 'Please enter a contact name.',
+                'contact_phone.required'           => 'Please enter a contact phone number.',
+                'currency.required'                => 'Please select a currency.',
+                'currency.size'                    => 'Currency must be a 3-letter code (e.g. NGN, USD).',
+                'currency.in'                      => 'The selected currency is not supported.',
             ]);
 
             if ($validator->fails()) {
                 return $this->error(
-                    'Validation failed',
+                    'Please review your order details and try again.',
                     400,
                     $validator->errors()
                 );
