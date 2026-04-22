@@ -288,14 +288,13 @@ class AuthController extends Controller
      */
     private function sendOtpEmail($user, $otp)
     {
-        $details = [
-            'subject' => 'Password Reset OTP',
-            'body' => "Your OTP for password reset is: $otp. This OTP expires in 10 minutes.",
+        $data = [
             'name' => $user->name ?? 'User',
+            'otp'  => $otp,
         ];
 
-        Mail::send('emails.otp', $details, function ($message) use ($user) {
-            $message->to($user->email)->subject('Password Reset OTP');
+        Mail::send('emails.otp', $data, function ($message) use ($user) {
+            $message->to($user->email)->subject('Password Reset OTP — SBA Reads');
         });
     }
 
