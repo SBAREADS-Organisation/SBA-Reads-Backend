@@ -106,7 +106,7 @@ class AuthController extends Controller
         //     'name' => $user->name != 'NO NAME' ?? $user->name,
         // ];
 
-        Mail::to($user->email)->queue(new LoginNotification($user, 'email', $ipAddress));
+        Mail::to($user->email)->send(new LoginNotification($user, 'email', $ipAddress));
 
         // Mail::send('emails.login_notification', $details, function ($message) use ($user) {
         //     $message->to($user->email)

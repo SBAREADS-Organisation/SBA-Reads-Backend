@@ -119,7 +119,7 @@ class UserController extends Controller
                 ]), now()->addMinutes(10));
 
                 // Send email with token (stub or actual)
-                Mail::to($email)->queue(new AuthorVerificationToken($token));
+                Mail::to($email)->send(new AuthorVerificationToken($token));
 
                 DB::commit();
 
@@ -177,7 +177,7 @@ class UserController extends Controller
                         );
                     }
                 }
-                Mail::to($user->email)->queue(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+                Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
 
                 $user->refresh();
 
@@ -316,7 +316,7 @@ class UserController extends Controller
         Cache::put($cacheKey, json_encode(array_merge($userData, ['token' => $token])), now()->addMinutes(10));
 
         // Send email with new token
-        Mail::to($request->email)->queue(new AuthorVerificationToken($token));
+        Mail::to($request->email)->send(new AuthorVerificationToken($token));
 
         return $this->success(
             ['email' => $request->email],
@@ -392,7 +392,7 @@ class UserController extends Controller
 
             Cache::forget($cacheKey);
 
-            Mail::to($user->email)->queue(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+            Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;
@@ -1127,7 +1127,7 @@ class UserController extends Controller
             $user->assignRole($role);
 
             // Send welcome email
-            Mail::to($user->email)->queue(new WelcomeEmail($user->name, $user->account_type));
+            Mail::to($user->email)->send(new WelcomeEmail($user->name, $user->account_type));
 
             DB::commit();
 
@@ -1184,7 +1184,7 @@ class UserController extends Controller
             ]);
 
             // Dispatch mail to the user with the account onboarding link
-            Mail::to($user->email)->queue(new StripeOnboardingMail($user, $accountLink));;
+            Mail::to($user->email)->send(new StripeOnboardingMail($user, $accountLink));;
 
             // Return the URL to the mobile app
             return response()->json([

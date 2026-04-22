@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\Order\OrderResource;
 use App\Models\Order;
+use App\Mail\Order\OrderPlaced;
+use App\Mail\Order\OrderStatusUpdated;
+use Illuminate\Support\Facades\Mail;
 
 class OrderController extends Controller
 {
@@ -156,7 +159,23 @@ class OrderController extends Controller
                 );
             }
 
-            return $this->service->create($request->user(), $request);
+            $response = $this->service->create($request->user(), $request);
+
+            // Send order confirmation email
+            try {
+                $responseData = json_decode($response->getContent(), true);
+                if (isset($responseData['data']['order'])) {
+                    $order = Order::with('items.book')->find($responseData['data']['order']['id']);
+                    if ($order) {
+                        Mail::to($request->user()->email)
+                            ->send(new OrderPlaced($order, $request->user()->name ?? 'Customer'));
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::error('Order confirmation email failed: ' . $e->getMessage());
+            }
+
+            return $response;
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
             return $this->error($message, 500, null, $th);
@@ -301,6 +320,17 @@ class OrderController extends Controller
 
             $order->status = $request->status;
             $order->save();
+
+            // Send status update email to customer
+            try {
+                $customer = $order->user;
+                if ($customer) {
+                    Mail::to($customer->email)
+                        ->send(new OrderStatusUpdated($order, $customer->name ?? 'Customer', $request->status));
+                }
+            } catch (\Throwable $e) {
+                Log::error('Order status email failed: ' . $e->getMessage());
+            }
 
             return $this->success($order, 'Order status updated successfully');
         } catch (\Throwable $th) {
