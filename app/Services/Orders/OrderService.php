@@ -62,8 +62,22 @@ class OrderService
 
             foreach ($payload->books as $item) {
                 $book = Book::findOrFail($item['book_id']);
-                $price = $book->pricing['actual_price'];
                 $quantity = $item['quantity'];
+
+                // Check printed stock availability
+                $available = ($book->stock_quantity ?? 0) - ($book->stock_reserved ?? 0);
+                if ($available < $quantity) {
+                    throw new \Exception(
+                        $available <= 0
+                            ? "'{$book->title}' is out of stock."
+                            : "Only {$available} cop" . ($available === 1 ? 'y' : 'ies') . " of '{$book->title}' available."
+                    );
+                }
+
+                // Reserve the stock for this order
+                $book->increment('stock_reserved', $quantity);
+
+                $price = $book->pricing['actual_price'];
                 $totalPrice = $price * $quantity;
                 $authorPayout = $totalPrice * 0.7;
 

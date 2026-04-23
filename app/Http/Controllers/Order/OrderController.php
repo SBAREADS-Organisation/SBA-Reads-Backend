@@ -297,6 +297,29 @@ class OrderController extends Controller
                 }
             }
 
+            // Release reserved stock on cancellation
+            if ($request->status === 'cancelled') {
+                $order->items->each(function ($item) {
+                    if ($item->book) {
+                        $release = min($item->quantity, $item->book->stock_reserved ?? 0);
+                        if ($release > 0) {
+                            $item->book->decrement('stock_reserved', $release);
+                        }
+                    }
+                });
+            }
+
+            // On completion: deduct from stock permanently (reserved → sold)
+            if ($request->status === 'completed' || $request->status === 'delivered') {
+                $order->items->each(function ($item) {
+                    if ($item->book) {
+                        $qty = $item->quantity;
+                        $item->book->decrement('stock_reserved', min($qty, $item->book->stock_reserved ?? 0));
+                        $item->book->decrement('stock_quantity', min($qty, $item->book->stock_quantity ?? 0));
+                    }
+                });
+            }
+
             if ($request->status === 'completed') {
                 // set the analytics for the book
                 $order->items->each(function ($item) {

@@ -41,6 +41,8 @@ class Book extends Model
         'file_size',
         'archived',
         'deleted',
+        'stock_quantity',
+        'stock_reserved',
         'drm_info',
         'meta_data',
         'publisher',
@@ -80,6 +82,8 @@ class Book extends Model
             'meta_data' => 'json',
             'archived' => 'boolean',
             'deleted' => 'boolean',
+            'stock_quantity' => 'integer',
+            'stock_reserved' => 'integer',
         ];
     }
 

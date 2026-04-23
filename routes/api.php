@@ -162,6 +162,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::put('books/{book}', [BookController::class, 'update']);
     Route::patch('books/{book}/toggle-visibility', [BookController::class, 'toggleVisibility']);
+    Route::middleware(['role:admin,superadmin'])->patch('books/{book}/archive', [BookController::class, 'toggleArchive']);
+    Route::middleware(['role:admin,superadmin'])->patch('books/{book}/stock', [BookController::class, 'updateStock']);
     Route::middleware(['role:admin,superadmin,author'])->delete('books/{book}', [BookController::class, 'destroy']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
 

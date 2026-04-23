@@ -152,6 +152,7 @@ class BookController extends Controller
         // Filter for visible books (public visibility and any status except rejected)
         $query = Book::query()
             ->where('visibility', 'public')
+            ->where('archived', false)
             ->whereIn('status', ['pending', 'approved', 'published']);
 
         if ($request->filled('category_id')) {
@@ -1462,6 +1463,60 @@ class BookController extends Controller
 
         // Default to Stripe for unsupported currencies
         return 'stripe';
+    }
+
+    /**
+     * Toggle archived status for a book (admin only).
+     * Archived books are hidden from all public listings.
+     */
+    public function toggleArchive(Request $request, Book $book)
+    {
+        try {
+            $newState = ! $book->archived;
+            $book->update(['archived' => $newState]);
+
+            return $this->success(
+                ['archived' => $newState, 'book_id' => $book->id],
+                $newState ? 'Book has been archived and hidden from public listings.' : 'Book has been unarchived and is now visible.'
+            );
+        } catch (\Throwable $th) {
+            return $this->error('Failed to update archive status.', 500, null, $th);
+        }
+    }
+
+    /**
+     * Update printed book stock quantity (admin only).
+     */
+    public function updateStock(Request $request, Book $book)
+    {
+        $validator = Validator::make($request->all(), [
+            'stock_quantity' => 'required|integer|min:0',
+        ], [
+            'stock_quantity.required' => 'Please provide a stock quantity.',
+            'stock_quantity.integer'  => 'Stock quantity must be a whole number.',
+            'stock_quantity.min'      => 'Stock quantity cannot be negative.',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Invalid stock value.', 400, $validator->errors());
+        }
+
+        try {
+            $book->update(['stock_quantity' => $request->stock_quantity]);
+            $book->refresh();
+
+            return $this->success(
+                [
+                    'book_id'        => $book->id,
+                    'stock_quantity' => $book->stock_quantity,
+                    'stock_reserved' => $book->stock_reserved,
+                    'stock_available' => max(0, $book->stock_quantity - $book->stock_reserved),
+                ],
+                'Stock updated successfully.'
+            );
+        } catch (\Throwable $th) {
+            return $this->error('Failed to update stock.', 500, null, $th);
+        }
     }
 
     // Get my purchased books

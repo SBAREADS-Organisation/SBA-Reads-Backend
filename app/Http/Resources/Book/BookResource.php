@@ -59,6 +59,9 @@ class BookResource extends JsonResource
             'deleted_at' => $this->deleted_at,
             'archived' => $this->archived,
             'deleted' => $this->deleted,
+            'stock_quantity' => $this->stock_quantity ?? 0,
+            'stock_reserved' => $this->stock_reserved ?? 0,
+            'stock_available' => max(0, ($this->stock_quantity ?? 0) - ($this->stock_reserved ?? 0)),
             'author_id' => $this->author_id,
             'files' => $this->files,
             'categories' => $this->categories->map(function ($cat) {
