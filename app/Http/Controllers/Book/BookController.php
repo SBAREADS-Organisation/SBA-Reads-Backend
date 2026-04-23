@@ -252,22 +252,25 @@ class BookController extends Controller
 
             $created = $this->service->createMultiple($validator->validated()['books']);
 
-            // dd($created);
             foreach ($created as $book) {
-                // dd($book);
-                // Notify the author about the book creation
-                // $book->author->notify(new BookApproved($book));
-                $this->notifier()->send(
-                    User::find($book->author_id),
-                    'New Book Created',
-                    'Your book "' . $book->title . '" has been created successfully.',
-                    ['in-app', 'email'],
-                    $book,
-                    new BookCreatedNotification(
-                        $book,
-                        User::find($book->author_id)->name ?? 'Author'
-                    ),
-                );
+                try {
+                    $author = User::find($book->author_id);
+                    if ($author) {
+                        $this->notifier()->send(
+                            $author,
+                            'New Book Created',
+                            'Your book "' . $book->title . '" has been created successfully.',
+                            ['in-app', 'email'],
+                            $book,
+                            new BookCreatedNotification($book, $author->name ?? 'Author'),
+                        );
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Failed to send book creation notification: ' . $e->getMessage(), [
+                        'book_id' => $book->id,
+                        'author_id' => $book->author_id,
+                    ]);
+                }
             }
 
             return $this->success(
@@ -276,13 +279,15 @@ class BookController extends Controller
                 201
             );
         } catch (\Illuminate\Database\QueryException $e) {
+            Log::error('DB error creating books: ' . $e->getMessage());
             return $this->error(
                 'An error occurred while creating books.',
                 500,
                 null,
                 $e
             );
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            Log::error('Error creating books: ' . $e->getMessage());
             return $this->error(
                 'An error occurred while creating books.',
                 500,
