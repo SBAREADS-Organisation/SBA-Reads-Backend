@@ -288,8 +288,12 @@ class AuthController extends Controller
      */
     private function sendOtpEmail($user, $otp)
     {
+        $displayName = ($user->name && $user->name !== 'NO NAME')
+            ? $user->name
+            : ($user->username ?? 'there');
+
         $data = [
-            'name' => $user->name ?? 'User',
+            'name' => $displayName,
             'otp'  => $otp,
         ];
 
@@ -303,10 +307,14 @@ class AuthController extends Controller
      */
     private function sendPasswordResetConfirmationEmail($user)
     {
+        $displayName = ($user->name && $user->name !== 'NO NAME')
+            ? $user->name
+            : ($user->username ?? 'there');
+
         $details = [
             'subject' => 'Password Reset Successful',
             'body' => 'Your password was successfully reset on ' . Carbon::now()->toDateTimeString(),
-            'name' => $user->name ?? 'User',
+            'name' => $displayName,
         ];
 
         Mail::send('emails.password_reset', $details, function ($message) use ($user) {
