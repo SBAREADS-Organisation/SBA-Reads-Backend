@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -165,6 +166,11 @@ class User extends Authenticatable
     public function defaultDeliveryAddress()
     {
         return $this->deliveryAddresses()->where('is_default', true)->first();
+    }
+
+    public function linkedAccount(): HasOne
+    {
+        return $this->hasOne(LinkedAccount::class, 'user_id');
     }
 
     /**

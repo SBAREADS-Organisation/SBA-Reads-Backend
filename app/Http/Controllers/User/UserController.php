@@ -126,8 +126,12 @@ class UserController extends Controller
                     'token' => $token,
                 ]), now()->addMinutes(10));
 
-                // Send email with token (stub or actual)
-                Mail::to($email)->send(new AuthorVerificationToken($token));
+                // Send email with token (non-fatal — OTP is returned in response)
+                try {
+                    Mail::to($email)->send(new AuthorVerificationToken($token));
+                } catch (\Throwable $mailErr) {
+                    \Log::warning('Author verification email failed: ' . $mailErr->getMessage());
+                }
 
                 DB::commit();
 
@@ -185,7 +189,11 @@ class UserController extends Controller
                         );
                     }
                 }
-                Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+                try {
+                    Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+                } catch (\Throwable $mailErr) {
+                    \Log::warning('Welcome email failed: ' . $mailErr->getMessage());
+                }
 
                 $user->refresh();
 

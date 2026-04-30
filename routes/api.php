@@ -19,6 +19,7 @@ use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
 use App\Http\Controllers\Withdrawal\StripeWithdrawalController;
 use App\Http\Controllers\Withdrawal\WithdrawalController;
+use App\Http\Controllers\User\LinkedAccountController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
 use Cloudinary\Api\Admin\AdminApi;
@@ -96,6 +97,13 @@ Route::prefix('user')->group(function () {
 
         // Logout
         Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+
+        // Linked Account (dual account) Routes
+        Route::prefix('linked-account')->group(function () {
+            Route::post('/', [LinkedAccountController::class, 'create'])->name('linked-account.create');
+            Route::get('/', [LinkedAccountController::class, 'show'])->name('linked-account.show');
+            Route::delete('/', [LinkedAccountController::class, 'destroy'])->name('linked-account.destroy');
+        });
 
         // Forgot Password
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
