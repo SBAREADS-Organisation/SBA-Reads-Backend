@@ -65,27 +65,29 @@ class LinkedAccountController extends Controller
                 ->first();
 
             if (! $linked) {
-                $linked = new User;
-                $linked->email         = $user->email;
-                $linked->account_type  = $request->account_type;
-                $linked->default_login = 'email';
-                $linked->status        = $request->account_type === 'reader' ? 'active' : 'unverified';
-                $linked->preferences   = [];
-                // Save first (without password) to obtain an auto-increment ID
-                $linked->save();
+                // Insert directly via query builder so the already-hashed password is
+                // stored as-is without triggering Eloquent's 'hashed' cast (which would
+                // double-hash it and make future logins fail).
+                $linkedId = DB::table('users')->insertGetId([
+                    'email'         => $user->email,
+                    'password'      => $user->getAttributes()['password'],
+                    'account_type'  => $request->account_type,
+                    'default_login' => 'email',
+                    'status'        => $request->account_type === 'reader' ? 'active' : 'unverified',
+                    'name'          => 'NO NAME',
+                    'first_name'    => 'NO NAME',
+                    'last_name'     => 'NO NAME',
+                    'preferences'   => json_encode([]),
+                    'created_at'    => now(),
+                    'updated_at'    => now(),
+                ]);
 
-                // Copy the already-hashed password via a raw query to bypass the 'hashed' cast,
-                // which would otherwise double-hash the value.
-                DB::table('users')
-                    ->where('id', $linked->id)
-                    ->update(['password' => $user->getAttributes()['password']]);
+                $linked = User::find($linkedId);
 
                 $role = Role::where('name', 'user')->first();
                 if ($role) {
                     $linked->assignRole($role);
                 }
-
-                $linked->refresh();
             }
 
             // Bidirectional link so both users can find each other
