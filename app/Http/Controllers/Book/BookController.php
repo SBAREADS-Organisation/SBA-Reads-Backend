@@ -1490,11 +1490,11 @@ class BookController extends Controller
     public function updateStock(Request $request, Book $book)
     {
         $validator = Validator::make($request->all(), [
-            'stock_quantity' => 'required|integer|min:0',
+            'quantity' => 'required|integer|min:0',
         ], [
-            'stock_quantity.required' => 'Please provide a stock quantity.',
-            'stock_quantity.integer'  => 'Stock quantity must be a whole number.',
-            'stock_quantity.min'      => 'Stock quantity cannot be negative.',
+            'quantity.required' => 'Please provide a stock quantity.',
+            'quantity.integer'  => 'Stock quantity must be a whole number.',
+            'quantity.min'      => 'Stock quantity cannot be negative.',
         ]);
 
         if ($validator->fails()) {
@@ -1502,7 +1502,7 @@ class BookController extends Controller
         }
 
         try {
-            $book->update(['stock_quantity' => $request->stock_quantity]);
+            $book->update(['stock_quantity' => $request->quantity]);
             $book->refresh();
 
             return $this->success(
