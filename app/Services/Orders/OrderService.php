@@ -44,6 +44,12 @@ class OrderService
                 $deliveryType === 'delivery' ? $payload->input('delivery_country', 'Not specified') : 'Nigeria'
             );
 
+            $deliveryCountry = $deliveryType === 'delivery'
+                ? $payload->input('delivery_country', 'Not specified')
+                : 'Nigeria';
+
+            $shippingCostUsd = $this->getShippingCostUsd($deliveryCountry, $deliveryType);
+
             $order = Order::create([
                 'user_id'             => $user->id,
                 'delivery_address_id' => $addressId,
@@ -51,8 +57,10 @@ class OrderService
                 'contact_name'        => $payload->contact_name,
                 'contact_phone'       => $payload->contact_phone,
                 'delivery_state'      => $deliveryType === 'delivery' ? $payload->input('delivery_state') : 'Lagos',
-                'delivery_country'    => $deliveryType === 'delivery' ? $payload->input('delivery_country') : 'Nigeria',
+                'delivery_country'    => $deliveryCountry,
                 'total_amount'        => 0,
+                'shipping_cost_usd'   => $shippingCostUsd,
+                'shipping_cost'       => 0,
                 'status'              => 'pending',
                 'tracking_number'     => Order::generateTrackingNumber(),
                 'currency'            => $currency,
@@ -100,18 +108,25 @@ class OrderService
 
 
 
+            // Add shipping cost (already in USD) to the books subtotal
+            $total += $shippingCostUsd;
+
             // Convert total amount from USD to requested currency if needed
             $payableAmount = $total;
+            $shippingCostConverted = $shippingCostUsd;
             if ($currency !== 'USD') {
                 try {
                     $payableAmount = $this->currencyConversionService->convert((float) $total, 'USD', $currency);
+                    $shippingCostConverted = $this->currencyConversionService->convert((float) $shippingCostUsd, 'USD', $currency);
                 } catch (\Exception $e) {
-                    // If conversion fails, rethrow to be handled by outer catch/rollback
                     throw new \Exception('Unable to convert currency at this time: ' . $e->getMessage(), 0, $e);
                 }
             }
 
-            $order->update(['total_amount' => $payableAmount]);
+            $order->update([
+                'total_amount'  => $payableAmount,
+                'shipping_cost' => $shippingCostConverted,
+            ]);
 
             // Determine the appropriate payment provider based on currency
             $provider = $this->getPaymentProvider($currency);
@@ -177,6 +192,46 @@ class OrderService
         ]);
 
         return $address->id;
+    }
+
+    /**
+     * Return the shipping cost in USD for a given delivery country.
+     * Nigeria is billed separately — no cost is added upfront.
+     * Pickup orders have no shipping cost.
+     */
+    private function getShippingCostUsd(string $country, string $deliveryType): float
+    {
+        if ($deliveryType === 'pickup') {
+            return 0.0;
+        }
+
+        // Rates defined in their native currency; we convert to USD for the order total
+        $rates = [
+            'united states'  => ['amount' => 10.00, 'currency' => 'USD'],
+            'canada'         => ['amount' => 15.00, 'currency' => 'CAD'],
+            'united kingdom' => ['amount' => 10.00, 'currency' => 'GBP'],
+            'nigeria'        => ['amount' => 0.00,  'currency' => 'NGN'], // invoiced separately
+        ];
+
+        $key = strtolower(trim($country));
+
+        if (! isset($rates[$key]) || $rates[$key]['amount'] === 0.0) {
+            return 0.0;
+        }
+
+        $rate = $rates[$key];
+
+        if ($rate['currency'] === 'USD') {
+            return $rate['amount'];
+        }
+
+        try {
+            return (float) $this->currencyConversionService->convert($rate['amount'], $rate['currency'], 'USD');
+        } catch (\Exception $e) {
+            // If conversion fails, fall back to 0 rather than blocking the order
+            \Illuminate\Support\Facades\Log::warning("Shipping cost conversion failed for {$country}: " . $e->getMessage());
+            return 0.0;
+        }
     }
 
     /**

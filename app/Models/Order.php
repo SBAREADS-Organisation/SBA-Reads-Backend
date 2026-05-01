@@ -33,6 +33,8 @@ class Order extends Model
         'contact_phone',
         'delivery_state',
         'delivery_country',
+        'shipping_cost',
+        'shipping_cost_usd',
     ];
 
     protected function casts(): array
