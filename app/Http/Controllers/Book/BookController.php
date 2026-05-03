@@ -1162,8 +1162,8 @@ class BookController extends Controller
                     $this->notifier()->send(
                         $author,
                         'Book Approved',
-                        "Your book '{$book->title}' has been approved.",
-                        ['in-app', 'email'],
+                        "Your book '{$book->title}' has been approved and is now live.",
+                        ['in-app', 'email', 'push'],
                         $book,
                         new BookApproved($book)
                     );
@@ -1215,7 +1215,7 @@ class BookController extends Controller
                         $author,
                         'Book Declined',
                         $reason,
-                        ['in-app', 'email'],
+                        ['in-app', 'email', 'push'],
                         $book,
                         new BookDeclined($book, $reason)
                     );

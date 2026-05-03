@@ -7,6 +7,7 @@ use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 
@@ -91,7 +92,22 @@ class NotificationService
 
     protected function sendPush(Notification $notification)
     {
-        // Placeholder for push logic (e.g., Firebase or OneSignal)
+        $token = $notification->user?->device_token;
+
+        if (! $token) {
+            return;
+        }
+
+        Http::withHeaders([
+            'Content-Type'  => 'application/json',
+            'Accept'        => 'application/json',
+        ])->post('https://exp.host/--/api/v2/push/send', [
+            'to'    => $token,
+            'title' => $notification->title,
+            'body'  => $notification->message,
+            'data'  => $notification->data ?? [],
+            'sound' => 'default',
+        ]);
     }
 
     public function markAsRead(Notification $notification): void

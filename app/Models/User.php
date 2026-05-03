@@ -51,6 +51,7 @@ class User extends Authenticatable
         'mfa_secret',
         'deleted',
         'archived',
+        'device_token',
     ];
 
     /**

@@ -1175,6 +1175,24 @@ class UserController extends Controller
     }
 
     /**
+     * Save or update the authenticated user's Expo push token.
+     */
+    public function updateDeviceToken(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'device_token' => ['required', 'string', 'max:500'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Validation failed', 400, $validator->errors());
+        }
+
+        $request->user()->update(['device_token' => $request->device_token]);
+
+        return $this->success(null, 'Device token saved.');
+    }
+
+    /**
      * Generates a Stripe onboarding link for the authenticated author.
      *
      * @param \Illuminate\Http\Request $request

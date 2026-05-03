@@ -76,6 +76,7 @@ Route::prefix('user')->group(function () {
             Route::post('/action/{action}/{user_id}', [UserController::class, 'adminAproveOrDeclineActionOnUser'])->name('admin-approve-decline-user');
             Route::patch('/preference', [UserController::class, 'updatePreferences']);
             Route::patch('/settings', [UserController::class, 'updateSettings']);
+            Route::post('/device-token', [UserController::class, 'updateDeviceToken']);
         });
 
         // User Address Routes
