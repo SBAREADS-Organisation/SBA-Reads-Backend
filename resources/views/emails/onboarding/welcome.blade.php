@@ -4,7 +4,11 @@
 @section('content')
   {{-- Greeting --}}
   <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#D8B99C;text-transform:uppercase;letter-spacing:1px;">
-    Welcome {{ $accountType === 'author' ? 'Author' : 'Reader' }}
+    Welcome
+    @if($accountType === 'author') Author
+    @elseif(in_array($accountType, ['manager', 'superadmin'])) Admin
+    @else Reader
+    @endif
   </p>
   <h1 style="margin:0 0 16px;font-size:26px;font-weight:700;color:#160c08;line-height:1.3;">
     Great to have you, {{ $name }}! 🎉
@@ -12,6 +16,8 @@
   <p style="margin:0 0 28px;font-size:15px;color:#4a3728;line-height:1.7;">
     @if($accountType === 'author')
       Your author account on SBA Reads is ready. You're one step closer to sharing your work with thousands of readers.
+    @elseif(in_array($accountType, ['manager', 'superadmin']))
+      Your SBA Reads admin account is ready. You now have access to the admin dashboard to manage books, authors, readers, and orders.
     @else
       Your SBA Reads account is all set. Thousands of books are waiting for you — start exploring today.
     @endif
@@ -44,6 +50,30 @@
               <td>
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Reach your audience</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Once approved, your book goes live to thousands of readers.</p>
+              </td>
+            </tr>
+          </table>
+        @elseif(in_array($accountType, ['manager', 'superadmin']))
+          <table width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🔐</span></td>
+              <td style="padding-bottom:12px;">
+                <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Log in to the admin dashboard</p>
+                <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Use your email and password to sign in at admin.sbareads.com.</p>
+              </td>
+            </tr>
+            <tr>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">📚</span></td>
+              <td style="padding-bottom:12px;">
+                <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Review and manage books</p>
+                <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Approve author submissions, manage inventory, and track orders.</p>
+              </td>
+            </tr>
+            <tr>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">👥</span></td>
+              <td>
+                <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Manage users</p>
+                <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">View and manage authors, readers, and their accounts.</p>
               </td>
             </tr>
           </table>
@@ -80,15 +110,28 @@
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
     <tr>
       <td align="center">
-        <a href="{{ config('app.url') }}" style="display:inline-block;background:#160c08;color:#D8B99C;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:8px;letter-spacing:0.5px;">
-          Open SBA Reads →
-        </a>
+        @if(in_array($accountType, ['manager', 'superadmin']))
+          <a href="{{ config('app.admin_url', 'https://admin.sbareads.com') }}" style="display:inline-block;background:#160c08;color:#D8B99C;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:8px;letter-spacing:0.5px;">
+            Open Admin Dashboard →
+          </a>
+        @else
+          <a href="{{ config('app.url') }}" style="display:inline-block;background:#160c08;color:#D8B99C;text-decoration:none;font-size:14px;font-weight:700;padding:14px 36px;border-radius:8px;letter-spacing:0.5px;">
+            Open SBA Reads →
+          </a>
+        @endif
       </td>
     </tr>
   </table>
 
   <p style="margin:0;font-size:14px;color:#9e8272;">
-    Happy {{ $accountType === 'author' ? 'writing' : 'reading' }},<br/>
+    @if(in_array($accountType, ['manager', 'superadmin']))
+      Best regards,
+    @elseif($accountType === 'author')
+      Happy writing,
+    @else
+      Happy reading,
+    @endif
+    <br/>
     <strong style="color:#160c08;">The SBA Reads Team</strong>
   </p>
 @endsection

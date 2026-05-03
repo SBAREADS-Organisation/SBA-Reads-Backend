@@ -55,8 +55,8 @@ Route::middleware(['auth:sanctum'])->prefix('withdrawals')->group(function () {
 Route::prefix('user')->group(function () {
     Route::get('/', [UserController::class, 'index']);
 
-    // Superadmin creation route
-    Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']);
+    // Superadmin creation (public bootstrap route — secured separately via admin panel)
+    // Route::post('/superadmin/create', [UserController::class, 'createSuperadmin']);
 
     Route::post('/register', [UserController::class, 'register']);
     Route::post('/verify-email', [UserController::class, 'verifyAuthorEmail'])->name('verify-email');
@@ -234,8 +234,11 @@ Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
 
 // Admin Routes
 Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')->group(function () {
-    // Super admin only - invite other managers
-    Route::middleware(['role:superadmin'])->post('invite-admin', [UserController::class, 'inviteAdmin']);
+    // Super admin only
+    Route::middleware(['role:superadmin'])->group(function () {
+        Route::post('invite-admin', [UserController::class, 'inviteAdmin']);
+        Route::post('create-superadmin', [UserController::class, 'createSuperAdmin']);
+    });
 
     // App Version Support Routes
     Route::prefix('app-versions-support')->group(function () {

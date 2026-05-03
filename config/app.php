@@ -53,6 +53,7 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+    'admin_url' => env('ADMIN_URL', 'https://admin.sbareads.com'),
 
     /*
     |--------------------------------------------------------------------------

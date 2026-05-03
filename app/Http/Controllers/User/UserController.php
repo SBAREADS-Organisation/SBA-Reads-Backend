@@ -240,7 +240,8 @@ class UserController extends Controller
     public function createSuperAdmin(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|unique:users,email',
+            'name'     => 'required|string|max:255',
+            'email'    => 'required|email|unique:users,email',
             'password' => [
                 'required',
                 'string',
@@ -262,10 +263,12 @@ class UserController extends Controller
 
         try {
             $user = new User;
-            $user->email = $request->email;
+            $user->name     = $request->name;
+            $user->email    = $request->email;
             $user->password = Hash::make($request->password);
-            $user->account_type = 'superadmin';
+            $user->account_type  = 'superadmin';
             $user->default_login = 'email';
+            $user->status        = 'active';
             $user->save();
 
             // Assign superadmin role (create if not exists)
@@ -276,8 +279,9 @@ class UserController extends Controller
 
             return $this->success([
                 'user_id' => $user->id,
-                'email' => $user->email,
-                'role' => $user->getRoleNames()->first(),
+                'name'    => $user->name,
+                'email'   => $user->email,
+                'role'    => $user->getRoleNames()->first(),
             ], 'Super admin created successfully', 201);
         } catch (\Exception $e) {
             return $this->error(
