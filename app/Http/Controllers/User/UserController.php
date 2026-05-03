@@ -1109,8 +1109,9 @@ class UserController extends Controller
     public function inviteAdmin(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|unique:users,email',
-            'name' => 'required|string|max:255',
+            'email'          => 'required|email|unique:users,email',
+            'name'           => 'required|string|max:255',
+            'dashboard_role' => 'nullable|string|in:admin,editor,operations',
             'password' => [
                 'required',
                 'string',
@@ -1133,16 +1134,19 @@ class UserController extends Controller
         try {
             DB::beginTransaction();
 
+            $dashboardRole = $request->input('dashboard_role', 'admin');
+
             $user = new User;
-            $user->name = $request->name;
-            $user->email = $request->email;
-            $user->password = Hash::make($request->password);
+            $user->name         = $request->name;
+            $user->email        = $request->email;
+            $user->password     = Hash::make($request->password);
             $user->account_type = 'manager';
             $user->default_login = 'email';
-            $user->status = 'active';
+            $user->status       = 'active';
+            $user->preferences  = ['dashboard_role' => $dashboardRole];
             $user->save();
 
-            // Assign admin role
+            // Assign admin role (Spatie — controls API access)
             $role = Role::firstOrCreate(['name' => 'admin']);
             $user->assignRole($role);
 
@@ -1152,11 +1156,12 @@ class UserController extends Controller
             DB::commit();
 
             return $this->success([
-                'user_id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->getRoleNames()->first(),
-                'account_type' => $user->account_type,
+                'user_id'        => $user->id,
+                'name'           => $user->name,
+                'email'          => $user->email,
+                'role'           => $user->getRoleNames()->first(),
+                'account_type'   => $user->account_type,
+                'dashboard_role' => $dashboardRole,
             ], 'Admin invited successfully', 201);
         } catch (\Exception $e) {
             DB::rollBack();
