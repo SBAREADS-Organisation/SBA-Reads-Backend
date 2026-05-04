@@ -64,6 +64,10 @@ class BookResource extends JsonResource
             'stock_available' => max(0, ($this->stock_quantity ?? 0) - ($this->stock_reserved ?? 0)),
             'author_id' => $this->author_id,
             'files' => $this->files,
+            'audio_status' => $this->audio_status ?? 'none',
+            'audio_url' => $this->audio_url,
+            'audio_duration' => $this->audio_duration,
+            'audio_segments' => $this->audio_segments ?? [],
             'categories' => $this->categories->map(function ($cat) {
                 return [
                     'id' => $cat->id,

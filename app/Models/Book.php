@@ -53,6 +53,10 @@ class Book extends Model
         'review_notes',
         'rejection_note',
         'expired_at',
+        'audio_status',
+        'audio_url',
+        'audio_duration',
+        'audio_segments',
     ];
 
     /**
@@ -84,6 +88,8 @@ class Book extends Model
             'deleted' => 'boolean',
             'stock_quantity' => 'integer',
             'stock_reserved' => 'integer',
+            'audio_duration' => 'integer',
+            'audio_segments' => 'array',
         ];
     }
 

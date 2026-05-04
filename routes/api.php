@@ -19,6 +19,7 @@ use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
 use App\Http\Controllers\Withdrawal\StripeWithdrawalController;
 use App\Http\Controllers\Withdrawal\WithdrawalController;
+use App\Http\Controllers\Audio\AudioController;
 use App\Http\Controllers\User\LinkedAccountController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
@@ -109,6 +110,9 @@ Route::prefix('user')->group(function () {
         // Forgot Password
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
 
+        // Voice Sample (for PDF-to-audio with author's cloned voice)
+        Route::post('voice-sample', [AudioController::class, 'uploadVoiceSample'])->name('upload-voice-sample');
+
         // User KYC Routes
         Route::prefix('kyc')->group(function () {
             Route::get('onboard', [UserController::class, 'onboard'])->name('onboard-account');
@@ -185,6 +189,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
+
+    // Audio generation routes
+    Route::post('books/{bookId}/generate-audio', [AudioController::class, 'generateAudio'])->name('book.generate-audio');
+    Route::get('books/{bookId}/audio-status', [AudioController::class, 'getAudioStatus'])->name('book.audio-status');
 
     // Author-specific endpoints (only for account_type = 'author')
     Route::middleware(['role:author'])->prefix('author')->group(function () {

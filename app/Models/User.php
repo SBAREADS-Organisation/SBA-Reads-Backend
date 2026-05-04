@@ -52,6 +52,8 @@ class User extends Authenticatable
         'deleted',
         'archived',
         'device_token',
+        'voice_sample_url',
+        'elevenlabs_voice_id',
     ];
 
     /**

@@ -120,6 +120,27 @@ class CloudinaryMediaUploadService
     }
 
     /**
+     * Upload a raw file from a local path (e.g. generated audio temp files).
+     * Returns the secure URL or throws on failure.
+     */
+    public function uploadFromPath(string $filePath, string $context = 'general', string $publicId = null): array
+    {
+        $folder = $this->resolveFolder($context);
+        $fileName = $publicId ?? Str::uuid()->toString();
+
+        $result = (new UploadApi)->upload($filePath, [
+            'folder' => $folder,
+            'public_id' => $fileName,
+            'resource_type' => 'video', // Cloudinary uses 'video' resource_type for audio files
+        ]);
+
+        return [
+            'url' => $result['secure_url'],
+            'public_id' => $result['public_id'],
+        ];
+    }
+
+    /**
      * Resolve folders dynamically.
      */
     protected function resolveFolder(string $context): string
@@ -129,6 +150,8 @@ class CloudinaryMediaUploadService
             'book_cover' => 'books/covers/'.date('Y/m/d'),
             'book_content' => 'books/content/'.date('Y/m/d'),
             'stripe_kyc' => 'stripe/kyc/'.date('Y/m/d'),
+            'voice_samples' => 'users/voice-samples/'.date('Y/m/d'),
+            'book_audio' => 'books/audio/'.date('Y/m/d'),
             default => 'general/'.date('Y/m/d')
         };
     }
