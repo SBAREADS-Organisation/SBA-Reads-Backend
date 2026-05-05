@@ -2,58 +2,98 @@
 @section('title', 'New Login Detected')
 
 @section('content')
-  <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#e67e22;text-transform:uppercase;letter-spacing:1px;">Security Alert</p>
-  <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#160c08;">New Login Detected</h1>
-  <p style="margin:0 0 24px;font-size:15px;color:#4a3728;line-height:1.7;">
-    Hi {{ $name }}, we noticed a new sign-in to your SBA Reads account. Here are the details:
+
+  {{-- Icon + heading --}}
+  <div style="text-align:center;margin-bottom:28px;">
+    <div style="display:inline-block;background:#fff4ec;border-radius:50%;width:64px;height:64px;line-height:64px;font-size:28px;margin-bottom:16px;">🔐</div>
+    <p style="margin:0 0 6px;font-size:11px;font-weight:700;color:#e67e22;text-transform:uppercase;letter-spacing:2px;">Security Alert</p>
+    <h1 style="margin:0;font-size:26px;font-weight:800;color:#160c08;letter-spacing:-0.5px;">New Login Detected</h1>
+  </div>
+
+  <p style="margin:0 0 24px;font-size:15px;color:#4a3728;line-height:1.8;text-align:center;">
+    Hi <strong>{{ $name }}</strong>, we noticed a new sign-in to your<br/>SBA Reads account. Here are the details:
   </p>
 
-  {{-- Login details --}}
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border:1px solid #e8ddd6;border-radius:10px;overflow:hidden;">
+  {{-- Login details card --}}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;border-radius:12px;overflow:hidden;border:1px solid #ede4dc;">
+
     <tr>
-      <td style="background:#f5f0eb;padding:14px 20px;border-bottom:1px solid #e8ddd6;">
+      <td style="background:#faf6f2;padding:14px 20px;border-bottom:1px solid #ede4dc;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            <td style="font-size:13px;color:#9e8272;width:120px;">Method</td>
-            <td style="font-size:14px;font-weight:600;color:#160c08;">{{ $provider }}</td>
+            <td width="20" style="vertical-align:middle;padding-right:12px;font-size:16px;">🔑</td>
+            <td style="font-size:12px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;font-weight:600;width:100px;vertical-align:middle;">Method</td>
+            <td style="font-size:14px;font-weight:700;color:#160c08;vertical-align:middle;">{{ $provider }}</td>
           </tr>
         </table>
       </td>
     </tr>
+
     <tr>
-      <td style="background:#ffffff;padding:14px 20px;border-bottom:1px solid #e8ddd6;">
+      <td style="background:#ffffff;padding:14px 20px;border-bottom:1px solid #ede4dc;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            <td style="font-size:13px;color:#9e8272;width:120px;">IP Address</td>
-            <td style="font-size:14px;font-weight:600;color:#160c08;font-family:monospace;">{{ $ipAddress }}</td>
+            <td width="20" style="vertical-align:middle;padding-right:12px;font-size:16px;">🌐</td>
+            <td style="font-size:12px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;font-weight:600;width:100px;vertical-align:middle;">IP Address</td>
+            <td style="font-size:14px;font-weight:700;color:#160c08;font-family:monospace;vertical-align:middle;">{{ $ipAddress }}</td>
           </tr>
         </table>
       </td>
     </tr>
+
     <tr>
-      <td style="background:#f5f0eb;padding:14px 20px;">
+      <td style="background:#faf6f2;padding:14px 20px;border-bottom:1px solid #ede4dc;">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            <td style="font-size:13px;color:#9e8272;width:120px;">Time</td>
-            <td style="font-size:14px;font-weight:600;color:#160c08;">{{ $time }}</td>
+            <td width="20" style="vertical-align:middle;padding-right:12px;font-size:16px;">📍</td>
+            <td style="font-size:12px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;font-weight:600;width:100px;vertical-align:middle;">Location</td>
+            <td style="font-size:14px;font-weight:700;color:#160c08;vertical-align:middle;">{{ $location }}</td>
           </tr>
         </table>
       </td>
     </tr>
+
+    <tr>
+      <td style="background:#ffffff;padding:14px 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td width="20" style="vertical-align:middle;padding-right:12px;font-size:16px;">🕐</td>
+            <td style="font-size:12px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;font-weight:600;width:100px;vertical-align:middle;">Time</td>
+            <td style="font-size:14px;font-weight:700;color:#160c08;vertical-align:middle;">{{ $time }}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
   </table>
 
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+  {{-- Warning banner --}}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
     <tr>
-      <td style="background:#fff5f5;border-left:3px solid #e74c3c;border-radius:0 8px 8px 0;padding:14px 18px;">
-        <p style="margin:0;font-size:13px;color:#7a3030;line-height:1.6;">
-          🔒 If this wasn't you, reset your password immediately. Someone else may have access to your account.
+      <td style="background:#fff8f0;border:1px solid #f5c9a0;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#b45309;">Not you?</p>
+        <p style="margin:0;font-size:13px;color:#7c4b1e;line-height:1.6;">
+          If you didn't sign in, reset your password immediately to secure your account.
         </p>
       </td>
     </tr>
   </table>
 
-  <p style="margin:0;font-size:14px;color:#9e8272;">
-    Stay secure,<br/>
-    <strong style="color:#160c08;">The SBA Reads Team</strong>
+  {{-- CTA button --}}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+    <tr>
+      <td align="center">
+        <a href="{{ config('app.url') }}/forgot-password"
+           style="display:inline-block;background:#e67e22;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;padding:14px 32px;border-radius:8px;letter-spacing:0.5px;">
+          Reset My Password
+        </a>
+      </td>
+    </tr>
+  </table>
+
+  <p style="margin:0;font-size:13px;color:#9e8272;text-align:center;line-height:1.8;">
+    If this was you, no action is needed. Stay safe!<br/>
+    <strong style="color:#160c08;">— The SBA Reads Team</strong>
   </p>
+
 @endsection
