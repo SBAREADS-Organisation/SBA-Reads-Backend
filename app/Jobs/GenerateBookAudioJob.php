@@ -6,7 +6,7 @@ use App\Models\Book;
 use App\Models\User;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\ElevenLabs\ElevenLabsService;
-use Cloudinary\Configuration\Configuration;
+use App\Services\Notification\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,15 +29,18 @@ class GenerateBookAudioJob implements ShouldQueue
         protected User $author
     ) {}
 
-    public function handle(ElevenLabsService $elevenLabs, CloudinaryMediaUploadService $cloudinary): void
-    {
+    public function handle(
+        ElevenLabsService $elevenLabs,
+        CloudinaryMediaUploadService $cloudinary,
+        NotificationService $notifications
+    ): void {
         $this->book->update(['audio_status' => 'processing']);
 
         try {
             // Step 1: Download PDF to a temp file
             $pdfUrl = $this->book->files[0]['public_url'] ?? null;
             if (! $pdfUrl) {
-                throw new \RuntimeException('No PDF file found on this book');
+                throw new \RuntimeException('No PDF file found on this book.');
             }
 
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
@@ -45,67 +48,93 @@ class GenerateBookAudioJob implements ShouldQueue
 
             // Step 2: Extract plain text from PDF
             $parser = new Parser;
-            $pdf = $parser->parseFile($tempPdfPath);
-            $text = $pdf->getText();
+            $text   = trim(preg_replace('/\s+/', ' ', $parser->parseFile($tempPdfPath)->getText()));
             @unlink($tempPdfPath);
 
-            $text = trim(preg_replace('/\s+/', ' ', $text));
-
             if (empty($text)) {
-                throw new \RuntimeException('PDF text extraction returned empty content');
+                throw new \RuntimeException('PDF text extraction returned empty content. The PDF may be image-only.');
             }
 
-            // Step 3: Chunk text into segments ElevenLabs can handle (~2500 chars each)
-            $chunks = $this->chunkText($text, 2500);
-
-            // Step 4: Generate audio for each chunk and upload to Cloudinary
+            // Step 3: Chunk text into ~2500-char segments
+            $chunks  = $this->chunkText($text, 2500);
             $voiceId = $this->author->elevenlabs_voice_id;
+
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }
 
+            // Step 4: Generate audio for each chunk — skip failures rather than aborting the whole book
             $segmentUrls = [];
-            $totalWords = 0;
+            $totalWords  = 0;
+            $failed      = 0;
 
             foreach ($chunks as $index => $chunk) {
-                $audioBinary = $elevenLabs->generateSpeech($voiceId, $chunk);
+                try {
+                    $audioBinary = $elevenLabs->generateSpeech($voiceId, $chunk);
 
-                $tempAudioPath = tempnam(sys_get_temp_dir(), 'sbareads_audio_').'.mp3';
-                file_put_contents($tempAudioPath, $audioBinary);
+                    $tempAudioPath = tempnam(sys_get_temp_dir(), 'sbareads_audio_').'.mp3';
+                    file_put_contents($tempAudioPath, $audioBinary);
 
-                $uploaded = $cloudinary->uploadFromPath(
-                    $tempAudioPath,
-                    'book_audio',
-                    'book_'.$this->book->id.'_seg_'.$index
-                );
+                    $uploaded = $cloudinary->uploadFromPath(
+                        $tempAudioPath,
+                        'book_audio',
+                        'book_'.$this->book->id.'_seg_'.$index
+                    );
 
-                @unlink($tempAudioPath);
-                $segmentUrls[] = $uploaded['url'];
-                $totalWords += str_word_count($chunk);
+                    @unlink($tempAudioPath);
+                    $segmentUrls[] = $uploaded['url'];
+                    $totalWords   += str_word_count($chunk);
+
+                } catch (\Throwable $e) {
+                    $failed++;
+                    Log::warning("Audio chunk {$index} failed for book {$this->book->id}: ".$e->getMessage());
+                    // Continue with remaining chunks — partial audio is better than no audio
+                }
             }
 
-            // Estimate total duration: average reading speed ~150 words/min
+            if (empty($segmentUrls)) {
+                throw new \RuntimeException("All {$failed} audio chunks failed to generate.");
+            }
+
+            // Estimate duration: ~150 words/min average reading speed
             $estimatedDuration = (int) (($totalWords / 150) * 60);
 
             $this->book->update([
-                'audio_status' => 'ready',
-                'audio_url' => $segmentUrls[0],
+                'audio_status'   => 'ready',
+                'audio_url'      => $segmentUrls[0],
                 'audio_duration' => $estimatedDuration,
                 'audio_segments' => $segmentUrls,
             ]);
 
-            Log::info("Audio generation complete for book {$this->book->id}: ".count($segmentUrls).' segments, ~'.$estimatedDuration.'s');
+            $segmentCount = count($segmentUrls);
+            $skipped      = $failed > 0 ? " ({$failed} segments skipped due to errors)" : '';
+            Log::info("Audio generation complete for book {$this->book->id}: {$segmentCount} segments, ~{$estimatedDuration}s{$skipped}");
+
+            // Notify the author that their audiobook is ready
+            $notifications->send(
+                $this->author,
+                'Your audiobook is ready!',
+                "\"{$this->book->title}\" has been converted to audio and is now available.",
+                ['in-app', 'push']
+            );
 
         } catch (\Throwable $e) {
             Log::error("Audio generation failed for book {$this->book->id}: ".$e->getMessage());
             $this->book->update(['audio_status' => 'failed']);
+
+            if ($this->attempts() >= $this->tries) {
+                $notifications->send(
+                    $this->author,
+                    'Audio generation failed',
+                    "We could not generate audio for \"{$this->book->title}\". Please try again.",
+                    ['in-app', 'push']
+                );
+            }
+
             throw $e;
         }
     }
 
-    /**
-     * Split text into chunks at sentence boundaries, each under $maxChars.
-     */
     private function chunkText(string $text, int $maxChars): array
     {
         $chunks = [];
@@ -116,9 +145,7 @@ class GenerateBookAudioJob implements ShouldQueue
                 break;
             }
 
-            $slice = substr($text, 0, $maxChars);
-
-            // Prefer breaking at sentence end closest to the limit
+            $slice    = substr($text, 0, $maxChars);
             $breakPos = max(
                 (int) strrpos($slice, '. '),
                 (int) strrpos($slice, '! '),
@@ -126,15 +153,14 @@ class GenerateBookAudioJob implements ShouldQueue
                 (int) strrpos($slice, "\n")
             );
 
-            // Fall back to hard cut if no good break found in the second half
             if ($breakPos < $maxChars / 2) {
                 $breakPos = $maxChars;
             } else {
-                $breakPos += 2; // include the punctuation and space
+                $breakPos += 2;
             }
 
             $chunks[] = trim(substr($text, 0, $breakPos));
-            $text = substr($text, $breakPos);
+            $text     = substr($text, $breakPos);
         }
 
         return array_values(array_filter($chunks, fn ($c) => ! empty(trim($c))));

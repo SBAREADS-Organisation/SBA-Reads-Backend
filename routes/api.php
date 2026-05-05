@@ -112,6 +112,7 @@ Route::prefix('user')->group(function () {
 
         // Voice Sample (for PDF-to-audio with author's cloned voice)
         Route::post('voice-sample', [AudioController::class, 'uploadVoiceSample'])->name('upload-voice-sample');
+        Route::get('voice-status', [AudioController::class, 'getVoiceStatus'])->name('voice-status');
 
         // User KYC Routes
         Route::prefix('kyc')->group(function () {

@@ -5,7 +5,7 @@
   <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#e67e22;text-transform:uppercase;letter-spacing:1px;">Submission Update</p>
   <h1 style="margin:0 0 16px;font-size:24px;font-weight:700;color:#160c08;">Book Requires Revision</h1>
   <p style="margin:0 0 24px;font-size:15px;color:#4a3728;line-height:1.7;">
-    Hi {{ $user->name }}, thank you for submitting your book. After careful review, our editorial team has determined that it needs some revisions before it can be published.
+    Hi there, thank you for submitting your book. After careful review, our team has determined that it needs some revisions before it can be published.
   </p>
 
   {{-- Book info --}}
@@ -46,6 +46,6 @@
 
   <p style="margin:0;font-size:14px;color:#9e8272;">
     Keep writing,<br/>
-    <strong style="color:#160c08;">The SBA Reads Editorial Team</strong>
+    <strong style="color:#160c08;">The SBA Reads Team</strong>
   </p>
 @endsection

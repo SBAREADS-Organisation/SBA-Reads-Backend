@@ -49,6 +49,6 @@
 
   <p style="margin:0;font-size:14px;color:#9e8272;">
     Congratulations again,<br/>
-    <strong style="color:#160c08;">The SBA Reads Editorial Team</strong>
+    <strong style="color:#160c08;">The SBA Reads Team</strong>
   </p>
 @endsection

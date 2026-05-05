@@ -8,16 +8,16 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-          
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -25,59 +25,101 @@ jobs:
           username: ubuntu
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Go to development directory
+            # ── 1. Install Redis if not already present ───────────────────────
+            if ! command -v redis-server &>/dev/null; then
+              sudo apt-get update -qq
+              sudo apt-get install -y redis-server
+              sudo systemctl enable redis-server
+              sudo systemctl start redis-server
+              echo "Redis installed and started"
+            fi
+
+            # ── 2. Pull latest code ───────────────────────────────────────────
             cd /home/ubuntu/SBA-Reads-Backend
-            
-            # Pull latest code
             git fetch origin
             git reset --hard origin/main
-            
-            # Copy files to production directory (excluding .env)
-            sudo rsync -av --exclude='.env' --exclude='.git' --exclude='node_modules' --exclude='vendor' /home/ubuntu/SBA-Reads-Backend/ /var/www/html/
-            
-            # Keep only the 2 most recent backups, then create a new one
+
+            # ── 3. Sync to production (exclude .env, git, node_modules, vendor)
+            sudo rsync -av \
+              --exclude='.env' \
+              --exclude='.git' \
+              --exclude='node_modules' \
+              --exclude='vendor' \
+              /home/ubuntu/SBA-Reads-Backend/ /var/www/html/
+
+            # ── 4. Keep only 1 backup ─────────────────────────────────────────
             sudo ls -dt /var/www/html_backup_* 2>/dev/null | tail -n +2 | xargs sudo rm -rf || true
             sudo cp -r /var/www/html /var/www/html_backup_$(date +%Y%m%d_%H%M%S) || true
-            
-            # Go to production directory for remaining commands
+
             cd /var/www/html
-            
-            # Create and set permissions for cache directories
-            sudo mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views
-            sudo chown -R www-data:www-data bootstrap/cache storage/framework
-            sudo chmod -R 775 bootstrap/cache storage/framework
-            
-            # Install PHP dependencies
+
+            # ── 5. Ensure cache and storage dirs exist with correct ownership ─
+            sudo mkdir -p bootstrap/cache storage/framework/cache storage/framework/sessions storage/framework/views storage/logs
+            sudo chown -R www-data:www-data bootstrap/cache storage/framework storage/logs
+            sudo chmod -R 775 bootstrap/cache storage/framework storage/logs
+
+            # ── 6. Ensure Redis queue/cache settings are in .env ──────────────
+            sudo grep -q "^QUEUE_CONNECTION=" /var/www/html/.env \
+              && sudo sed -i 's/^QUEUE_CONNECTION=.*/QUEUE_CONNECTION=redis/' /var/www/html/.env \
+              || echo "QUEUE_CONNECTION=redis" | sudo tee -a /var/www/html/.env
+            sudo grep -q "^CACHE_STORE=" /var/www/html/.env \
+              && sudo sed -i 's/^CACHE_STORE=.*/CACHE_STORE=redis/' /var/www/html/.env \
+              || echo "CACHE_STORE=redis" | sudo tee -a /var/www/html/.env
+            sudo grep -q "^REDIS_CLIENT=" /var/www/html/.env \
+              && sudo sed -i 's/^REDIS_CLIENT=.*/REDIS_CLIENT=predis/' /var/www/html/.env \
+              || echo "REDIS_CLIENT=predis" | sudo tee -a /var/www/html/.env
+
+            # ── 7. Install PHP dependencies ───────────────────────────────────
             composer install --no-dev --optimize-autoloader --no-interaction
-            
-            # Install Node dependencies and build
+
+            # ── 8. Build frontend assets ──────────────────────────────────────
             npm install
             npm run build
-            
-            # Set permissions before running artisan so cache files are owned by www-data
+
+            # ── 9. Fix ownership so artisan commands run as www-data ──────────
             sudo chown -R www-data:www-data /var/www/html
 
-            # Clear all Laravel caches first
+            # ── 10. Clear and rebuild Laravel caches ──────────────────────────
             sudo -u www-data php artisan optimize:clear
+            sudo -u www-data php artisan config:cache  || echo "Config cache failed"
+            sudo -u www-data php artisan route:cache   || echo "Route cache failed"
+            sudo -u www-data php artisan view:cache    || echo "View cache failed"
 
-            # Run Laravel optimizations (with error handling)
-            sudo -u www-data php artisan config:cache || echo "Config cache failed"
-            sudo -u www-data php artisan route:cache || echo "Route cache failed"
-            sudo -u www-data php artisan view:cache || echo "View cache failed"
-
-            # Run migrations (with rollback safety)
+            # ── 11. Run migrations ────────────────────────────────────────────
             sudo -u www-data php artisan migrate --force || echo "Migration failed"
+
+            # ── 12. Set final permissions ─────────────────────────────────────
             sudo find /var/www/html -type f -exec chmod 644 {} \;
             sudo find /var/www/html -type d -exec chmod 755 {} \;
             sudo chmod -R 775 /var/www/html/storage
             sudo chmod -R 775 /var/www/html/bootstrap/cache
-            
-            # Restart web services
+
+            # ── 13. Install/update Horizon Supervisor config ──────────────────
+            sudo tee /etc/supervisor/conf.d/sba-horizon.conf > /dev/null <<'SUPERVISOREOF'
+            [program:sba-horizon]
+            process_name=%(program_name)s
+            command=php /var/www/html/artisan horizon
+            autostart=true
+            autorestart=true
+            user=www-data
+            redirect_stderr=true
+            stdout_logfile=/var/www/html/storage/logs/horizon.log
+            stopwaitsecs=3600
+            SUPERVISOREOF
+
+            # Remove old per-queue worker configs if they still exist
+            sudo rm -f /etc/supervisor/conf.d/sba-queue.conf
+            sudo rm -f /etc/supervisor/conf.d/sba-queue-default.conf
+            sudo rm -f /etc/supervisor/conf.d/sba-queue-audio.conf
+
+            sudo supervisorctl reread
+            sudo supervisorctl update
+
+            # ── 14. Restart services ──────────────────────────────────────────
             sudo systemctl reload nginx
             sudo systemctl restart php8.4-fpm
-            
-            # Clear Laravel caches
-            php artisan cache:clear
-            php artisan queue:restart || true
-            
+
+            # Signal Horizon to gracefully restart workers with new code
+            sudo supervisorctl restart sba-horizon || sudo supervisorctl start sba-horizon
+
             echo "Deployment completed successfully!"

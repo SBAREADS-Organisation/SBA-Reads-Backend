@@ -1,7 +1,7 @@
 <x-mail::message>
 # Set up your payouts with Stripe
 
-Hi {{ $user->name }},
+Hi {{ ($user->name && $user->name !== 'NO NAME') ? $user->name : 'there' }},
 
 To receive payouts from Sbareads-Library, please finish your Stripe onboarding. This is a secure process handled by Stripe.
 

@@ -9,7 +9,9 @@ use App\Services\Stripe\StripeConnectService;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Broadcast;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Horizon\Horizon;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -37,6 +39,12 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Restrict Horizon dashboard to superadmin and admin roles
+        Horizon::auth(function ($request) {
+            $user = $request->user();
+            return $user && in_array($user->account_type, ['admin', 'manager', 'superadmin']);
+        });
+
         // Resolve the router from the container
         /** @var Router $router */
         $router = $this->app->make(Router::class);

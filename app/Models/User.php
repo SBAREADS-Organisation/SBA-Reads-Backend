@@ -54,6 +54,7 @@ class User extends Authenticatable
         'device_token',
         'voice_sample_url',
         'elevenlabs_voice_id',
+        'voice_status',
     ];
 
     /**
