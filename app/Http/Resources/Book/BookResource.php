@@ -66,6 +66,7 @@ class BookResource extends JsonResource
             'files' => $this->files,
             'audio_status' => $this->audio_status ?? 'none',
             'audio_url' => $this->audio_url,
+            'audio_sample_url' => $this->audio_sample_url,
             'audio_duration' => $this->audio_duration,
             'audio_segments' => $this->audio_segments ?? [],
             'categories' => $this->categories->map(function ($cat) {

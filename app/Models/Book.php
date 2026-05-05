@@ -57,6 +57,7 @@ class Book extends Model
         'audio_url',
         'audio_duration',
         'audio_segments',
+        'audio_sample_url',
     ];
 
     /**

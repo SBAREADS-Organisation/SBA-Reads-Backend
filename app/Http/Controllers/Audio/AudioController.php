@@ -137,7 +137,7 @@ class AudioController extends Controller
      */
     public function getAudioStatus(int $bookId)
     {
-        $book = Book::select('id', 'audio_status', 'audio_url', 'audio_duration', 'audio_segments')
+        $book = Book::select('id', 'audio_status', 'audio_url', 'audio_sample_url', 'audio_duration', 'audio_segments')
             ->find($bookId);
 
         if (! $book) {
@@ -145,10 +145,11 @@ class AudioController extends Controller
         }
 
         return $this->success([
-            'audio_status'    => $book->audio_status ?? 'none',
-            'audio_url'       => $book->audio_url,
-            'audio_duration'  => $book->audio_duration,
-            'audio_segments'  => $book->audio_segments ?? [],
+            'audio_status'     => $book->audio_status ?? 'none',
+            'audio_url'        => $book->audio_url,
+            'audio_sample_url' => $book->audio_sample_url,
+            'audio_duration'   => $book->audio_duration,
+            'audio_segments'   => $book->audio_segments ?? [],
         ]);
     }
 }

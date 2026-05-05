@@ -85,6 +85,12 @@ class GenerateBookAudioJob implements ShouldQueue
                     $segmentUrls[] = $uploaded['url'];
                     $totalWords   += str_word_count($chunk);
 
+                    // First chunk done — save it immediately as the sample so readers
+                    // can preview while the rest of the book is still generating
+                    if ($index === 0) {
+                        $this->book->update(['audio_sample_url' => $uploaded['url']]);
+                    }
+
                 } catch (\Throwable $e) {
                     $failed++;
                     Log::warning("Audio chunk {$index} failed for book {$this->book->id}: ".$e->getMessage());
