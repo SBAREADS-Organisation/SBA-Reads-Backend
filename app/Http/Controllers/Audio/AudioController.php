@@ -120,7 +120,7 @@ class AudioController extends Controller
 
         $book->update(['audio_status' => 'pending']);
 
-        GenerateBookAudioJob::dispatch($book, $user);
+        GenerateBookAudioJob::dispatch($book, $user)->onQueue('audio');
 
         return $this->success([
             'audio_status' => 'pending',
