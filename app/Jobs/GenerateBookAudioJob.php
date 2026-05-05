@@ -22,7 +22,9 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 1800; // 30 minutes — large books need time
+    public int $timeout = 1800;
+
+    public string $queue = 'audio';
 
     public function __construct(
         protected Book $book,

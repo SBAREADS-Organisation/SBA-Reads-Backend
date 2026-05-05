@@ -35,7 +35,8 @@ jobs:
             # Copy files to production directory (excluding .env)
             sudo rsync -av --exclude='.env' --exclude='.git' --exclude='node_modules' --exclude='vendor' /home/ubuntu/SBA-Reads-Backend/ /var/www/html/
             
-            # Create backup of current production version
+            # Keep only the 2 most recent backups, then create a new one
+            sudo ls -dt /var/www/html_backup_* 2>/dev/null | tail -n +2 | xargs sudo rm -rf || true
             sudo cp -r /var/www/html /var/www/html_backup_$(date +%Y%m%d_%H%M%S) || true
             
             # Go to production directory for remaining commands
@@ -53,19 +54,19 @@ jobs:
             npm install
             npm run build
             
-            # Clear all Laravel caches first
-            php artisan optimize:clear
-            
-            # Run Laravel optimizations (with error handling)
-            php artisan config:cache || echo "Config cache failed"
-            php artisan route:cache || echo "Route cache failed"
-            php artisan view:cache || echo "View cache failed"
-            
-            # Run migrations (with rollback safety)
-            php artisan migrate --force || echo "Migration failed"
-            
-            # Set proper permissions for web server
+            # Set permissions before running artisan so cache files are owned by www-data
             sudo chown -R www-data:www-data /var/www/html
+
+            # Clear all Laravel caches first
+            sudo -u www-data php artisan optimize:clear
+
+            # Run Laravel optimizations (with error handling)
+            sudo -u www-data php artisan config:cache || echo "Config cache failed"
+            sudo -u www-data php artisan route:cache || echo "Route cache failed"
+            sudo -u www-data php artisan view:cache || echo "View cache failed"
+
+            # Run migrations (with rollback safety)
+            sudo -u www-data php artisan migrate --force || echo "Migration failed"
             sudo find /var/www/html -type f -exec chmod 644 {} \;
             sudo find /var/www/html -type d -exec chmod 755 {} \;
             sudo chmod -R 775 /var/www/html/storage
