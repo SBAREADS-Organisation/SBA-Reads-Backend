@@ -37,7 +37,7 @@ class ElevenLabsService
      */
     public function generateSpeech(string $voiceId, string $text): string
     {
-        $response = Http::withHeaders([
+        $response = Http::timeout(180)->withHeaders([
             'xi-api-key' => $this->apiKey,
             'Content-Type' => 'application/json',
             'Accept' => 'audio/mpeg',

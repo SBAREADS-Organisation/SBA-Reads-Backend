@@ -55,8 +55,8 @@ class GenerateBookAudioJob implements ShouldQueue
                 throw new \RuntimeException('PDF text extraction returned empty content');
             }
 
-            // Step 3: Chunk text into segments ElevenLabs can handle (~4000 chars each)
-            $chunks = $this->chunkText($text, 4000);
+            // Step 3: Chunk text into segments ElevenLabs can handle (~2500 chars each)
+            $chunks = $this->chunkText($text, 2500);
 
             // Step 4: Generate audio for each chunk and upload to Cloudinary
             $voiceId = $this->author->elevenlabs_voice_id;
