@@ -127,6 +127,14 @@ class GenerateBookAudioJob implements ShouldQueue
                 return;
             }
 
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
+                Log::critical("GenerateBookAudioJob: ElevenLabs quota exhausted — top up the account. Book {$this->book->id} cannot be processed.");
+                $this->book->update(['audio_status' => 'failed']);
+                $this->fail($e);
+
+                return;
+            }
+
             throw $e;
         }
     }

@@ -7,6 +7,7 @@ use App\Jobs\GenerateBookAudioJob;
 use App\Jobs\VoiceCloningJob;
 use App\Models\Book;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
+use App\Services\ElevenLabs\ElevenLabsService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -195,5 +196,24 @@ class AudioController extends Controller
             'audio_duration'   => $book->audio_duration,
             'audio_segments'   => $book->audio_segments ?? [],
         ]);
+    }
+
+    /**
+     * Admin-only: return ElevenLabs character quota usage.
+     * GET /admin/elevenlabs/quota
+     */
+    public function getElevenLabsQuota(ElevenLabsService $elevenLabs)
+    {
+        try {
+            $quota = $elevenLabs->getQuota();
+
+            return $this->success($quota, $quota['is_low']
+                ? 'Warning: ElevenLabs credit is running low (under 10% remaining).'
+                : 'ElevenLabs quota fetched successfully.');
+        } catch (\Throwable $e) {
+            Log::error('Failed to fetch ElevenLabs quota: '.$e->getMessage());
+
+            return $this->error('Could not fetch ElevenLabs quota: '.$e->getMessage(), 500);
+        }
     }
 }

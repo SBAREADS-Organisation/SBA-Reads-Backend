@@ -242,6 +242,44 @@ class ElevenLabsService
     }
 
     // ─────────────────────────────────────────────
+    // Account / quota
+    // ─────────────────────────────────────────────
+
+    /**
+     * Fetch the current character quota from ElevenLabs.
+     * Returns an array with: used, limit, remaining, percent_used, resets_at
+     */
+    public function getQuota(): array
+    {
+        $response = Http::timeout(15)
+            ->withHeaders(['xi-api-key' => $this->apiKey])
+            ->get("{$this->baseUrl}/user/subscription");
+
+        if (! $response->successful()) {
+            $this->logFailure('getQuota', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Quota fetch failed', $response->body());
+        }
+
+        $data      = $response->json();
+        $used      = (int) ($data['character_count'] ?? 0);
+        $limit     = (int) ($data['character_limit'] ?? 0);
+        $remaining = max(0, $limit - $used);
+        $resetsAt  = isset($data['next_character_count_reset_unix'])
+            ? date('Y-m-d H:i:s', $data['next_character_count_reset_unix'])
+            : null;
+
+        return [
+            'used'         => $used,
+            'limit'        => $limit,
+            'remaining'    => $remaining,
+            'percent_used' => $limit > 0 ? round(($used / $limit) * 100, 1) : 0,
+            'resets_at'    => $resetsAt,
+            'is_low'       => $limit > 0 && ($remaining / $limit) < 0.10, // under 10% = low
+            'tier'         => $data['tier'] ?? null,
+        ];
+    }
+
+    // ─────────────────────────────────────────────
     // Internal helpers
     // ─────────────────────────────────────────────
 
@@ -269,6 +307,12 @@ class ElevenLabsService
         }
 
         if ($status === 401 || $status === 403) {
+            // ElevenLabs also sends 401 for quota_exceeded — check the body before assuming auth failure
+            $errorStatus = json_decode($body, true)['detail']['status'] ?? '';
+            if ($errorStatus === 'quota_exceeded') {
+                throw new \RuntimeException("ELEVENLABS_QUOTA_EXCEEDED: {$context}. {$body}");
+            }
+
             throw new \RuntimeException("ElevenLabs authentication error [{$status}] in {$context}. Check ELEVENLABS_API_KEY.");
         }
 
