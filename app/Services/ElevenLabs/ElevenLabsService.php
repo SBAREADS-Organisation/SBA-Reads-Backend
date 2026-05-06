@@ -82,8 +82,10 @@ class ElevenLabsService
      */
     public function createProject(string $name, string $voiceId): string
     {
-        $response = Http::timeout(30)->withHeaders(['xi-api-key' => $this->apiKey])
-            ->post("{$this->baseUrl}/projects/add", [
+        $response = Http::timeout(30)->withHeaders([
+            'xi-api-key'   => $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->post("{$this->baseUrl}/projects/add", [
                 'name'                          => $name,
                 'default_title_voice_id'        => $voiceId,
                 'default_paragraph_voice_id'    => $voiceId,
@@ -124,8 +126,10 @@ class ElevenLabsService
      */
     public function convertChapter(string $projectId, string $chapterId): void
     {
-        $response = Http::timeout(30)->withHeaders(['xi-api-key' => $this->apiKey])
-            ->post("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/convert");
+        $response = Http::timeout(30)->withHeaders([
+            'xi-api-key'   => $this->apiKey,
+            'Content-Type' => 'application/json',
+        ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/convert");
 
         if (! $response->successful()) {
             throw new \RuntimeException('ElevenLabs chapter conversion failed: '.$response->body());
