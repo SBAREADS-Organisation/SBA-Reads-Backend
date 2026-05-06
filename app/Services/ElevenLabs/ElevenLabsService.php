@@ -63,10 +63,9 @@ class ElevenLabsService
 
     public function generateSpeech(string $voiceId, string $text): string
     {
-        $response = Http::timeout(180)->withHeaders([
-            'xi-api-key'   => $this->apiKey,
-            'Content-Type' => 'application/json',
-            'Accept'       => 'audio/mpeg',
+        $response = Http::timeout(180)->asJson()->withHeaders([
+            'xi-api-key' => $this->apiKey,
+            'Accept'     => 'audio/mpeg',
         ])->post("{$this->baseUrl}/text-to-speech/{$voiceId}", [
             'text'           => $text,
             'model_id'       => 'eleven_multilingual_v2',
@@ -94,9 +93,8 @@ class ElevenLabsService
      */
     public function createProject(string $name, string $voiceId): string
     {
-        $response = Http::timeout(60)->withHeaders([
-            'xi-api-key'   => $this->apiKey,
-            'Content-Type' => 'application/json',
+        $response = Http::timeout(60)->asJson()->withHeaders([
+            'xi-api-key' => $this->apiKey,
         ])->post("{$this->baseUrl}/projects/add", [
             'name'                       => $name,
             'default_title_voice_id'     => $voiceId,
@@ -127,9 +125,8 @@ class ElevenLabsService
      */
     public function addChapter(string $projectId, string $name, string $text): string
     {
-        $response = Http::timeout(120)->withHeaders([
-            'xi-api-key'   => $this->apiKey,
-            'Content-Type' => 'application/json',
+        $response = Http::timeout(120)->asJson()->withHeaders([
+            'xi-api-key' => $this->apiKey,
         ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/add", [
             'name'    => $name,
             'content' => $text,
@@ -156,9 +153,8 @@ class ElevenLabsService
      */
     public function convertChapter(string $projectId, string $chapterId): void
     {
-        $response = Http::timeout(60)->withHeaders([
-            'xi-api-key'   => $this->apiKey,
-            'Content-Type' => 'application/json',
+        $response = Http::timeout(60)->asJson()->withHeaders([
+            'xi-api-key' => $this->apiKey,
         ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/convert");
 
         if (! $response->successful()) {
