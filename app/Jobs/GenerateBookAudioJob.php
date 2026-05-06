@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\Book;
 use App\Models\User;
-use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\ElevenLabs\ElevenLabsService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Bus\Queueable;
@@ -22,7 +21,7 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 1800;
+    public int $timeout = 300;
 
     public function __construct(
         protected Book $book,
@@ -31,7 +30,6 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public function handle(
         ElevenLabsService $elevenLabs,
-        CloudinaryMediaUploadService $cloudinary,
         NotificationService $notifications
     ): void {
         $this->book->update(['audio_status' => 'processing']);
@@ -55,84 +53,47 @@ class GenerateBookAudioJob implements ShouldQueue
                 throw new \RuntimeException('PDF text extraction returned empty content. The PDF may be image-only.');
             }
 
-            // Step 3: Chunk text into ~2500-char segments
-            $chunks  = $this->chunkText($text, 2500);
             $voiceId = $this->author->elevenlabs_voice_id;
-
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }
 
-            // Step 4: Generate audio for each chunk — skip failures rather than aborting the whole book
-            $segmentUrls = [];
-            $totalWords  = 0;
-            $failed      = 0;
+            // Step 3: Create an ElevenLabs project for long-form audio
+            $projectName = 'book-'.$this->book->id.'-'.time();
+            Log::info("Creating ElevenLabs project for book {$this->book->id}, voice {$voiceId}");
+            $projectId   = $elevenLabs->createProject($projectName, $voiceId);
+            Log::info("ElevenLabs project created: {$projectId}");
 
-            foreach ($chunks as $index => $chunk) {
-                try {
-                    $audioBinary = $elevenLabs->generateSpeech($voiceId, $chunk);
+            $this->book->update(['elevenlabs_project_id' => $projectId]);
 
-                    $tempAudioPath = tempnam(sys_get_temp_dir(), 'sbareads_audio_').'.mp3';
-                    file_put_contents($tempAudioPath, $audioBinary);
+            // Step 4: Split into 45,000-char chapters and kick off conversion
+            $chapters   = $this->chunkText($text, 45000);
+            $chapterIds = [];
 
-                    $uploaded = $cloudinary->uploadFromPath(
-                        $tempAudioPath,
-                        'book_audio',
-                        'book_'.$this->book->id.'_seg_'.$index
-                    );
-
-                    @unlink($tempAudioPath);
-                    $segmentUrls[] = $uploaded['url'];
-                    $totalWords   += str_word_count($chunk);
-
-                    // First chunk done — save it immediately as the sample so readers
-                    // can preview while the rest of the book is still generating
-                    if ($index === 0) {
-                        $this->book->update(['audio_sample_url' => $uploaded['url']]);
-                    }
-
-                } catch (\Throwable $e) {
-                    $failed++;
-                    Log::warning("Audio chunk {$index} failed for book {$this->book->id}: ".$e->getMessage());
-                    // Continue with remaining chunks — partial audio is better than no audio
-                }
+            foreach ($chapters as $i => $chapterText) {
+                Log::info("Adding chapter ".($i + 1)." (".strlen($chapterText)." chars) to project {$projectId}");
+                $chapterId    = $elevenLabs->addChapter($projectId, 'Chapter '.($i + 1), $chapterText);
+                $chapterIds[] = $chapterId;
+                Log::info("Chapter ".($i + 1)." added: {$chapterId}, triggering conversion");
+                $elevenLabs->convertChapter($projectId, $chapterId);
             }
 
-            if (empty($segmentUrls)) {
-                throw new \RuntimeException("All {$failed} audio chunks failed to generate.");
-            }
+            Log::info("ElevenLabs project {$projectId} created for book {$this->book->id} with ".count($chapterIds).' chapters.');
 
-            // Estimate duration: ~150 words/min average reading speed
-            $estimatedDuration = (int) (($totalWords / 150) * 60);
-
-            $this->book->update([
-                'audio_status'   => 'ready',
-                'audio_url'      => $segmentUrls[0],
-                'audio_duration' => $estimatedDuration,
-                'audio_segments' => $segmentUrls,
-            ]);
-
-            $segmentCount = count($segmentUrls);
-            $skipped      = $failed > 0 ? " ({$failed} segments skipped due to errors)" : '';
-            Log::info("Audio generation complete for book {$this->book->id}: {$segmentCount} segments, ~{$estimatedDuration}s{$skipped}");
-
-            // Notify the author that their audiobook is ready
-            $notifications->send(
-                $this->author,
-                'Your audiobook is ready!',
-                "\"{$this->book->title}\" has been converted to audio and is now available.",
-                ['in-app', 'push']
-            );
+            // Step 5: Hand off to the polling job — checks every 2 minutes until all chapters are done
+            DownloadBookAudioJob::dispatch($this->book->id, $this->author->id, $projectId, $chapterIds)
+                ->onQueue('audio')
+                ->delay(now()->addMinutes(2));
 
         } catch (\Throwable $e) {
-            Log::error("Audio generation failed for book {$this->book->id}: ".$e->getMessage());
+            Log::error("Audio generation setup failed for book {$this->book->id}: ".$e->getMessage());
             $this->book->update(['audio_status' => 'failed']);
 
             if ($this->attempts() >= $this->tries) {
                 $notifications->send(
                     $this->author,
                     'Audio generation failed',
-                    "We could not generate audio for \"{$this->book->title}\". Please try again.",
+                    "We could not start audio generation for \"{$this->book->title}\". Please try again.",
                     ['in-app', 'push']
                 );
             }

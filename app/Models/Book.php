@@ -58,6 +58,7 @@ class Book extends Model
         'audio_duration',
         'audio_segments',
         'audio_sample_url',
+        'elevenlabs_project_id',
     ];
 
     /**

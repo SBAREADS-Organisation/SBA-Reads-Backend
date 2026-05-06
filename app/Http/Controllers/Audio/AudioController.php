@@ -121,7 +121,14 @@ class AudioController extends Controller
             return $this->error('Audio generation is already in progress for this book.', 422);
         }
 
-        $book->update(['audio_status' => 'pending']);
+        // Clear any stale audio data from a previous run before starting fresh
+        $book->update([
+            'audio_status'     => 'pending',
+            'audio_url'        => null,
+            'audio_sample_url' => null,
+            'audio_segments'   => null,
+            'audio_duration'   => null,
+        ]);
 
         GenerateBookAudioJob::dispatch($book, $user)->onQueue('audio');
 
