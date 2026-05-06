@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Book;
 use App\Models\User;
+use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\ElevenLabs\ElevenLabsService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Bus\Queueable;
@@ -23,7 +24,6 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $timeout = 600;
 
-    // Wait 60 s before attempt 2, 120 s before attempt 3 (if tries ever raised)
     public array $backoff = [60, 120];
 
     public function __construct(
@@ -31,19 +31,15 @@ class GenerateBookAudioJob implements ShouldQueue
         protected User $author
     ) {}
 
-    public function handle(ElevenLabsService $elevenLabs): void
-    {
+    public function handle(
+        ElevenLabsService $elevenLabs,
+        CloudinaryMediaUploadService $cloudinary
+    ): void {
         ini_set('memory_limit', '512M');
 
         $this->book->update(['audio_status' => 'processing']);
 
         try {
-            // Clean up any orphaned ElevenLabs project left from a prior failed attempt
-            if ($this->book->elevenlabs_project_id) {
-                $elevenLabs->deleteProject($this->book->elevenlabs_project_id);
-                $this->book->update(['elevenlabs_project_id' => null]);
-            }
-
             // Step 1: Download PDF to a temp file
             $pdfUrl = $this->book->files[0]['public_url'] ?? null;
             if (! $pdfUrl) {
@@ -63,37 +59,59 @@ class GenerateBookAudioJob implements ShouldQueue
             }
 
             $voiceId = $this->author->elevenlabs_voice_id;
-
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }
 
-            // Step 3: Create an ElevenLabs project for long-form audio
-            $projectName = 'book-'.$this->book->id.'-'.time();
-            Log::info("GenerateBookAudioJob: creating project for book {$this->book->id}, voice {$voiceId}");
-            $projectId = $elevenLabs->createProject($projectName, $voiceId);
-            Log::info("GenerateBookAudioJob: project [{$projectId}] created for book {$this->book->id}");
+            // Step 3: Split into 4,500-char chunks and synthesise each with the TTS API
+            $chunks      = $this->chunkText($text, 4500);
+            $segmentUrls = [];
 
-            $this->book->update(['elevenlabs_project_id' => $projectId]);
+            Log::info("GenerateBookAudioJob: book {$this->book->id} — ".count($chunks)." chunks, voice {$voiceId}");
 
-            // Step 4: Split into 45,000-char chapters and kick off conversion
-            $chapters   = $this->chunkText($text, 45000);
-            $chapterIds = [];
+            foreach ($chunks as $i => $chunk) {
+                Log::info("GenerateBookAudioJob: synthesising chunk ".($i + 1)."/".count($chunks)." for book {$this->book->id}");
 
-            foreach ($chapters as $i => $chapterText) {
-                Log::info("GenerateBookAudioJob: adding chapter ".($i + 1)." (".strlen($chapterText)." chars) to project {$projectId}");
-                $chapterId    = $elevenLabs->addChapter($projectId, 'Chapter '.($i + 1), $chapterText);
-                $chapterIds[] = $chapterId;
-                Log::info("GenerateBookAudioJob: chapter ".($i + 1)." [{$chapterId}] added, triggering conversion");
-                $elevenLabs->convertChapter($projectId, $chapterId);
+                $audioBinary = $elevenLabs->generateSpeech($voiceId, $chunk);
+
+                $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_chunk_').'.mp3';
+                file_put_contents($tempPath, $audioBinary);
+
+                $uploaded = $cloudinary->uploadFromPath(
+                    $tempPath,
+                    'book_audio',
+                    'book_'.$this->book->id.'_chunk_'.$i
+                );
+                @unlink($tempPath);
+
+                $segmentUrls[] = $uploaded['url'];
+
+                // Persist the first segment immediately so the sample is available early
+                if (count($segmentUrls) === 1) {
+                    $this->book->update(['audio_sample_url' => $uploaded['url']]);
+                }
             }
 
-            Log::info("GenerateBookAudioJob: book {$this->book->id} — ".count($chapterIds)." chapters queued on project {$projectId}. Dispatching download job.");
+            if (empty($segmentUrls)) {
+                throw new \RuntimeException('No audio segments were generated for this book.');
+            }
 
-            // Step 5: Hand off to the polling job — checks every 2 minutes until all chapters are done
-            DownloadBookAudioJob::dispatch($this->book->id, $this->author->id, $projectId, $chapterIds)
-                ->onQueue('audio')
-                ->delay(now()->addMinutes(2));
+            $this->book->update([
+                'audio_status'          => 'ready',
+                'audio_url'             => $segmentUrls[0],
+                'audio_segments'        => $segmentUrls,
+                'audio_duration'        => null,
+                'elevenlabs_project_id' => null,
+            ]);
+
+            Log::info("GenerateBookAudioJob: book {$this->book->id} complete — ".count($segmentUrls).' segments');
+
+            app(NotificationService::class)->send(
+                $this->author,
+                'Your audiobook is ready!',
+                "\"{$this->book->title}\" has been converted to audio and is now available.",
+                ['in-app', 'push']
+            );
 
         } catch (\Throwable $e) {
             Log::error(
@@ -102,7 +120,6 @@ class GenerateBookAudioJob implements ShouldQueue
                 ['exception' => $e]
             );
 
-            // Rate-limited: hold off without burning a retry attempt
             if (str_starts_with($e->getMessage(), 'ELEVENLABS_RATE_LIMITED')) {
                 Log::warning("GenerateBookAudioJob: rate-limited — releasing for 5 minutes.");
                 $this->release(300);
@@ -110,14 +127,13 @@ class GenerateBookAudioJob implements ShouldQueue
                 return;
             }
 
-            // Throw so Laravel can retry or call failed() on the last attempt
             throw $e;
         }
     }
 
     /**
      * Called by Laravel when the job permanently fails (retries exhausted or hard timeout).
-     * This is the single place that marks the book failed and notifies the author.
+     * Single place that marks the book failed and notifies the author.
      */
     public function failed(\Throwable $exception): void
     {
@@ -126,20 +142,14 @@ class GenerateBookAudioJob implements ShouldQueue
             ['exception' => $exception]
         );
 
-        $projectId = $this->book->elevenlabs_project_id;
-
         if (in_array($this->book->audio_status, ['processing', 'pending'])) {
             $this->book->update(['audio_status' => 'failed', 'elevenlabs_project_id' => null]);
-        }
-
-        if ($projectId) {
-            app(ElevenLabsService::class)->deleteProject($projectId);
         }
 
         app(NotificationService::class)->send(
             $this->author,
             'Audio generation failed',
-            "We could not start audio generation for \"{$this->book->title}\". Please try again.",
+            "We could not generate audio for \"{$this->book->title}\". Please try again.",
             ['in-app', 'push']
         );
     }
