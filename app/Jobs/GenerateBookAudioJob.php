@@ -54,6 +54,7 @@ class GenerateBookAudioJob implements ShouldQueue
             }
 
             $voiceId = $this->author->elevenlabs_voice_id;
+
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }

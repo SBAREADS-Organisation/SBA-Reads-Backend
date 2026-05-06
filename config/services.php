@@ -77,6 +77,7 @@ return [
     ],
 
     'elevenlabs' => [
-        'api_key' => env('ELEVENLABS_API_KEY'),
+        'api_key'         => env('ELEVENLABS_API_KEY'),
+        'default_voice_id' => env('ELEVENLABS_DEFAULT_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL'), // ElevenLabs "Sarah" voice
     ],
 ];
