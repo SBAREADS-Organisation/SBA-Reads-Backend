@@ -51,16 +51,19 @@ class DownloadBookAudioJob implements ShouldQueue
         }
 
         try {
-            // Check each chapter's status
+            // Single-pass status check — track done IDs to avoid a second API call
             $pendingCount = 0;
             $failedCount  = 0;
+            $doneIds      = [];
 
             foreach ($this->chapterIds as $chapterId) {
                 $status = $elevenLabs->getChapterStatus($this->projectId, $chapterId);
 
-                if ($status === 'failed') {
+                if ($status === 'done') {
+                    $doneIds[] = $chapterId;
+                } elseif ($status === 'failed') {
                     $failedCount++;
-                } elseif (in_array($status, ['default', 'in_progress'])) {
+                } else {
                     $pendingCount++;
                 }
             }
@@ -72,31 +75,26 @@ class DownloadBookAudioJob implements ShouldQueue
                 return;
             }
 
-            $allFailed = $failedCount === count($this->chapterIds);
-            if ($allFailed) {
+            if (empty($doneIds)) {
                 throw new \RuntimeException("All {$failedCount} chapters failed to convert on ElevenLabs.");
             }
 
-            // All done (some may have failed — we still download the successful ones)
+            // Download only the chapters confirmed done in the status pass above
             $segmentUrls = [];
             $totalWords  = 0;
 
-            foreach ($this->chapterIds as $index => $chapterId) {
-                $status = $elevenLabs->getChapterStatus($this->projectId, $chapterId);
-                if ($status !== 'done') {
-                    Log::warning("DownloadBookAudioJob: chapter {$chapterId} has status '{$status}', skipping download.");
-                    continue;
-                }
-
+            foreach ($doneIds as $index => $chapterId) {
                 $snapshots = $elevenLabs->getChapterSnapshots($this->projectId, $chapterId);
                 if (empty($snapshots)) {
                     Log::warning("DownloadBookAudioJob: no snapshots for chapter {$chapterId}.");
                     continue;
                 }
 
-                $snapshotId  = $snapshots[0]['chapter_snapshot_id'] ?? $snapshots[0]['snapshot_id'] ?? null;
+                // ElevenLabs returns the ID in different fields depending on API version
+                $snap       = $snapshots[0];
+                $snapshotId = $snap['chapter_snapshot_id'] ?? $snap['snapshot_id'] ?? $snap['id'] ?? null;
                 if (! $snapshotId) {
-                    Log::warning("DownloadBookAudioJob: could not determine snapshot ID for chapter {$chapterId}.");
+                    Log::warning("DownloadBookAudioJob: unknown snapshot fields for chapter {$chapterId}: ".implode(', ', array_keys($snap)));
                     continue;
                 }
 
