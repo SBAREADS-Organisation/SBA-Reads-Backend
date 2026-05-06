@@ -12,7 +12,11 @@ class ElevenLabsService
 
     public function __construct()
     {
-        $this->apiKey = config('services.elevenlabs.api_key');
+        $this->apiKey = config('services.elevenlabs.api_key', '');
+
+        if (empty($this->apiKey)) {
+            Log::critical('ElevenLabs API key is not configured. Set ELEVENLABS_API_KEY in .env');
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -21,27 +25,34 @@ class ElevenLabsService
 
     public function addVoice(string $name, string $audioFilePath): string
     {
-        $response = Http::withHeaders(['xi-api-key' => $this->apiKey])
+        $response = Http::timeout(120)
+            ->withHeaders(['xi-api-key' => $this->apiKey])
             ->attach('files', file_get_contents($audioFilePath), basename($audioFilePath))
             ->post("{$this->baseUrl}/voices/add", ['name' => $name]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs voice cloning failed: '.$response->body());
+            $this->logFailure('addVoice', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Voice cloning failed', $response->body());
         }
 
-        return $response->json('voice_id');
+        $voiceId = $response->json('voice_id');
+        if (empty($voiceId)) {
+            throw new \RuntimeException('ElevenLabs addVoice returned no voice_id. Response: '.substr($response->body(), 0, 300));
+        }
+
+        return $voiceId;
     }
 
     public function deleteVoice(string $voiceId): bool
     {
         try {
-            $response = Http::withHeaders(['xi-api-key' => $this->apiKey])
+            $response = Http::timeout(30)
+                ->withHeaders(['xi-api-key' => $this->apiKey])
                 ->delete("{$this->baseUrl}/voices/{$voiceId}");
 
             return $response->successful();
         } catch (\Throwable $e) {
-            Log::warning('ElevenLabs deleteVoice failed: '.$e->getMessage());
-
+            Log::warning("ElevenLabs deleteVoice [{$voiceId}] failed: ".$e->getMessage());
             return false;
         }
     }
@@ -66,7 +77,8 @@ class ElevenLabsService
         ]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs TTS failed: '.$response->body());
+            $this->logFailure('generateSpeech', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Text-to-speech failed', $response->body());
         }
 
         return $response->body();
@@ -82,22 +94,31 @@ class ElevenLabsService
      */
     public function createProject(string $name, string $voiceId): string
     {
-        $response = Http::timeout(30)->withHeaders([
+        $response = Http::timeout(60)->withHeaders([
             'xi-api-key'   => $this->apiKey,
             'Content-Type' => 'application/json',
         ])->post("{$this->baseUrl}/projects/add", [
-                'name'                          => $name,
-                'default_title_voice_id'        => $voiceId,
-                'default_paragraph_voice_id'    => $voiceId,
-                'default_model_id'              => 'eleven_multilingual_v2',
-                'quality_preset'                => 'standard',
-            ]);
+            'name'                       => $name,
+            'default_title_voice_id'     => $voiceId,
+            'default_paragraph_voice_id' => $voiceId,
+            'default_model_id'           => 'eleven_multilingual_v2',
+            'quality_preset'             => 'standard',
+        ]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs project creation failed: '.$response->body());
+            $this->logFailure('createProject', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Project creation failed', $response->body());
         }
 
-        return $response->json('project.project_id');
+        // Support both nested {"project":{"project_id":"..."}} and flat {"project_id":"..."}
+        $projectId = $response->json('project.project_id') ?? $response->json('project_id');
+
+        if (empty($projectId)) {
+            Log::error('ElevenLabs createProject returned no project_id. Full response: '.substr($response->body(), 0, 500));
+            throw new \RuntimeException('ElevenLabs createProject returned no project_id.');
+        }
+
+        return (string) $projectId;
     }
 
     /**
@@ -106,7 +127,7 @@ class ElevenLabsService
      */
     public function addChapter(string $projectId, string $name, string $text): string
     {
-        $response = Http::timeout(90)->withHeaders([
+        $response = Http::timeout(120)->withHeaders([
             'xi-api-key'   => $this->apiKey,
             'Content-Type' => 'application/json',
         ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/add", [
@@ -115,10 +136,19 @@ class ElevenLabsService
         ]);
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs chapter add failed: '.$response->body());
+            $this->logFailure('addChapter', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Chapter add failed', $response->body());
         }
 
-        return $response->json('chapter.chapter_id');
+        // Support both nested and flat response shapes
+        $chapterId = $response->json('chapter.chapter_id') ?? $response->json('chapter_id');
+
+        if (empty($chapterId)) {
+            Log::error("ElevenLabs addChapter returned no chapter_id for project {$projectId}. Response: ".substr($response->body(), 0, 500));
+            throw new \RuntimeException('ElevenLabs addChapter returned no chapter_id.');
+        }
+
+        return (string) $chapterId;
     }
 
     /**
@@ -126,72 +156,130 @@ class ElevenLabsService
      */
     public function convertChapter(string $projectId, string $chapterId): void
     {
-        $response = Http::timeout(30)->withHeaders([
+        $response = Http::timeout(60)->withHeaders([
             'xi-api-key'   => $this->apiKey,
             'Content-Type' => 'application/json',
         ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/convert");
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs chapter conversion failed: '.$response->body());
+            $this->logFailure('convertChapter', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Chapter conversion trigger failed', $response->body());
         }
     }
 
     /**
-     * Get the current status of a chapter.
-     * Status values: 'default' (queued), 'in_progress', 'done', 'failed'
+     * Get the current conversion status of a chapter.
+     * Known values: 'default' (queued), 'in_progress', 'done', 'failed'
      */
     public function getChapterStatus(string $projectId, string $chapterId): string
     {
-        $response = Http::timeout(30)->withHeaders(['xi-api-key' => $this->apiKey])
+        $response = Http::timeout(30)
+            ->withHeaders(['xi-api-key' => $this->apiKey])
             ->get("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}");
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs chapter status failed: '.$response->body());
+            $this->logFailure('getChapterStatus', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Chapter status fetch failed', $response->body());
         }
 
-        return $response->json('chapter.status') ?? 'default';
+        return (string) ($response->json('chapter.status') ?? $response->json('status') ?? 'default');
     }
 
     /**
-     * Get the list of snapshots (completed audio outputs) for a chapter.
+     * Get the list of completed audio snapshots for a chapter.
      */
     public function getChapterSnapshots(string $projectId, string $chapterId): array
     {
-        $response = Http::timeout(30)->withHeaders(['xi-api-key' => $this->apiKey])
+        $response = Http::timeout(30)
+            ->withHeaders(['xi-api-key' => $this->apiKey])
             ->get("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/snapshots");
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs snapshots fetch failed: '.$response->body());
+            $this->logFailure('getChapterSnapshots', $response->status(), $response->body());
+            $this->throwForStatus($response->status(), 'Snapshots fetch failed', $response->body());
         }
 
         return $response->json('snapshots') ?? [];
     }
 
     /**
-     * Download the audio binary for a chapter snapshot.
+     * Stream the audio for a chapter snapshot directly to a local temp file.
+     * Returns the path to the downloaded file. Caller is responsible for unlinking.
+     * Streaming avoids loading 100 MB+ audio binaries into PHP memory.
      */
-    public function downloadChapterAudio(string $projectId, string $chapterId, string $snapshotId): string
+    public function downloadChapterAudioToFile(string $projectId, string $chapterId, string $snapshotId): string
     {
-        $response = Http::timeout(300)->withHeaders(['xi-api-key' => $this->apiKey])
+        $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_audio_').'.mp3';
+
+        $response = Http::timeout(300)
+            ->withHeaders(['xi-api-key' => $this->apiKey])
+            ->sink($tempPath)
             ->post("{$this->baseUrl}/projects/{$projectId}/chapters/{$chapterId}/snapshots/{$snapshotId}/stream");
 
         if (! $response->successful()) {
-            throw new \RuntimeException('ElevenLabs audio download failed: '.$response->body());
+            @unlink($tempPath);
+            $this->logFailure('downloadChapterAudio', $response->status(), '(binary stream — no body)');
+            $this->throwForStatus($response->status(), 'Audio download failed', '');
         }
 
-        return $response->body();
+        if (! file_exists($tempPath) || filesize($tempPath) < 1024) {
+            @unlink($tempPath);
+            throw new \RuntimeException("ElevenLabs audio download produced an empty or corrupt file for chapter {$chapterId}.");
+        }
+
+        return $tempPath;
     }
 
     /**
-     * Delete a project and free ElevenLabs storage quota.
+     * Delete an ElevenLabs project to free storage quota.
+     * Always safe to call — swallows all errors.
      */
     public function deleteProject(string $projectId): void
     {
         try {
-            Http::timeout(30)->withHeaders(['xi-api-key' => $this->apiKey])
+            Http::timeout(30)
+                ->withHeaders(['xi-api-key' => $this->apiKey])
                 ->delete("{$this->baseUrl}/projects/{$projectId}");
         } catch (\Throwable $e) {
-            Log::warning('ElevenLabs deleteProject failed: '.$e->getMessage());
+            Log::warning("ElevenLabs deleteProject [{$projectId}] failed: ".$e->getMessage());
         }
+    }
+
+    // ─────────────────────────────────────────────
+    // Internal helpers
+    // ─────────────────────────────────────────────
+
+    /**
+     * Log a failed API call with the status code and truncated response body.
+     */
+    private function logFailure(string $method, int $status, string $body): void
+    {
+        Log::error(sprintf(
+            'ElevenLabs %s failed [HTTP %d]: %s',
+            $method,
+            $status,
+            substr($body, 0, 600)
+        ));
+    }
+
+    /**
+     * Throw the appropriate exception based on HTTP status.
+     * 429 includes the Retry-After delay in the message so callers can re-queue intelligently.
+     */
+    private function throwForStatus(int $status, string $context, string $body): never
+    {
+        if ($status === 429) {
+            throw new \RuntimeException("ELEVENLABS_RATE_LIMITED: {$context}. Back off and retry.");
+        }
+
+        if ($status === 401 || $status === 403) {
+            throw new \RuntimeException("ElevenLabs authentication error [{$status}] in {$context}. Check ELEVENLABS_API_KEY.");
+        }
+
+        if ($status >= 500) {
+            throw new \RuntimeException("ElevenLabs server error [{$status}] in {$context}. Will retry.");
+        }
+
+        throw new \RuntimeException("ElevenLabs {$context} [{$status}]: ".substr($body, 0, 300));
     }
 }

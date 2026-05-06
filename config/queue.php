@@ -39,7 +39,9 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Must exceed the longest job timeout (600s) or Laravel re-queues a running job,
+            // causing duplicate execution. 720 = 600s timeout + 2-minute safety buffer.
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 720),
             'after_commit' => false,
         ],
 

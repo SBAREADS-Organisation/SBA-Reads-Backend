@@ -194,6 +194,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Audio generation routes
     Route::post('books/{bookId}/generate-audio', [AudioController::class, 'generateAudio'])->name('book.generate-audio');
     Route::get('books/{bookId}/audio-status', [AudioController::class, 'getAudioStatus'])->name('book.audio-status');
+    Route::middleware(['role:admin,superadmin'])->post('books/{bookId}/reset-audio', [AudioController::class, 'resetAudio'])->name('book.reset-audio');
 
     // Author-specific endpoints (only for account_type = 'author')
     Route::middleware(['role:author'])->prefix('author')->group(function () {

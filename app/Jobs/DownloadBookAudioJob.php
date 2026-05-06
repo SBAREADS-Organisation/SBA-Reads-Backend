@@ -99,10 +99,8 @@ class DownloadBookAudioJob implements ShouldQueue
                 }
 
                 try {
-                    $audioBinary = $elevenLabs->downloadChapterAudio($this->projectId, $chapterId, $snapshotId);
-
-                    $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_chapter_').'.mp3';
-                    file_put_contents($tempPath, $audioBinary);
+                    // Stream directly to a temp file — avoids loading 100 MB+ audio into PHP memory
+                    $tempPath = $elevenLabs->downloadChapterAudioToFile($this->projectId, $chapterId, $snapshotId);
 
                     $uploaded = $cloudinary->uploadFromPath(
                         $tempPath,
@@ -156,21 +154,49 @@ class DownloadBookAudioJob implements ShouldQueue
             );
 
         } catch (\Throwable $e) {
-            Log::error("DownloadBookAudioJob failed for book {$this->bookId}: ".$e->getMessage());
+            Log::error(
+                "DownloadBookAudioJob failed for book {$this->bookId} (attempt {$this->attempts()}/{$this->tries}): "
+                .$e->getMessage(),
+                ['exception' => $e]
+            );
 
-            if ($this->attempts() >= $this->tries) {
-                $book->update(['audio_status' => 'failed', 'elevenlabs_project_id' => null]);
-                $this->cleanupProject($elevenLabs);
+            // Rate-limited: hold off without burning a retry attempt
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_RATE_LIMITED')) {
+                Log::warning("DownloadBookAudioJob: rate-limited — releasing for 10 minutes.");
+                $this->release(600);
 
-                $notifications->send(
-                    $author,
-                    'Audio generation failed',
-                    "We could not generate audio for \"{$book->title}\". Please try again.",
-                    ['in-app', 'push']
-                );
+                return;
             }
 
+            // Let failed() exclusively handle book status + notification on permanent failure
             throw $e;
+        }
+    }
+
+    /**
+     * Called by Laravel when the job permanently fails (retries exhausted).
+     * Without this, books stay stuck in 'processing' forever.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error("DownloadBookAudioJob permanently failed for book {$this->bookId}: ".$exception->getMessage());
+
+        $book   = Book::find($this->bookId);
+        $author = User::find($this->authorId);
+
+        if ($book && in_array($book->audio_status, ['processing', 'pending'])) {
+            $book->update(['audio_status' => 'failed', 'elevenlabs_project_id' => null]);
+        }
+
+        app(ElevenLabsService::class)->deleteProject($this->projectId);
+
+        if ($author) {
+            app(NotificationService::class)->send(
+                $author,
+                'Audio generation failed',
+                "We could not generate audio for \"{$book?->title}\". Please try again.",
+                ['in-app', 'push']
+            );
         }
     }
 

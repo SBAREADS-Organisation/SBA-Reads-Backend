@@ -150,6 +150,32 @@ class AudioController extends Controller
     }
 
     /**
+     * Admin-only: reset a stuck audio job back to 'none' so the author can retry.
+     * POST /books/{bookId}/reset-audio
+     */
+    public function resetAudio(int $bookId)
+    {
+        $book = Book::find($bookId);
+
+        if (! $book) {
+            return $this->error('Book not found.', 404);
+        }
+
+        $book->update([
+            'audio_status'          => 'none',
+            'audio_url'             => null,
+            'audio_sample_url'      => null,
+            'audio_segments'        => null,
+            'audio_duration'        => null,
+            'elevenlabs_project_id' => null,
+        ]);
+
+        Log::info("Admin manually reset audio status for book {$bookId}.");
+
+        return $this->success(['book_id' => $bookId, 'audio_status' => 'none'], 'Audio status reset. The author can now retry generation.');
+    }
+
+    /**
      * Get the current audio generation status and URLs for a book.
      * GET /books/{bookId}/audio-status
      */
