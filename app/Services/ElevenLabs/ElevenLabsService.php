@@ -106,7 +106,7 @@ class ElevenLabsService
      */
     public function addChapter(string $projectId, string $name, string $text): string
     {
-        $response = Http::timeout(30)->withHeaders([
+        $response = Http::timeout(90)->withHeaders([
             'xi-api-key'   => $this->apiKey,
             'Content-Type' => 'application/json',
         ])->post("{$this->baseUrl}/projects/{$projectId}/chapters/add", [

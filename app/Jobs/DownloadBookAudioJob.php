@@ -18,8 +18,8 @@ class DownloadBookAudioJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    // 20 retries × 2-minute delay = up to 40 minutes of polling
-    public int $tries = 20;
+    // 30 retries × 2-minute delay = up to 58 minutes of polling
+    public int $tries = 30;
 
     public int $timeout = 600;
 

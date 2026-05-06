@@ -21,7 +21,7 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 300;
+    public int $timeout = 600;
 
     public function __construct(
         protected Book $book,
@@ -35,6 +35,16 @@ class GenerateBookAudioJob implements ShouldQueue
         $this->book->update(['audio_status' => 'processing']);
 
         try {
+            // Clean up any orphaned ElevenLabs project left from a prior failed attempt
+            if ($this->book->elevenlabs_project_id) {
+                try {
+                    $elevenLabs->deleteProject($this->book->elevenlabs_project_id);
+                } catch (\Throwable) {
+                    // Non-fatal — project may already be gone
+                }
+                $this->book->update(['elevenlabs_project_id' => null]);
+            }
+
             // Step 1: Download PDF to a temp file
             $pdfUrl = $this->book->files[0]['public_url'] ?? null;
             if (! $pdfUrl) {

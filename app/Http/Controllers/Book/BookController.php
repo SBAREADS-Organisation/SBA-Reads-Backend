@@ -529,9 +529,8 @@ class BookController extends Controller
                 }
 
                 if ($request->input('sort_by') === 'recommended') {
-                    // Sort by user's top completed % or analytics data
-                    $query->join('book_meta_data_analytics as a', 'reading_progress.book_id', '=', 'a.book_id')
-                        ->orderBy('a.recommendation_score', 'desc') // Assuming such a column exists
+                    $query->leftJoin('book_meta_data_analytics as a', 'reading_progress.book_id', '=', 'a.book_id')
+                        ->orderByRaw('COALESCE(a.likes, 0) + COALESCE(a.views, 0) DESC')
                         ->select('reading_progress.*');
                 } elseif ($request->input('sort_by') === 'progress') {
                     $query->orderBy('progress', 'desc');
@@ -1539,9 +1538,12 @@ class BookController extends Controller
             // $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
 
             $query = Book::query()
-                ->whereHas('purchasers', function ($q) use ($user) {
-                    $q->where('user_id', $user->id);
+                ->join('book_user as bu', function ($join) use ($user) {
+                    $join->on('books.id', '=', 'bu.book_id')
+                         ->where('bu.user_id', '=', $user->id);
                 })
+                ->orderByDesc('bu.created_at')
+                ->select('books.*')
                 ->with([
                     'authors:id,name',
                     'categories:id,name',

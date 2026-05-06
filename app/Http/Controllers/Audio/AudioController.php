@@ -9,6 +9,7 @@ use App\Models\Book;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
@@ -117,21 +118,30 @@ class AudioController extends Controller
             return $this->error('This book has no PDF file attached.', 422);
         }
 
-        if (in_array($book->audio_status, ['pending', 'processing'])) {
+        $dispatched = DB::transaction(function () use ($book, $user) {
+            $fresh = Book::where('id', $book->id)->lockForUpdate()->first();
+
+            if (in_array($fresh->audio_status, ['pending', 'processing'])) {
+                return false;
+            }
+
+            $fresh->update([
+                'audio_status'          => 'pending',
+                'audio_url'             => null,
+                'audio_sample_url'      => null,
+                'audio_segments'        => null,
+                'audio_duration'        => null,
+                'elevenlabs_project_id' => null,
+            ]);
+
+            GenerateBookAudioJob::dispatch($fresh, $user)->onQueue('audio');
+
+            return true;
+        });
+
+        if (! $dispatched) {
             return $this->error('Audio generation is already in progress for this book.', 422);
         }
-
-        // Clear any stale audio data from a previous run before starting fresh
-        $book->update([
-            'audio_status'          => 'pending',
-            'audio_url'             => null,
-            'audio_sample_url'      => null,
-            'audio_segments'        => null,
-            'audio_duration'        => null,
-            'elevenlabs_project_id' => null,
-        ]);
-
-        GenerateBookAudioJob::dispatch($book, $user)->onQueue('audio');
 
         return $this->success([
             'audio_status' => 'pending',
