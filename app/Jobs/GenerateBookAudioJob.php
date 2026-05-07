@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Smalot\PdfParser\Parser;
@@ -37,9 +38,17 @@ class GenerateBookAudioJob implements ShouldQueue
     ): void {
         ini_set('memory_limit', '512M');
 
-        $this->book->update(['audio_status' => 'processing']);
+        // Acquire an exclusive lock so duplicate workers (from retry_after misfires or
+        // manual retriggers) exit immediately without burning ElevenLabs credits.
+        $lock = Cache::lock("audio_job_book_{$this->book->id}", 3660);
+        if (! $lock->get()) {
+            Log::warning("GenerateBookAudioJob: duplicate detected for book {$this->book->id} — aborting to prevent double credit usage.");
+            return;
+        }
 
         try {
+            $this->book->update(['audio_status' => 'processing']);
+
             // Step 1: Download PDF to a temp file
             $pdfUrl = $this->book->files[0]['public_url'] ?? null;
             if (! $pdfUrl) {
@@ -136,6 +145,8 @@ class GenerateBookAudioJob implements ShouldQueue
             }
 
             throw $e;
+        } finally {
+            $lock->release();
         }
     }
 
