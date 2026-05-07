@@ -76,6 +76,17 @@ return [
             'after_commit' => false,
         ],
 
+        // Dedicated connection for audio chunk jobs — each chunk has a 120s timeout so
+        // retry_after of 180s is sufficient and keeps failed chunks retried promptly.
+        'redis-chunks' => [
+            'driver'       => 'redis',
+            'connection'   => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue'        => env('REDIS_CHUNKS_QUEUE', 'audio-chunks'),
+            'retry_after'  => (int) env('REDIS_CHUNKS_RETRY_AFTER', 180),
+            'block_for'    => null,
+            'after_commit' => false,
+        ],
+
     ],
 
     /*

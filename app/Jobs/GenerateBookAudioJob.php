@@ -4,14 +4,13 @@ namespace App\Jobs;
 
 use App\Models\Book;
 use App\Models\User;
-use App\Services\Cloudinary\CloudinaryMediaUploadService;
-use App\Services\ElevenLabs\ElevenLabsService;
 use App\Services\Notification\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -23,33 +22,31 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 3600; // 1 hour — long books need ~30-40 min at 45 chunks
+    public int $timeout = 300; // 5 min — PDF download + text extraction + batch dispatch
 
-    public array $backoff = [120, 300];
+    public array $backoff = [60, 120];
 
     public function __construct(
         protected Book $book,
         protected User $author
     ) {}
 
-    public function handle(
-        ElevenLabsService $elevenLabs,
-        CloudinaryMediaUploadService $cloudinary
-    ): void {
+    public function handle(): void
+    {
         ini_set('memory_limit', '512M');
 
-        // Acquire an exclusive lock so duplicate workers (from retry_after misfires or
-        // manual retriggers) exit immediately without burning ElevenLabs credits.
-        $lock = Cache::lock("audio_job_book_{$this->book->id}", 3660);
+        // Prevent duplicate coordinators from dispatching parallel batches
+        $lock = Cache::lock("audio_job_book_{$this->book->id}", 360);
         if (! $lock->get()) {
-            Log::warning("GenerateBookAudioJob: duplicate detected for book {$this->book->id} — aborting to prevent double credit usage.");
+            Log::warning("GenerateBookAudioJob: duplicate detected for book {$this->book->id} — aborting.");
+
             return;
         }
 
         try {
             $this->book->update(['audio_status' => 'processing']);
 
-            // Step 1: Download PDF to a temp file
+            // Step 1: Download PDF
             $pdfUrl = $this->book->files[0]['public_url'] ?? null;
             if (! $pdfUrl) {
                 throw new \RuntimeException('No PDF file found on this book.');
@@ -58,7 +55,7 @@ class GenerateBookAudioJob implements ShouldQueue
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
             file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
 
-            // Step 2: Extract plain text from PDF
+            // Step 2: Extract text
             $parser = new Parser;
             $text   = trim(preg_replace('/\s+/', ' ', $parser->parseFile($tempPdfPath)->getText()));
             @unlink($tempPdfPath);
@@ -72,55 +69,37 @@ class GenerateBookAudioJob implements ShouldQueue
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }
 
-            // Step 3: Split into 4,500-char chunks and synthesise each with the TTS API
+            // Step 3: Split into chunks and dispatch all as a parallel batch
             $chunks      = $this->chunkText($text, 4500);
-            $segmentUrls = [];
+            $totalChunks = count($chunks);
+            $book        = $this->book;
+            $author      = $this->author;
 
-            Log::info("GenerateBookAudioJob: book {$this->book->id} — ".count($chunks)." chunks, voice {$voiceId}");
+            Log::info("GenerateBookAudioJob: book {$book->id} — {$totalChunks} chunks dispatching in parallel");
 
+            $chunkJobs = [];
             foreach ($chunks as $i => $chunk) {
-                Log::info("GenerateBookAudioJob: synthesising chunk ".($i + 1)."/".count($chunks)." for book {$this->book->id}");
-
-                $audioBinary = $elevenLabs->generateSpeech($voiceId, $chunk);
-
-                $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_chunk_').'.mp3';
-                file_put_contents($tempPath, $audioBinary);
-
-                $uploaded = $cloudinary->uploadFromPath(
-                    $tempPath,
-                    'book_audio',
-                    'book_'.$this->book->id.'_chunk_'.$i
-                );
-                @unlink($tempPath);
-
-                $segmentUrls[] = $uploaded['url'];
-
-                // Persist the first segment immediately so the sample is available early
-                if (count($segmentUrls) === 1) {
-                    $this->book->update(['audio_sample_url' => $uploaded['url']]);
-                }
+                $chunkJobs[] = (new GenerateAudioChunkJob($book->id, $i, $chunk, $voiceId, $totalChunks))
+                    ->onQueue('audio-chunks');
             }
 
-            if (empty($segmentUrls)) {
-                throw new \RuntimeException('No audio segments were generated for this book.');
-            }
-
-            $this->book->update([
-                'audio_status'          => 'ready',
-                'audio_url'             => $segmentUrls[0],
-                'audio_segments'        => $segmentUrls,
-                'audio_duration'        => null,
-                'elevenlabs_project_id' => null,
-            ]);
-
-            Log::info("GenerateBookAudioJob: book {$this->book->id} complete — ".count($segmentUrls).' segments');
-
-            app(NotificationService::class)->send(
-                $this->author,
-                'Your audiobook is ready!',
-                "\"{$this->book->title}\" has been converted to audio and is now available.",
-                ['in-app', 'push']
-            );
+            Bus::batch($chunkJobs)
+                ->name("audio-book-{$book->id}")
+                ->then(function () use ($book, $author) {
+                    FinalizeBookAudioJob::dispatch($book, $author)->onQueue('audio');
+                })
+                ->catch(function (\Illuminate\Bus\Batch $batch, \Throwable $e) use ($book, $author) {
+                    Log::error("GenerateBookAudioJob: batch failed for book {$book->id} — ".$e->getMessage());
+                    $book->update(['audio_status' => 'failed']);
+                    app(NotificationService::class)->send(
+                        $author,
+                        'Audio generation failed',
+                        "We could not generate audio for \"{$book->title}\". Please try again.",
+                        ['in-app', 'push']
+                    );
+                })
+                ->onQueue('audio-chunks')
+                ->dispatch();
 
         } catch (\Throwable $e) {
             Log::error(
@@ -128,32 +107,13 @@ class GenerateBookAudioJob implements ShouldQueue
                 .$e->getMessage(),
                 ['exception' => $e]
             );
-
-            if (str_starts_with($e->getMessage(), 'ELEVENLABS_RATE_LIMITED')) {
-                Log::warning("GenerateBookAudioJob: rate-limited — releasing for 5 minutes.");
-                $this->release(300);
-
-                return;
-            }
-
-            if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
-                Log::critical("GenerateBookAudioJob: ElevenLabs quota exhausted — top up the account. Book {$this->book->id} cannot be processed.");
-                $this->book->update(['audio_status' => 'failed']);
-                $this->fail($e);
-
-                return;
-            }
-
+            $this->book->update(['audio_status' => 'failed']);
             throw $e;
         } finally {
             $lock->release();
         }
     }
 
-    /**
-     * Called by Laravel when the job permanently fails (retries exhausted or hard timeout).
-     * Single place that marks the book failed and notifies the author.
-     */
     public function failed(\Throwable $exception): void
     {
         Log::error(
@@ -162,7 +122,7 @@ class GenerateBookAudioJob implements ShouldQueue
         );
 
         if (in_array($this->book->audio_status, ['processing', 'pending'])) {
-            $this->book->update(['audio_status' => 'failed', 'elevenlabs_project_id' => null]);
+            $this->book->update(['audio_status' => 'failed']);
         }
 
         app(NotificationService::class)->send(

@@ -114,18 +114,37 @@ return [
             'nice'                 => 0,
         ],
 
-        // Book audio generation — long-running, keep concurrency low to avoid memory pressure
+        // Book audio coordinator — downloads PDF, dispatches chunk batch, finalises.
+        // Low concurrency: these jobs are short but memory-heavy (PDF parsing).
         'supervisor-audio' => [
             'connection'           => 'redis',
             'queue'                => ['audio'],
             'balance'              => 'simple',
-            'maxProcesses'         => 2,
+            'maxProcesses'         => 3,
             'minProcesses'         => 1,
             'maxTime'              => 0,
             'maxJobs'              => 0,
             'memory'               => 512,
             'tries'                => 2,
-            'timeout'              => 1800,
+            'timeout'              => 300,
+            'nice'                 => 0,
+        ],
+
+        // Audio chunk workers — one job per TTS chunk, run in parallel.
+        // 5 workers = 5 simultaneous ElevenLabs calls (safe for Creator/Pro plan).
+        // Raise maxProcesses to 10-20 when on Scale plan.
+        'supervisor-audio-chunks' => [
+            'connection'           => 'redis-chunks',
+            'queue'                => ['audio-chunks'],
+            'balance'              => 'auto',
+            'autoScalingStrategy'  => 'size',
+            'maxProcesses'         => 5,
+            'minProcesses'         => 1,
+            'maxTime'              => 0,
+            'maxJobs'              => 0,
+            'memory'               => 128,
+            'tries'                => 3,
+            'timeout'              => 120,
             'nice'                 => 0,
         ],
     ],
@@ -148,7 +167,12 @@ return [
                 'balanceCooldown'   => 3,
             ],
             'supervisor-audio' => [
-                'maxProcesses'      => 2,
+                'maxProcesses'      => 3,
+            ],
+            'supervisor-audio-chunks' => [
+                'maxProcesses'      => 5,
+                'balanceMaxShift'   => 2,
+                'balanceCooldown'   => 3,
             ],
         ],
 
