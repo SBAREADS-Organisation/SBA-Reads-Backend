@@ -22,9 +22,9 @@ class GenerateBookAudioJob implements ShouldQueue
 
     public int $tries = 2;
 
-    public int $timeout = 600;
+    public int $timeout = 3600; // 1 hour — long books need ~30-40 min at 45 chunks
 
-    public array $backoff = [60, 120];
+    public array $backoff = [120, 300];
 
     public function __construct(
         protected Book $book,
