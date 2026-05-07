@@ -69,7 +69,9 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 720),
+            // Must exceed the longest job timeout (3600s) or Horizon re-queues a running job,
+            // causing duplicate execution and double credit usage. 3900 = 3600 + 5 min buffer.
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 3900),
             'block_for' => null,
             'after_commit' => false,
         ],
