@@ -86,8 +86,10 @@ class AppStorePurchaseController extends Controller
                     }
 
                     if (! $existingTransaction) {
-                        $amount = $book->actual_price ?? $book->discounted_price ?? 0;
-                        $currency = strtolower($book->currency ?? 'usd');
+                        // Always store amounts in USD — it is the system base currency.
+                        // If the book has a non-USD price, store it in meta_data as reference only.
+                        $amount   = $book->actual_price ?? $book->discounted_price ?? 0;
+                        $bookCurrency = strtolower($book->currency ?? 'usd');
 
                         Log::info('Creating transaction for in-app purchase', [
                             'user_id' => $user->id,
@@ -102,7 +104,7 @@ class AppStorePurchaseController extends Controller
                             'user_id' => $user->id,
                             'payment_intent_id' => $originalTransId,
                             'amount' => $amount,
-                            'currency' => $currency,
+                            'currency' => 'usd',
                             'payment_provider' => 'apple',
                             'description' => "Apple IAP book purchase: {$book->title}",
                             'purpose_type' => 'Online book purchase',
@@ -112,6 +114,7 @@ class AppStorePurchaseController extends Controller
                             'meta_data' => [
                                 'product_id' => $productId,
                                 'book_id' => $book->id,
+                                'book_currency' => $bookCurrency,
                             ],
                         ]);
                     }
