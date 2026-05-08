@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -27,7 +28,8 @@ class VoiceCloningJob implements ShouldQueue
     public function __construct(
         protected int $userId,
         protected string $localFilePath,
-        protected string $voiceName
+        protected string $voiceName,
+        protected int $uploadVersion = 0
     ) {}
 
     public function handle(
@@ -35,6 +37,14 @@ class VoiceCloningJob implements ShouldQueue
         NotificationService $notifications,
         CloudinaryMediaUploadService $cloudinary
     ): void {
+        // If a newer upload was made after this job was queued, skip silently
+        $currentVersion = Cache::get("voice_upload_version:{$this->userId}", 0);
+        if ($this->uploadVersion > 0 && $this->uploadVersion < $currentVersion) {
+            Log::info("VoiceCloningJob: skipping stale job for user {$this->userId} (v{$this->uploadVersion} < v{$currentVersion})");
+            @unlink($this->localFilePath);
+            return;
+        }
+
         $user = User::find($this->userId);
 
         if (! $user) {

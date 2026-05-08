@@ -9,6 +9,7 @@ use App\Models\Book;
 use App\Services\ElevenLabs\ElevenLabsService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -60,7 +61,9 @@ class AudioController extends Controller
             $user->update(['voice_status' => 'processing']);
 
             $voiceName = ($user->name ?? 'author').'-'.$user->id;
-            VoiceCloningJob::dispatch($user->id, Storage::disk('local')->path($storagePath), $voiceName)
+            $version   = time();
+            Cache::put("voice_upload_version:{$user->id}", $version, 3600);
+            VoiceCloningJob::dispatch($user->id, Storage::disk('local')->path($storagePath), $voiceName, $version)
                 ->onQueue('voice');
 
             return $this->success([
