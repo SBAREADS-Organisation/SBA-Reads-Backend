@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class VoiceCloningJob implements ShouldQueue
@@ -19,13 +20,13 @@ class VoiceCloningJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public int $timeout = 300; // 5 min — Cloudinary upload + ElevenLabs cloning
+    public int $timeout = 300;
 
     public array $backoff = [30, 60, 120];
 
     public function __construct(
         protected int $userId,
-        protected string $localFilePath, // absolute path to file saved in storage/app/voice-samples/
+        protected string $localFilePath,
         protected string $voiceName
     ) {}
 
@@ -41,31 +42,56 @@ class VoiceCloningJob implements ShouldQueue
             return;
         }
 
+        $tempPath = null;
+
         try {
-            if (! file_exists($this->localFilePath)) {
-                throw new \RuntimeException("Voice sample file not found at: {$this->localFilePath}");
+            // Resolve the file to use — local file if it exists, otherwise re-download from Cloudinary
+            if (file_exists($this->localFilePath)) {
+                $filePath = $this->localFilePath;
+                $ownFile  = false; // don't delete the local storage file yet — keep it until Cloudinary upload done
+            } elseif ($user->voice_sample_url) {
+                // Local file lost (server restart / disk issue) — re-download from previously saved Cloudinary URL
+                Log::warning("VoiceCloningJob: local file missing for user {$this->userId}, re-downloading from Cloudinary");
+                $ext      = pathinfo(parse_url($user->voice_sample_url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'm4a';
+                $tempPath = tempnam(sys_get_temp_dir(), 'voice_clone_').'.'.$ext;
+                file_put_contents($tempPath, Http::timeout(60)->get($user->voice_sample_url)->body());
+                $filePath = $tempPath;
+                $ownFile  = true;
+            } else {
+                // No file and no previous URL — cannot proceed, notify user to re-upload
+                User::where('id', $this->userId)->update(['voice_status' => 'failed']);
+                $notifications->send(
+                    $user,
+                    'Voice upload required',
+                    'Your voice sample was not saved properly. Please upload a new recording.',
+                    ['in-app', 'push']
+                );
+                Log::error("VoiceCloningJob: no local file and no Cloudinary URL for user {$this->userId} — giving up");
+                return;
             }
 
-            // Step 1: Upload to Cloudinary (now runs in background — no user-facing timeout)
-            $uploaded = $cloudinary->uploadFromPath(
-                $this->localFilePath,
-                'voice_samples',
-                'voice_'.$this->userId.'_'.time()
-            );
+            // Upload to Cloudinary if not already done (local file means Cloudinary upload hasn't happened yet)
+            if (! $ownFile) {
+                $uploaded = $cloudinary->uploadFromPath(
+                    $filePath,
+                    'voice_samples',
+                    'voice_'.$this->userId.'_'.time()
+                );
+                $user->update(['voice_sample_url' => $uploaded['url']]);
+                @unlink($this->localFilePath);
+            }
 
-            // Step 2: Save the Cloudinary URL before cloning (so it's persisted even if cloning fails)
-            $user->update(['voice_sample_url' => $uploaded['url']]);
-
-            // Step 3: Delete the old ElevenLabs voice to avoid quota creep
+            // Delete old ElevenLabs voice to avoid quota creep
             if ($user->elevenlabs_voice_id) {
                 $elevenLabs->deleteVoice($user->elevenlabs_voice_id);
             }
 
-            // Step 4: Clone the voice — local file is still available (same process, same disk)
-            $voiceId = $elevenLabs->addVoice($this->voiceName, $this->localFilePath);
+            // Clone the voice
+            $voiceId = $elevenLabs->addVoice($this->voiceName, $filePath);
 
-            // Step 5: Clean up local temp file
-            @unlink($this->localFilePath);
+            if ($ownFile && $tempPath) {
+                @unlink($tempPath);
+            }
 
             $user->update([
                 'elevenlabs_voice_id' => $voiceId,
@@ -82,7 +108,9 @@ class VoiceCloningJob implements ShouldQueue
             Log::info("Voice cloning complete for user {$user->id}: voice_id={$voiceId}");
 
         } catch (\Throwable $e) {
-            @unlink($this->localFilePath);
+            if ($tempPath) {
+                @unlink($tempPath);
+            }
             Log::error("Voice cloning failed for user {$this->userId}: ".$e->getMessage());
 
             User::where('id', $this->userId)->update(['voice_status' => 'failed']);
