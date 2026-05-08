@@ -55,13 +55,22 @@ class GenerateBookAudioJob implements ShouldQueue
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
             file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
 
-            // Step 2: Extract text
+            // Step 2: Extract text — try smalot/pdfparser first, fall back to pdftotext
             $parser = new Parser;
             $text   = trim(preg_replace('/\s+/', ' ', $parser->parseFile($tempPdfPath)->getText()));
+
+            if (empty($text)) {
+                // pdftotext (poppler-utils) handles more PDF types including those with embedded fonts
+                Log::info("GenerateBookAudioJob: smalot returned empty for book {$this->book->id} — trying pdftotext fallback");
+                $text = $this->extractWithPdftotext($tempPdfPath);
+            }
+
             @unlink($tempPdfPath);
 
             if (empty($text)) {
-                throw new \RuntimeException('PDF text extraction returned empty content. The PDF may be image-only.');
+                throw new \RuntimeException(
+                    'This PDF appears to be image-based (scanned). Please upload a text-based PDF so audio can be generated.'
+                );
             }
 
             $voiceId = $this->author->elevenlabs_voice_id;
@@ -131,6 +140,19 @@ class GenerateBookAudioJob implements ShouldQueue
             "We could not generate audio for \"{$this->book->title}\". Please try again.",
             ['in-app', 'push']
         );
+    }
+
+    private function extractWithPdftotext(string $pdfPath): string
+    {
+        if (! shell_exec('which pdftotext')) {
+            Log::warning('GenerateBookAudioJob: pdftotext not installed — skipping fallback');
+            return '';
+        }
+
+        $escaped = escapeshellarg($pdfPath);
+        $output  = shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
+
+        return trim(preg_replace('/\s+/', ' ', $output ?? ''));
     }
 
     private function chunkText(string $text, int $maxChars): array
