@@ -41,6 +41,10 @@ class AudioController extends Controller
             $file = $request->file('voice_sample');
             $ext  = $file->getClientOriginalExtension() ?: 'm4a';
 
+            if ($file->getSize() < 25600) {
+                return $this->error('Voice sample is too small. Please upload at least 30 seconds of clean audio.', 422);
+            }
+
             // Save to local disk immediately (fast) — Cloudinary upload + ElevenLabs cloning run in the background job
             $storagePath = $file->storeAs(
                 'voice-samples',

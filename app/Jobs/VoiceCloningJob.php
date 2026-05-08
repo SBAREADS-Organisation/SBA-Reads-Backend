@@ -113,6 +113,25 @@ class VoiceCloningJob implements ShouldQueue
             }
             Log::error("Voice cloning failed for user {$this->userId}: ".$e->getMessage());
 
+            // Rate-limited: keep status as 'processing', release for 5 minutes without burning a retry
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_RATE_LIMITED')) {
+                Log::warning("VoiceCloningJob: rate-limited for user {$this->userId} — releasing for 5 minutes.");
+                $this->release(300);
+                return;
+            }
+
+            // Quota exhausted: fail immediately, no point retrying until quota resets
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
+                User::where('id', $this->userId)->update(['voice_status' => 'failed']);
+                $notifications->send(
+                    $user,
+                    'Voice cloning unavailable',
+                    'Audio services are temporarily at capacity. Please try again later.',
+                    ['in-app', 'push']
+                );
+                return;
+            }
+
             User::where('id', $this->userId)->update(['voice_status' => 'failed']);
 
             if ($this->attempts() >= $this->tries) {

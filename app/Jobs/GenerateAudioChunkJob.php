@@ -48,23 +48,42 @@ class GenerateAudioChunkJob implements ShouldQueue
 
         Log::info("GenerateAudioChunkJob: book {$this->bookId} chunk ".($this->chunkIndex + 1)."/{$this->totalChunks}");
 
-        $audioBinary = $elevenLabs->generateSpeech($this->voiceId, $this->chunkText);
+        try {
+            $audioBinary = $elevenLabs->generateSpeech($this->voiceId, $this->chunkText);
 
-        $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_chunk_').'.mp3';
-        file_put_contents($tempPath, $audioBinary);
+            $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_chunk_').'.mp3';
+            file_put_contents($tempPath, $audioBinary);
 
-        $uploaded = $cloudinary->uploadFromPath(
-            $tempPath,
-            'book_audio',
-            'book_'.$this->bookId.'_chunk_'.$this->chunkIndex
-        );
-        @unlink($tempPath);
+            $uploaded = $cloudinary->uploadFromPath(
+                $tempPath,
+                'book_audio',
+                'book_'.$this->bookId.'_chunk_'.$this->chunkIndex
+            );
+            @unlink($tempPath);
 
-        // Store URL keyed by index so the finalizer can assemble in correct order
-        Redis::hset("audio_chunks:{$this->bookId}", $this->chunkIndex, $uploaded['url']);
-        Redis::expire("audio_chunks:{$this->bookId}", 86400); // 24-hour safety TTL
+            // Store URL keyed by index so the finalizer can assemble in correct order
+            Redis::hset("audio_chunks:{$this->bookId}", $this->chunkIndex, $uploaded['url']);
+            Redis::expire("audio_chunks:{$this->bookId}", 86400); // 24-hour safety TTL
 
-        Log::info("GenerateAudioChunkJob: book {$this->bookId} chunk ".($this->chunkIndex + 1)." done");
+            Log::info("GenerateAudioChunkJob: book {$this->bookId} chunk ".($this->chunkIndex + 1)." done");
+
+        } catch (\Throwable $e) {
+            // Rate-limited: pause 60 seconds without counting as a failed attempt
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_RATE_LIMITED')) {
+                Log::warning("GenerateAudioChunkJob: rate-limited — book {$this->bookId} chunk ".($this->chunkIndex + 1)." releasing for 60s.");
+                $this->release(60);
+                return;
+            }
+
+            // Quota exhausted: cancel the entire batch immediately — no chunk will succeed
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
+                Log::error("GenerateAudioChunkJob: quota exceeded — cancelling batch for book {$this->bookId}.");
+                $this->batch()?->cancel();
+                return;
+            }
+
+            throw $e;
+        }
     }
 
     public function failed(\Throwable $exception): void
