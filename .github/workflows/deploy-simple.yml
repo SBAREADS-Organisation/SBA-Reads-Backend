@@ -50,10 +50,10 @@ jobs:
               --exclude='.git' \
               --exclude='node_modules' \
               --exclude='vendor' \
-              --exclude='storage/app/voice-samples/*.m4a' \
-              --exclude='storage/app/voice-samples/*.mp3' \
-              --exclude='storage/app/voice-samples/*.wav' \
-              --exclude='storage/app/voice-samples/*.aac' \
+              --exclude='storage/app/private/voice-samples/*.m4a' \
+              --exclude='storage/app/private/voice-samples/*.mp3' \
+              --exclude='storage/app/private/voice-samples/*.wav' \
+              --exclude='storage/app/private/voice-samples/*.aac' \
               /home/ubuntu/SBA-Reads-Backend/ /var/www/html/
 
             cd /var/www/html
@@ -64,7 +64,7 @@ jobs:
               storage/framework/sessions \
               storage/framework/views \
               storage/logs \
-              storage/app/voice-samples
+              storage/app/private/voice-samples
 
             # ── 6. Ensure Redis settings are in .env ──────────────────────────
             sudo grep -q "^QUEUE_CONNECTION=" /var/www/html/.env \

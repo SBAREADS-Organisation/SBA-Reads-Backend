@@ -11,6 +11,7 @@ use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class AudioController extends Controller
@@ -59,7 +60,7 @@ class AudioController extends Controller
             $user->update(['voice_status' => 'processing']);
 
             $voiceName = ($user->name ?? 'author').'-'.$user->id;
-            VoiceCloningJob::dispatch($user->id, storage_path('app/'.$storagePath), $voiceName)
+            VoiceCloningJob::dispatch($user->id, Storage::disk('local')->path($storagePath), $voiceName)
                 ->onQueue('voice');
 
             return $this->success([
