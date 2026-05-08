@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Jobs\GenerateBookAudioJob;
 use App\Jobs\VoiceCloningJob;
 use App\Models\Book;
-use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\ElevenLabs\ElevenLabsService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -18,12 +17,8 @@ class AudioController extends Controller
 {
     use ApiResponse;
 
-    public function __construct(
-        protected CloudinaryMediaUploadService $cloudinary
-    ) {}
-
     /**
-     * Upload a voice sample to Cloudinary, then dispatch async voice cloning.
+     * Save voice sample to local disk and dispatch async cloning job.
      * POST /user/voice-sample
      */
     public function uploadVoiceSample(Request $request)
@@ -44,35 +39,34 @@ class AudioController extends Controller
 
         try {
             $file = $request->file('voice_sample');
+            $ext  = $file->getClientOriginalExtension() ?: 'm4a';
 
-            // Step 1: Upload to Cloudinary immediately so the file is safely stored
-            $uploaded = $this->cloudinary->upload($file, 'voice_samples');
+            // Save to local disk immediately (fast) — Cloudinary upload + ElevenLabs cloning run in the background job
+            $storagePath = $file->storeAs(
+                'voice-samples',
+                "user_{$user->id}_".time().".$ext",
+                'local'
+            );
 
-            if ($uploaded instanceof \Illuminate\Http\JsonResponse) {
-                return $uploaded;
+            if (! $storagePath) {
+                return $this->error('Failed to save voice sample. Please try again.', 500);
             }
 
-            // Step 2: Mark status as processing and save the sample URL
-            $user->update([
-                'voice_sample_url' => $uploaded['url'],
-                'voice_status'     => 'processing',
-            ]);
+            $user->update(['voice_status' => 'processing']);
 
-            // Step 3: Dispatch async job to clone the voice on ElevenLabs
             $voiceName = ($user->name ?? 'author').'-'.$user->id;
-            VoiceCloningJob::dispatch($user->id, $uploaded['url'], $voiceName)
+            VoiceCloningJob::dispatch($user->id, storage_path('app/'.$storagePath), $voiceName)
                 ->onQueue('voice');
 
             return $this->success([
-                'voice_sample_url' => $uploaded['url'],
-                'voice_status'     => 'processing',
-                'has_voice'        => false,
-            ], 'Voice sample uploaded. Cloning is in progress — you will be notified when it is ready.');
+                'voice_status' => 'processing',
+                'has_voice'    => false,
+            ], 'Voice sample received. Cloning is in progress — you will be notified when it is ready.');
 
         } catch (\Throwable $e) {
             Log::error('Voice sample upload failed for user '.$user->id.': '.$e->getMessage());
 
-            return $this->error('Failed to upload voice sample. Please try again.', 500, null, $e);
+            return $this->error('Failed to save voice sample. Please try again.', 500);
         }
     }
 

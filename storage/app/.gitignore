@@ -1,4 +1,5 @@
 *
 !private/
 !public/
+!voice-samples/
 !.gitignore

@@ -39,6 +39,13 @@ class GenerateAudioChunkJob implements ShouldQueue
             return;
         }
 
+        // Idempotency guard: if a previous attempt already stored this chunk, skip TTS to avoid double-charging
+        $existing = Redis::hget("audio_chunks:{$this->bookId}", $this->chunkIndex);
+        if ($existing) {
+            Log::info("GenerateAudioChunkJob: book {$this->bookId} chunk ".($this->chunkIndex + 1)." already done — skipping");
+            return;
+        }
+
         Log::info("GenerateAudioChunkJob: book {$this->bookId} chunk ".($this->chunkIndex + 1)."/{$this->totalChunks}");
 
         $audioBinary = $elevenLabs->generateSpeech($this->voiceId, $this->chunkText);
