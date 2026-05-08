@@ -59,7 +59,9 @@ class VoiceCloningJob implements ShouldQueue
                 $ownFile  = true;
             } else {
                 // No file and no previous URL — cannot proceed, notify user to re-upload
-                User::where('id', $this->userId)->update(['voice_status' => 'failed']);
+                User::where('id', $this->userId)
+                    ->where('voice_status', '!=', 'ready')
+                    ->update(['voice_status' => 'failed']);
                 $notifications->send(
                     $user,
                     'Voice upload required',
@@ -122,7 +124,9 @@ class VoiceCloningJob implements ShouldQueue
 
             // Quota exhausted: fail immediately, no point retrying until quota resets
             if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
-                User::where('id', $this->userId)->update(['voice_status' => 'failed']);
+                User::where('id', $this->userId)
+                    ->where('voice_status', '!=', 'ready')
+                    ->update(['voice_status' => 'failed']);
                 $notifications->send(
                     $user,
                     'Voice cloning unavailable',
@@ -132,7 +136,9 @@ class VoiceCloningJob implements ShouldQueue
                 return;
             }
 
-            User::where('id', $this->userId)->update(['voice_status' => 'failed']);
+            User::where('id', $this->userId)
+                ->where('voice_status', '!=', 'ready')
+                ->update(['voice_status' => 'failed']);
 
             if ($this->attempts() >= $this->tries) {
                 $notifications->send(
