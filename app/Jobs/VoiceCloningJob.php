@@ -37,9 +37,11 @@ class VoiceCloningJob implements ShouldQueue
         NotificationService $notifications,
         CloudinaryMediaUploadService $cloudinary
     ): void {
-        // If a newer upload was made after this job was queued, skip silently
+        // Skip if a newer upload has been made since this job was queued.
+        // currentVersion > 0 means at least one upload has happened via the new flow.
+        // Any job whose uploadVersion is less than currentVersion (including old jobs with version 0) is stale.
         $currentVersion = Cache::get("voice_upload_version:{$this->userId}", 0);
-        if ($this->uploadVersion > 0 && $this->uploadVersion < $currentVersion) {
+        if ($currentVersion > 0 && $this->uploadVersion < $currentVersion) {
             Log::info("VoiceCloningJob: skipping stale job for user {$this->userId} (v{$this->uploadVersion} < v{$currentVersion})");
             @unlink($this->localFilePath);
             return;
