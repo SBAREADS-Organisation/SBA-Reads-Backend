@@ -325,10 +325,10 @@ class BookAIController extends Controller
             $insights = $this->claude->message(
                 userPrompt: $summary,
                 systemPrompt: "You are an expert publishing analytics advisor. ".
-                    "Analyze this author's performance data and provide 3–5 specific, actionable insights. ".
-                    "Focus on: what's working, what to improve, pricing strategy, audio adoption, and reader engagement. ".
-                    "Be direct and practical. Use plain text with numbered points. No generic advice.",
-                maxTokens: 600
+                    "Analyze this author's data and give exactly 3 numbered insights. ".
+                    "Each insight: one sentence of finding + one sentence of action. Max 30 words each. ".
+                    "Be specific to the numbers. No intros, no conclusions, no generic advice.",
+                maxTokens: 300
             );
 
             return $this->success([
