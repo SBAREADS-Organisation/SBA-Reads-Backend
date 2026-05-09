@@ -19,6 +19,7 @@ use App\Http\Controllers\Subscription\SubscriptionController;
 use App\Http\Controllers\Transaction\TransactionsController;
 use App\Http\Controllers\Withdrawal\StripeWithdrawalController;
 use App\Http\Controllers\Withdrawal\WithdrawalController;
+use App\Http\Controllers\AI\BookAIController;
 use App\Http\Controllers\Audio\AudioController;
 use App\Http\Controllers\User\LinkedAccountController;
 use App\Http\Controllers\User\UserController;
@@ -196,6 +197,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('books/{bookId}/audio-status', [AudioController::class, 'getAudioStatus'])->name('book.audio-status');
     Route::middleware(['role:admin,superadmin'])->post('books/{bookId}/reset-audio', [AudioController::class, 'resetAudio'])->name('book.reset-audio');
     Route::middleware(['role:admin,superadmin'])->get('admin/elevenlabs/quota', [AudioController::class, 'getElevenLabsQuota'])->name('admin.elevenlabs.quota');
+
+    // AI feature routes
+    Route::post('books/{bookId}/ai/chat', [BookAIController::class, 'chat'])->name('book.ai.chat');
+    Route::post('books/{bookId}/ai/generate-description', [BookAIController::class, 'generateDescription'])->name('book.ai.description');
+    Route::post('books/{bookId}/ai/detect-chapters', [BookAIController::class, 'detectChapters'])->name('book.ai.detect-chapters');
+    Route::get('books/{bookId}/ai/recommendations', [BookAIController::class, 'recommendations'])->name('book.ai.recommendations');
+    Route::get('author/ai/insights', [BookAIController::class, 'aiInsights'])->name('author.ai.insights');
 
     // Author-specific endpoints (only for account_type = 'author')
     Route::middleware(['role:author'])->prefix('author')->group(function () {

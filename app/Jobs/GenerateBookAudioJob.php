@@ -73,6 +73,11 @@ class GenerateBookAudioJob implements ShouldQueue
                 );
             }
 
+            // Cache extracted text on the book so AI features can reuse it without re-downloading the PDF
+            if (empty($this->book->text_content)) {
+                $this->book->updateQuietly(['text_content' => $text]);
+            }
+
             $voiceId = $this->author->elevenlabs_voice_id;
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');

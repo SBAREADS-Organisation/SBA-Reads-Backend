@@ -80,4 +80,9 @@ return [
         'api_key'         => env('ELEVENLABS_API_KEY'),
         'default_voice_id' => env('ELEVENLABS_DEFAULT_VOICE_ID', 'EXAVITQu4vr4xnSDxMaL'), // ElevenLabs "Sarah" voice
     ],
+
+    'anthropic' => [
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
+    ],
 ];

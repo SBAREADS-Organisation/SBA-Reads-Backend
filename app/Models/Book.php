@@ -59,6 +59,11 @@ class Book extends Model
         'audio_segments',
         'audio_sample_url',
         'elevenlabs_project_id',
+        'text_content',
+    ];
+
+    protected $hidden = [
+        'text_content',
     ];
 
     /**
