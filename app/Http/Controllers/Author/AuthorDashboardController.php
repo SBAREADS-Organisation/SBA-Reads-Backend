@@ -77,6 +77,11 @@ class AuthorDashboardController extends Controller
                 'categories:id,name'
             ])->orderBy('created_at', 'desc')->take(5)->get();
 
+            // Total book views across all author books
+            $total_views = Book::whereHas('authors', function ($q) use ($author) {
+                $q->where('author_id', $author->id);
+            })->sum('views_count');
+
             // Monthly trends
             $monthly_sales = $this->getMonthlySales($authorBooks->toArray());
 
@@ -87,6 +92,7 @@ class AuthorDashboardController extends Controller
                 'revenue' => round($revenue, 2),
                 'reader_engagement' => $reader_engagement,
                 'books_published' => $books_published,
+                'total_views' => (int) $total_views,
                 'total_sales' => round($total_sales, 2),
                 'books_sold' => $books_sold,
                 'books_uploaded' => $books_uploaded,
