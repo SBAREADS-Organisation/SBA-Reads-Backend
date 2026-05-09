@@ -313,6 +313,16 @@ class BookController extends Controller
                 'purchasers:id',
             ])->findOrFail($id);
 
+            // Count the view — skip for the book's own author
+            $viewerId = auth()->id();
+            $isOwner  = $viewerId && (
+                $book->author_id === $viewerId ||
+                $book->authors->contains('id', $viewerId)
+            );
+            if (! $isOwner) {
+                $book->increment('views_count');
+            }
+
             // Fetch similar books (by shared categories)
             $similarBooks = Book::whereHas('categories', function ($q) use ($book) {
                 $q->whereIn('categories.id', $book->categories->pluck('id'));
@@ -1285,7 +1295,7 @@ class BookController extends Controller
 
             // Calculate total amount (assumed USD baseline)
             $totalAmount = $books->sum('actual_price');
-            $platformFeeAmount = $totalAmount * 0.3; // 30% platform fee
+            $platformFeeAmount = $totalAmount * 0.1; // 10% platform fee (author keeps 90%)
 
             // Ensure total amount is not null or zero
             if ($totalAmount <= 0) {
@@ -1304,7 +1314,7 @@ class BookController extends Controller
             // Create individual purchase items for each book
             foreach ($bookIds as $bookId) {
                 $book = $books->find($bookId);
-                $authorPayoutAmount = $book->actual_price * 0.7; // 70% to author
+                $authorPayoutAmount = $book->actual_price * 0.9; // 90% to author, 10% platform fee
 
                 DigitalBookPurchaseItem::create([
                     'digital_book_purchase_id' => $purchase->id,
