@@ -4,6 +4,7 @@ namespace App\Services\Stripe;
 
 use App\Jobs\ProcessAuthorPayout;
 use App\Models\BookMetaDataAnalytics;
+use App\Models\AudioBookPurchase;
 use App\Models\DigitalBookPurchase;
 use App\Models\StripePayout;
 use App\Models\Transaction;
@@ -54,6 +55,10 @@ class StripeWebhookService
                     $this->processSuccessfulDigitalBookPurchase($transaction, $user);
                     break;
 
+                case 'audio_book_purchase':
+                    $this->processSuccessfulAudioBookPurchase($transaction, $user);
+                    break;
+
                 case 'order':
                     $this->processSuccessfulOrder($transaction, $user);
                     break;
@@ -62,6 +67,52 @@ class StripeWebhookService
                     break;
             }
         } catch (\Exception $e) {
+        }
+    }
+
+    /**
+     * Processes a successful audio book purchase — marks status paid, credits author 30%.
+     */
+    protected function processSuccessfulAudioBookPurchase(Transaction $transaction, User $user): void
+    {
+        try {
+            $purchase = AudioBookPurchase::with('book.author')
+                ->where('user_id', $user->id)
+                ->findOrFail($transaction->purpose_id);
+
+            if ($purchase->status !== 'paid') {
+                $purchase->update(['status' => 'paid']);
+            }
+
+            $author = $purchase->book->author;
+            if ($author) {
+                $author->increment('wallet_balance', $purchase->author_payout_amount);
+
+                Transaction::create([
+                    'id'               => \Illuminate\Support\Str::uuid(),
+                    'user_id'          => $author->id,
+                    'reference'        => uniqid('audio_pay_'),
+                    'status'           => 'succeeded',
+                    'currency'         => $purchase->currency ?? 'USD',
+                    'amount'           => $purchase->author_payout_amount,
+                    'payment_provider' => 'app',
+                    'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
+                    'type'             => 'payout',
+                    'direction'        => 'credit',
+                    'purpose_type'     => 'audio_book_purchase',
+                    'purpose_id'       => $purchase->id,
+                ]);
+            }
+
+            // Update analytics
+            $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                ['book_id' => $purchase->book_id],
+                ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+            );
+            $bookAnalytics->increment('purchases', 1);
+            $bookAnalytics->save();
+        } catch (\Exception $e) {
+            throw $e;
         }
     }
 

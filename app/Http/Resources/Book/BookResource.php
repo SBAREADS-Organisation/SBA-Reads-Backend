@@ -3,6 +3,7 @@
 namespace App\Http\Resources\Book;
 
 use App\Http\Resources\User\UserResource;
+use App\Models\AudioBookPurchase;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class BookResource extends JsonResource
@@ -64,11 +65,16 @@ class BookResource extends JsonResource
             'stock_available' => max(0, ($this->stock_quantity ?? 0) - ($this->stock_reserved ?? 0)),
             'author_id' => $this->author_id,
             'files' => $this->files,
+            'is_featured'    => (bool) ($this->is_featured ?? false),
+            'ranking'        => $this->ranking,
+            'audio_price'    => $this->audio_price ?? 10.00,
             'audio_status' => $this->audio_status ?? 'none',
             'audio_url' => $this->audio_url,
             'audio_sample_url' => $this->audio_sample_url,
             'audio_duration' => $this->audio_duration,
             'audio_segments' => $this->audio_segments ?? [],
+            'audio_chapters' => $this->audio_chapters ?? [],
+            'audio_purchased' => $this->resolveAudioPurchased(),
             'categories' => $this->categories->map(function ($cat) {
                 return [
                     'id' => $cat->id,
@@ -97,6 +103,17 @@ class BookResource extends JsonResource
             'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
             'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
         ];
+    }
+
+    private function resolveAudioPurchased(): bool
+    {
+        $userId = auth()->id();
+        if (!$userId) return false;
+
+        return AudioBookPurchase::where('user_id', $userId)
+            ->where('book_id', $this->id)
+            ->where('status', 'paid')
+            ->exists();
     }
 
     private function formatProfilePicture($profilePicture)

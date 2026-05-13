@@ -172,15 +172,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     //get my purchased books
     Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
+    Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
+    Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
     Route::get('books/{id}/reviews', [BookController::class, 'getReviews']);
-    Route::post('books/preview', [BookController::class, 'extractPreview']);
+    Route::post('books/{id}/purchase-audio', [BookController::class, 'purchaseAudio'])->name('book.purchase-audio');
     Route::put('books/{book}', [BookController::class, 'update']);
     Route::patch('books/{book}/toggle-visibility', [BookController::class, 'toggleVisibility']);
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/archive', [BookController::class, 'toggleArchive']);
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/stock', [BookController::class, 'updateStock']);
+    Route::middleware(['role:admin,superadmin'])->patch('books/{book}/featured', [BookController::class, 'setFeatured'])->name('book.set-featured');
+    Route::middleware(['role:admin,superadmin'])->patch('books/{book}/ranking', [BookController::class, 'setRanking'])->name('book.set-ranking');
     Route::middleware(['role:admin,superadmin,author'])->delete('books/{book}', [BookController::class, 'destroy']);
-    Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
 
     // Reader-specific endpoints
     Route::post('books/{id}/start-reading', [BookController::class, 'startReading']);
@@ -223,6 +226,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 Route::get('books', [BookController::class, 'index']);
+Route::get('books/featured', [BookController::class, 'featured']); // public featured list (no auth required)
 
 // Order Routes
 Route::middleware(['auth:sanctum'])->group(function () {

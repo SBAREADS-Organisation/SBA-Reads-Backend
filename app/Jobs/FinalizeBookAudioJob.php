@@ -44,6 +44,10 @@ class FinalizeBookAudioJob implements ShouldQueue
         ksort($chunks, SORT_NUMERIC);
         $segmentUrls = array_values($chunks);
 
+        // Read chapter map written by GenerateBookAudioJob (if any)
+        $chaptersJson = Redis::get("audio_chapters:{$this->book->id}");
+        $audioChapters = $chaptersJson ? json_decode($chaptersJson, true) : null;
+
         $this->book->update([
             'audio_status'          => 'ready',
             'audio_url'             => $segmentUrls[0],
@@ -51,9 +55,13 @@ class FinalizeBookAudioJob implements ShouldQueue
             'audio_segments'        => $segmentUrls,
             'audio_duration'        => null,
             'elevenlabs_project_id' => null,
+            'audio_chapters'        => $audioChapters,
         ]);
 
         Redis::del("audio_chunks:{$this->book->id}");
+        if ($chaptersJson) {
+            Redis::del("audio_chapters:{$this->book->id}");
+        }
 
         Log::info("FinalizeBookAudioJob: book {$this->book->id} ready — ".count($segmentUrls).' segments');
 

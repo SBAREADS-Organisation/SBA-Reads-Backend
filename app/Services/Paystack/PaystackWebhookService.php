@@ -316,6 +316,10 @@ class PaystackWebhookService
                     $this->processSuccessfulDigitalBookPurchase($transaction, $user);
                     break;
 
+                case 'audio_book_purchase':
+                    $this->processSuccessfulAudioBookPurchase($transaction, $user);
+                    break;
+
                 case 'order':
                     $this->processSuccessfulOrder($transaction, $user);
                     break;
@@ -326,6 +330,53 @@ class PaystackWebhookService
             }
         } catch (\Exception $e) {
             Log::error('Error processing successful Paystack transaction: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Process successful audio book purchase — marks paid, credits author 30%.
+     */
+    protected function processSuccessfulAudioBookPurchase(Transaction $transaction, $user): void
+    {
+        try {
+            $purchase = \App\Models\AudioBookPurchase::with('book.author')
+                ->where('user_id', $user->id)
+                ->findOrFail($transaction->purpose_id);
+
+            if ($purchase->status !== 'paid') {
+                $purchase->update(['status' => 'paid']);
+            }
+
+            $author = $purchase->book->author;
+            if ($author) {
+                $author->increment('wallet_balance', $purchase->author_payout_amount);
+
+                \App\Models\Transaction::create([
+                    'id'               => \Illuminate\Support\Str::uuid(),
+                    'user_id'          => $author->id,
+                    'reference'        => uniqid('audio_pay_'),
+                    'status'           => 'succeeded',
+                    'currency'         => $purchase->currency ?? 'NGN',
+                    'amount'           => $purchase->author_payout_amount,
+                    'payment_provider' => 'app',
+                    'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
+                    'type'             => 'payout',
+                    'direction'        => 'credit',
+                    'purpose_type'     => 'audio_book_purchase',
+                    'purpose_id'       => $purchase->id,
+                ]);
+            }
+
+            // Update analytics
+            $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                ['book_id' => $purchase->book_id],
+                ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+            );
+            $bookAnalytics->increment('purchases', 1);
+            $bookAnalytics->save();
+        } catch (\Exception $e) {
+            Log::error('Error processing successful audio book purchase: ' . $e->getMessage());
+            throw $e;
         }
     }
 

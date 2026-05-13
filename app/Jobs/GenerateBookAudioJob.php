@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use Smalot\PdfParser\Parser;
 
 class GenerateBookAudioJob implements ShouldQueue
@@ -78,14 +79,23 @@ class GenerateBookAudioJob implements ShouldQueue
                 $this->book->updateQuietly(['text_content' => $text]);
             }
 
+            // Skip front matter (copyright, ToC, dedication) — start from first chapter/intro
+            $text = $this->skipFrontMatter($text);
+
             $voiceId = $this->author->elevenlabs_voice_id;
             if (! $voiceId) {
                 throw new \RuntimeException('Author has no cloned voice. Please upload a voice sample first.');
             }
 
-            // Step 3: Split into chunks and dispatch all as a parallel batch
-            $chunks      = $this->chunkText($text, 4500);
+            // Step 3: Detect chapter boundaries, then split into chunks
+            $chapterMarkers = $this->detectChapterMarkers($text);
+            [$chunks, $chapterMap] = $this->chunkTextWithChapters($text, 4500, $chapterMarkers);
             $totalChunks = count($chunks);
+
+            // Store chapter map in Redis so FinalizeBookAudioJob can persist it
+            if (! empty($chapterMap)) {
+                Redis::set("audio_chapters:{$this->book->id}", json_encode($chapterMap), 'EX', 86400);
+            }
             $book        = $this->book;
             $author      = $this->author;
 
@@ -160,34 +170,119 @@ class GenerateBookAudioJob implements ShouldQueue
         return trim(preg_replace('/\s+/', ' ', $output ?? ''));
     }
 
-    private function chunkText(string $text, int $maxChars): array
+    /**
+     * Strip everything before the first chapter/introduction marker.
+     * Avoids reading out copyright pages, ToC, dedications, etc.
+     */
+    private function skipFrontMatter(string $text): string
     {
-        $chunks = [];
+        $pattern = '/(?:^|\n)[ \t]*(Chapter|CHAPTER|Introduction|INTRODUCTION|Prologue|PROLOGUE|Preface|PREFACE|Part\s+(?:\d+|[IVXLC]+))\b/';
 
-        while (strlen($text) > 0) {
-            if (strlen($text) <= $maxChars) {
-                $chunks[] = trim($text);
-                break;
+        if (preg_match($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
+            $offset = $matches[0][1];
+            // Only skip if there's meaningful front matter (> 150 chars before first marker)
+            if ($offset > 150) {
+                return ltrim(substr($text, $offset));
             }
-
-            $slice    = substr($text, 0, $maxChars);
-            $breakPos = max(
-                (int) strrpos($slice, '. '),
-                (int) strrpos($slice, '! '),
-                (int) strrpos($slice, '? '),
-                (int) strrpos($slice, "\n")
-            );
-
-            if ($breakPos < $maxChars / 2) {
-                $breakPos = $maxChars;
-            } else {
-                $breakPos += 2;
-            }
-
-            $chunks[] = trim(substr($text, 0, $breakPos));
-            $text     = substr($text, $breakPos);
         }
 
-        return array_values(array_filter($chunks, fn ($c) => ! empty(trim($c))));
+        return $text;
+    }
+
+    /**
+     * Return a map of [charOffset => title] for all chapter/section headings found in the text.
+     */
+    private function detectChapterMarkers(string $text): array
+    {
+        $markers = [];
+
+        // "Chapter 1", "Chapter One", "CHAPTER IV", etc.
+        $chapterPattern = '/(?:^|\n)[ \t]*((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/';
+
+        // Stand-alone section names (Introduction, Prologue, etc.)
+        $sectionPattern = '/(?:^|\n)[ \t]*((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/i';
+
+        foreach ([$chapterPattern, $sectionPattern] as $pat) {
+            preg_match_all($pat, $text, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[1] as $match) {
+                $pos   = $match[1];
+                $title = trim($match[0]);
+                // Truncate very long headings to a clean label
+                if (strlen($title) > 60) {
+                    $title = rtrim(substr($title, 0, 57)).'…';
+                }
+                $markers[$pos] = $title;
+            }
+        }
+
+        ksort($markers);
+
+        return $markers;
+    }
+
+    /**
+     * Split text into ~$maxChars chunks at sentence boundaries, and build a
+     * chapter map: [{segment: n, title: "Chapter 1"}, ...] keyed by which
+     * segment each chapter heading first appears in.
+     *
+     * @return array{0: string[], 1: array<int, array{segment: int, title: string}>}
+     */
+    private function chunkTextWithChapters(string $text, int $maxChars, array $chapterMarkers): array
+    {
+        $chunks      = [];
+        $chapterMap  = [];
+        $absolutePos = 0;
+        $remaining   = $text;
+        $markerPos   = array_keys($chapterMarkers);
+        $markerIdx   = 0;
+
+        while (strlen($remaining) > 0) {
+            if (strlen($remaining) <= $maxChars) {
+                $chunkLen  = strlen($remaining);
+                $chunkText = trim($remaining);
+            } else {
+                $slice    = substr($remaining, 0, $maxChars);
+                $breakPos = max(
+                    (int) strrpos($slice, '. '),
+                    (int) strrpos($slice, '! '),
+                    (int) strrpos($slice, '? '),
+                    (int) strrpos($slice, "\n")
+                );
+
+                if ($breakPos < $maxChars / 2) {
+                    $breakPos = $maxChars;
+                } else {
+                    $breakPos += 2;
+                }
+
+                $chunkLen  = $breakPos;
+                $chunkText = trim(substr($remaining, 0, $chunkLen));
+            }
+
+            $segIdx    = count($chunks);
+            $chunkEnd  = $absolutePos + $chunkLen;
+
+            // Advance past any chapter markers that fall within this chunk
+            while ($markerIdx < count($markerPos) && $markerPos[$markerIdx] < $chunkEnd) {
+                $pos   = $markerPos[$markerIdx];
+                $title = $chapterMarkers[$pos];
+
+                // Only record marker if it starts within this chunk (not before it)
+                if ($pos >= $absolutePos) {
+                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title];
+                }
+
+                $markerIdx++;
+            }
+
+            if (! empty($chunkText)) {
+                $chunks[] = $chunkText;
+            }
+
+            $remaining   = substr($remaining, $chunkLen);
+            $absolutePos = $chunkEnd;
+        }
+
+        return [$chunks, $chapterMap];
     }
 }

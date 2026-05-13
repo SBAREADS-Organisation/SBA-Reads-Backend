@@ -60,6 +60,10 @@ class Book extends Model
         'audio_sample_url',
         'elevenlabs_project_id',
         'text_content',
+        'is_featured',
+        'ranking',
+        'audio_price',
+        'audio_chapters',
     ];
 
     protected $hidden = [
@@ -97,6 +101,10 @@ class Book extends Model
             'stock_reserved' => 'integer',
             'audio_duration' => 'integer',
             'audio_segments' => 'array',
+            'is_featured'    => 'boolean',
+            'ranking'        => 'integer',
+            'audio_price'    => 'float',
+            'audio_chapters' => 'array',
         ];
     }
 

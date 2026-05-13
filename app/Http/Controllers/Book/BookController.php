@@ -11,6 +11,7 @@ use App\Mail\Book\BookDeleted;
 use App\Mail\Books\BookCreatedNotification;
 use App\Models\Book;
 use App\Models\BookReviews;
+use App\Models\AudioBookPurchase;
 use App\Models\DigitalBookPurchase;
 use App\Models\DigitalBookPurchaseItem;
 use App\Models\ReadingProgress;
@@ -1295,7 +1296,7 @@ class BookController extends Controller
 
             // Calculate total amount (assumed USD baseline)
             $totalAmount = $books->sum('actual_price');
-            $platformFeeAmount = $totalAmount * 0.1; // 10% platform fee (author keeps 90%)
+            $platformFeeAmount = $totalAmount * 0.25; // 25% platform fee (author keeps 75%)
 
             // Ensure total amount is not null or zero
             if ($totalAmount <= 0) {
@@ -1314,7 +1315,7 @@ class BookController extends Controller
             // Create individual purchase items for each book
             foreach ($bookIds as $bookId) {
                 $book = $books->find($bookId);
-                $authorPayoutAmount = $book->actual_price * 0.9; // 90% to author, 10% platform fee
+                $authorPayoutAmount = $book->actual_price * 0.75; // 75% to author, 25% platform fee
 
                 DigitalBookPurchaseItem::create([
                     'digital_book_purchase_id' => $purchase->id,
@@ -1389,6 +1390,156 @@ class BookController extends Controller
             ], 'Book purchase initiated successfully. Complete payment to access books.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('One or more books not found.', 404, $e->getMessage(), $e);
+        } catch (\Exception $e) {
+            return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Return books marked as featured.
+     */
+    public function featured(): JsonResponse
+    {
+        try {
+            $books = Book::where('is_featured', true)
+                ->orderBy('ranking')
+                ->orderByDesc('updated_at')
+                ->get();
+
+            return $this->success(BookResource::collection($books), 'Featured books retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve featured books.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Toggle a book's featured status (admin only).
+     */
+    public function setFeatured(Request $request, Book $book): JsonResponse
+    {
+        try {
+            $book->update(['is_featured' => !$book->is_featured]);
+
+            return $this->success(['is_featured' => $book->is_featured], 'Book featured status updated.');
+        } catch (\Exception $e) {
+            return $this->error('Failed to update featured status.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Set a book's ad/placement ranking (admin only). Lower number = higher priority.
+     */
+    public function setRanking(Request $request, Book $book): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'ranking' => 'nullable|integer|min:0|max:65535',
+            ]);
+
+            $book->update(['ranking' => $validated['ranking']]);
+
+            return $this->success(['ranking' => $book->ranking], 'Book ranking updated.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error('Validation failed.', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->error('Failed to update ranking.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Purchase the audio version of a single book at the flat $10 rate.
+     * Split: 30% author, 70% platform.
+     */
+    public function purchaseAudio(Request $request, $id): JsonResponse
+    {
+        try {
+            $user = $request->user();
+            $book = Book::findOrFail($id);
+
+            if (empty($book->audio_url) && empty($book->audio_segments)) {
+                return $this->error('This book does not have an audio version available.', 422);
+            }
+
+            $alreadyPurchased = AudioBookPurchase::where('user_id', $user->id)
+                ->where('book_id', $book->id)
+                ->where('status', 'paid')
+                ->exists();
+
+            if ($alreadyPurchased) {
+                return $this->error('You already own the audio version of this book.', 409);
+            }
+
+            $currency = strtoupper($request->input('currency', 'USD'));
+            $provider = $this->getPaymentProvider($currency);
+
+            $priceUsd   = (float) ($book->audio_price ?? 10.00);
+            $authorCut  = round($priceUsd * 0.30, 2); // 30% to author
+            $platformCut = round($priceUsd * 0.70, 2); // 70% to platform
+
+            $priceConverted = $priceUsd;
+            if ($currency !== 'USD') {
+                $priceConverted = (float) $this->currencyConversionService->convert($priceUsd, 'USD', $currency);
+            }
+
+            $purchase = AudioBookPurchase::create([
+                'user_id'              => $user->id,
+                'book_id'              => $book->id,
+                'author_id'            => $book->author_id,
+                'price'                => $priceUsd,
+                'author_payout_amount' => $authorCut,
+                'platform_fee_amount'  => $platformCut,
+                'price_converted'      => $priceConverted,
+                'currency'             => $currency,
+                'status'               => 'pending',
+                'payout_status'        => 'pending',
+                'payment_provider'     => $provider,
+            ]);
+
+            $transaction = app(\App\Services\Payments\PaymentService::class)->createPayment([
+                'amount'      => $priceConverted,
+                'currency'    => $currency,
+                'description' => 'Audio book purchase: ' . $book->title,
+                'purpose'     => 'audio_book_purchase',
+                'purpose_id'  => $purchase->id,
+                'meta_data'   => [
+                    'book_id'          => $book->id,
+                    'user_id'          => $user->id,
+                    'purchase_id'      => $purchase->id,
+                    'provider'         => $provider,
+                    'amount_usd'       => $priceUsd,
+                    'amount_converted' => $priceConverted,
+                ],
+            ], $user);
+
+            if ($transaction instanceof \Illuminate\Http\JsonResponse) {
+                $responseData = $transaction->getData(true);
+
+                return $this->error(
+                    'An error occurred while initiating the audio purchase.',
+                    $transaction->getStatusCode(),
+                    $responseData['error'] ?? 'Unknown error from payment service.'
+                );
+            }
+
+            return $this->success([
+                'purchase'           => $purchase->load('book'),
+                'transaction'        => $transaction,
+                'currency'           => $currency,
+                'provider'           => $provider,
+                'price_usd'          => $priceUsd,
+                'price_converted'    => $priceConverted,
+                'author_payout'      => $authorCut,
+                'platform_fee'       => $platformCut,
+                'status'             => 'pending',
+                'payment_intent_id'  => $transaction->payment_intent_id,
+                'authorization_url'  => $provider === 'paystack'
+                    ? $transaction->payment_client_secret
+                    : (isset($transaction->meta_data['paystack_response']['data']['authorization_url'])
+                        ? $transaction->meta_data['paystack_response']['data']['authorization_url']
+                        : null),
+            ], 'Audio purchase initiated. Complete payment to unlock audio.');
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return $this->error('Book not found.', 404, $e->getMessage(), $e);
         } catch (\Exception $e) {
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
