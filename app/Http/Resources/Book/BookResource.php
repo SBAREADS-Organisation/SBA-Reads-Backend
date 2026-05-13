@@ -110,10 +110,14 @@ class BookResource extends JsonResource
         $userId = auth()->id();
         if (!$userId) return false;
 
-        return AudioBookPurchase::where('user_id', $userId)
-            ->where('book_id', $this->id)
-            ->where('status', 'paid')
-            ->exists();
+        try {
+            return AudioBookPurchase::where('user_id', $userId)
+                ->where('book_id', $this->id)
+                ->where('status', 'paid')
+                ->exists();
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function formatProfilePicture($profilePicture)
