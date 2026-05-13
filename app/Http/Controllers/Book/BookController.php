@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Book;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Book\BookResource;
 use App\Http\Resources\ReadingProgress\ReadingProgressResource;
+use App\Jobs\NotifyReadersOfNewBookJob;
 use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
 use App\Mail\Book\BookDeleted;
@@ -1179,6 +1180,10 @@ class BookController extends Controller
                     );
                     // $author->notify(new BookApproved($book));
                 }
+
+                // Notify all readers that a new book is available.
+                // Runs in the background so the admin response is instant.
+                NotifyReadersOfNewBookJob::dispatch($book);
 
                 $book->authors->transform(function ($author) {
                     return [
