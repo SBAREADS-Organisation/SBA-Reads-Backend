@@ -22,6 +22,7 @@ class Book extends Model
         'description',
         'isbn',
         'product_id',
+        'audio_product_id',
         'table_of_contents',
         'tags',
         'category',
