@@ -106,15 +106,28 @@ class BookResource extends JsonResource
         ];
     }
 
+    // Date audio became a separate purchase. Purchases before this are grandfathered.
+    private const AUDIO_SPLIT_DATE = '2026-05-13';
+
     private function resolveAudioPurchased(): bool
     {
         $userId = auth()->id();
         if (!$userId) return false;
 
         try {
-            return AudioBookPurchase::where('user_id', $userId)
+            // Paid audio purchase — always valid
+            $hasAudioPurchase = AudioBookPurchase::where('user_id', $userId)
                 ->where('book_id', $this->id)
                 ->where('status', 'paid')
+                ->exists();
+
+            if ($hasAudioPurchase) return true;
+
+            // Grandfathered: bought the book before audio was split into a separate product
+            return \Illuminate\Support\Facades\DB::table('book_user')
+                ->where('user_id', $userId)
+                ->where('book_id', $this->id)
+                ->where('created_at', '<', self::AUDIO_SPLIT_DATE)
                 ->exists();
         } catch (\Throwable $e) {
             return false;
