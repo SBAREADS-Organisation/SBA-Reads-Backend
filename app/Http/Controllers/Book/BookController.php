@@ -327,21 +327,30 @@ class BookController extends Controller
                 $book->increment('views_count');
             }
 
-            // Auto-heal: if the authenticated user has a successful Apple IAP
-            // transaction for this book but isn't in book_user (e.g. receipt
-            // validation failed before the sandbox-fallback fix was deployed),
-            // add them silently so the book shows as purchased without any user action.
+            // Auto-heal: ensure any user with a legitimate paid purchase record
+            // (Paystack/Stripe DigitalBookPurchase OR Apple IAP Transaction) is
+            // reflected in book_user. This fixes older purchases that completed
+            // payment but never reached addBooksToUserLibrary due to webhook
+            // failures or receipt validation bugs.
             if ($viewerId) {
                 $alreadyOwned = $book->purchasers->contains('id', $viewerId);
 
                 if (! $alreadyOwned) {
-                    $hasIapTransaction = Transaction::where('user_id', $viewerId)
+                    // Android / Stripe: paid DigitalBookPurchase that contains this book
+                    $hasDigitalPurchase = DigitalBookPurchaseItem::where('book_id', $book->id)
+                        ->whereHas('digitalBookPurchase', function ($q) use ($viewerId) {
+                            $q->where('user_id', $viewerId)->where('status', 'paid');
+                        })
+                        ->exists();
+
+                    // iOS IAP: Apple transaction recorded but book not in library
+                    $hasIapTransaction = ! $hasDigitalPurchase && Transaction::where('user_id', $viewerId)
                         ->where('payment_provider', 'apple')
                         ->where('status', 'success')
                         ->where('meta_data->book_id', $book->id)
                         ->exists();
 
-                    if ($hasIapTransaction) {
+                    if ($hasDigitalPurchase || $hasIapTransaction) {
                         app(BookPurchaseService::class)->addBooksToUserLibrary(
                             auth()->user(),
                             [$book->id]
