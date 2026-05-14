@@ -16,8 +16,10 @@ use App\Models\AudioBookPurchase;
 use App\Models\DigitalBookPurchase;
 use App\Models\DigitalBookPurchaseItem;
 use App\Models\ReadingProgress;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\Book\Milestone\MilestoneReachedNotification;
+use App\Services\Book\BookPurchaseService;
 use App\Services\Book\BookService;
 use App\Services\Book\PdfTocExtractorService;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
@@ -323,6 +325,32 @@ class BookController extends Controller
             );
             if (! $isOwner) {
                 $book->increment('views_count');
+            }
+
+            // Auto-heal: if the authenticated user has a successful Apple IAP
+            // transaction for this book but isn't in book_user (e.g. receipt
+            // validation failed before the sandbox-fallback fix was deployed),
+            // add them silently so the book shows as purchased without any user action.
+            if ($viewerId) {
+                $alreadyOwned = $book->purchasers->contains('id', $viewerId);
+
+                if (! $alreadyOwned) {
+                    $hasIapTransaction = Transaction::where('user_id', $viewerId)
+                        ->where('payment_provider', 'apple')
+                        ->where('status', 'success')
+                        ->where('meta_data->book_id', $book->id)
+                        ->exists();
+
+                    if ($hasIapTransaction) {
+                        app(BookPurchaseService::class)->addBooksToUserLibrary(
+                            auth()->user(),
+                            [$book->id]
+                        );
+
+                        // Reload purchasers so BookResource reflects the healed state
+                        $book->load('purchasers:id');
+                    }
+                }
             }
 
             // Fetch similar books (by shared categories)
