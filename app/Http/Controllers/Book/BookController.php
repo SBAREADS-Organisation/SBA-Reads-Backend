@@ -1496,7 +1496,7 @@ class BookController extends Controller
     {
         try {
             $user = $request->user();
-            $book = Book::findOrFail($id);
+            $book = Book::with('authors')->findOrFail($id);
 
             if (empty($book->audio_url) && empty($book->audio_segments)) {
                 return $this->error('This book does not have an audio version available.', 422);
@@ -1511,31 +1511,54 @@ class BookController extends Controller
                 return $this->error('You already own the audio version of this book.', 409);
             }
 
-            $currency = strtoupper($request->input('currency', 'USD'));
-            $provider = $this->getPaymentProvider($currency);
-
-            $priceUsd   = (float) ($book->audio_price ?? 10.00);
-            $authorCut  = round($priceUsd * 0.30, 2); // 30% to author
-            $platformCut = round($priceUsd * 0.70, 2); // 70% to platform
+            $currency    = strtoupper($request->input('currency', 'USD'));
+            $provider    = $this->getPaymentProvider($currency);
+            $priceUsd    = (float) ($book->audio_price ?? 10.00);
+            $authorCut   = round($priceUsd * 0.30, 2);
+            $platformCut = round($priceUsd * 0.70, 2);
 
             $priceConverted = $priceUsd;
             if ($currency !== 'USD') {
-                $priceConverted = (float) $this->currencyConversionService->convert($priceUsd, 'USD', $currency);
+                try {
+                    $priceConverted = (float) $this->currencyConversionService->convert($priceUsd, 'USD', $currency);
+                } catch (\Exception $e) {
+                    return $this->error('Unable to convert currency at this time. Please try USD.', 500, $e->getMessage());
+                }
             }
 
-            $purchase = AudioBookPurchase::create([
-                'user_id'              => $user->id,
-                'book_id'              => $book->id,
-                'author_id'            => $book->author_id,
-                'price'                => $priceUsd,
-                'author_payout_amount' => $authorCut,
-                'platform_fee_amount'  => $platformCut,
-                'price_converted'      => $priceConverted,
-                'currency'             => $currency,
-                'status'               => 'pending',
-                'payout_status'        => 'pending',
-                'payment_provider'     => $provider,
-            ]);
+            // Resolve primary author — fall back to first book_authors pivot entry
+            $authorId = $book->author_id ?? $book->authors->first()?->id;
+            if (!$authorId) {
+                return $this->error('This book has no author assigned.', 422);
+            }
+
+            // Reuse an existing pending record to avoid unique-key violations on retry
+            $purchase = AudioBookPurchase::where('user_id', $user->id)
+                ->where('book_id', $book->id)
+                ->where('status', 'pending')
+                ->first();
+
+            if ($purchase) {
+                $purchase->update([
+                    'price_converted'  => $priceConverted,
+                    'currency'         => $currency,
+                    'payment_provider' => $provider,
+                ]);
+            } else {
+                $purchase = AudioBookPurchase::create([
+                    'user_id'              => $user->id,
+                    'book_id'              => $book->id,
+                    'author_id'            => $authorId,
+                    'price'                => $priceUsd,
+                    'author_payout_amount' => $authorCut,
+                    'platform_fee_amount'  => $platformCut,
+                    'price_converted'      => $priceConverted,
+                    'currency'             => $currency,
+                    'status'               => 'pending',
+                    'payout_status'        => 'pending',
+                    'payment_provider'     => $provider,
+                ]);
+            }
 
             $transaction = app(\App\Services\Payments\PaymentService::class)->createPayment([
                 'amount'      => $priceConverted,
@@ -1555,7 +1578,6 @@ class BookController extends Controller
 
             if ($transaction instanceof \Illuminate\Http\JsonResponse) {
                 $responseData = $transaction->getData(true);
-
                 return $this->error(
                     'An error occurred while initiating the audio purchase.',
                     $transaction->getStatusCode(),
@@ -1564,21 +1586,20 @@ class BookController extends Controller
             }
 
             return $this->success([
-                'purchase'           => $purchase->load('book'),
-                'transaction'        => $transaction,
-                'currency'           => $currency,
-                'provider'           => $provider,
-                'price_usd'          => $priceUsd,
-                'price_converted'    => $priceConverted,
-                'author_payout'      => $authorCut,
-                'platform_fee'       => $platformCut,
-                'status'             => 'pending',
-                'payment_intent_id'  => $transaction->payment_intent_id,
-                'authorization_url'  => $provider === 'paystack'
+                'purchase'          => $purchase->load('book'),
+                'transaction'       => $transaction,
+                'currency'          => $currency,
+                'provider'          => $provider,
+                'price_usd'         => $priceUsd,
+                'price_converted'   => $priceConverted,
+                'author_payout'     => $authorCut,
+                'platform_fee'      => $platformCut,
+                'status'            => 'pending',
+                'payment_intent_id' => $transaction->payment_intent_id,
+                // Paystack stores the authorization URL in payment_client_secret
+                'authorization_url' => $provider === 'paystack'
                     ? $transaction->payment_client_secret
-                    : (isset($transaction->meta_data['paystack_response']['data']['authorization_url'])
-                        ? $transaction->meta_data['paystack_response']['data']['authorization_url']
-                        : null),
+                    : null,
             ], 'Audio purchase initiated. Complete payment to unlock audio.');
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
             return $this->error('Book not found.', 404, $e->getMessage(), $e);
