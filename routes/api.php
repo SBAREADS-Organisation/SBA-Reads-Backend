@@ -40,10 +40,10 @@ use App\Services\Paystack\CurrencyConversionService;
 
 // Authentication Routes
 Route::prefix('auth')->group(function () {
-    Route::post('login', [AuthController::class, 'login'])->name('login');
-    Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->name('forgot-password');
-    Route::post('reset-password', [AuthController::class, 'resetPassword']);
-    Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp']);
+    Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login');
+    Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,5')->name('forgot-password');
+    Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,5');
+    Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,5');
 });
 
 // Withdrawal Routes
@@ -159,7 +159,8 @@ Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
 
 // Paystack Routes
 Route::prefix('paystack')->group(function () {
-    Route::post('/payment/initialize', [\App\Http\Controllers\PaystackPaymentController::class, 'initializePayment']);
+    Route::post('/payment/initialize', [\App\Http\Controllers\PaystackPaymentController::class, 'initializePayment'])
+        ->middleware('auth:sanctum');
     Route::post('/webhook', [\App\Http\Controllers\PaystackPaymentController::class, 'handleWebhook'])->name('paystack.webhook');
     Route::get('/callback', [\App\Http\Controllers\PaystackPaymentController::class, 'handleCallback'])->name('paystack.callback');
 });
@@ -292,180 +293,90 @@ Route::get('/auth/{provider}/callback', [SocialAuthController::class, 'callback'
 Route::get('/auth/google', [SocialAuthController::class, 'redirectToProvider']);
 Route::get('/auth/google/callback', [SocialAuthController::class, 'handleProviderCallback']);
 
-// Utility Routes
-//testing logs
-Route::get('log-test', function () {
-    Log::info('Log test route accessed');
-    return response()->json(['message' => 'Log test successful']);
-});
-
-// Simple ping endpoint for connectivity testing
+// Simple public endpoints
 Route::get('ping', function () {
     return response()->json([
-        'message' => 'Pong! Server is responding.',
-        'timestamp' => now()->toIso8601String(),
+        'message'     => 'Pong! Server is responding.',
+        'timestamp'   => now()->toIso8601String(),
         'server_time' => now()->format('Y-m-d H:i:s'),
-        'uptime' => 'Server is running',
-        'version' => '1.0.1'
+        'version'     => '1.0.1',
     ]);
 });
 
-// Deployment test endpoint
 Route::get('deploy-test', function () {
     return response()->json([
-        'message' => 'Deployment test successful!',
-        'timestamp' => now()->toIso8601String(),
-        'server_time' => now()->format('Y-m-d H:i:s'),
+        'message'       => 'Deployment test successful!',
+        'timestamp'     => now()->toIso8601String(),
+        'server_time'   => now()->format('Y-m-d H:i:s'),
         'last_deployed' => now()->toDateTimeString(),
-        'version' => '1.0.1'
+        'version'       => '1.0.1',
     ]);
 });
 
-//configure scribe
-Route::get('scribe-generate', function () {
-    //Artisan::call('vendor:publish', ['--tag' => 'scribe-config']);
-    Artisan::call('scribe:generate');
-    $output = Artisan::output();
+// Superadmin-only Artisan / ops routes — never publicly accessible
+Route::middleware(['auth:sanctum', 'role:superadmin'])->group(function () {
+    Route::get('ops/migrate', function () {
+        Artisan::call('migrate', ['--force' => true]);
+        $output = Artisan::output();
+        try {
+            DB::select('SELECT 1');
+            $conn   = DB::connection()->getConfig();
+            $dbInfo = "Connected to {$conn['host']}/{$conn['database']}";
+        } catch (\Exception $e) {
+            $dbInfo = 'DB error: ' . $e->getMessage();
+        }
+        return response()->json(['message' => 'Migration executed', 'output' => $output, 'db' => $dbInfo]);
+    });
 
-    return response()->json([
-        'message' => 'Scribe documentation generated successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
-});
+    Route::get('ops/migrate/rollback', function () {
+        Artisan::call('migrate:rollback', ['--force' => true]);
+        return response()->json(['message' => 'Rollback executed', 'output' => Artisan::output()]);
+    });
 
-// Database migration route
-Route::get('migrate', function () {
-    Artisan::call('migrate', ['--force' => true]);
+    Route::get('ops/seed', function () {
+        Artisan::call('db:seed');
+        return response()->json(['message' => 'Seeder run successfully', 'output' => Artisan::output()]);
+    });
 
-    $output = Artisan::output();
+    Route::get('ops/clear', function () {
+        Artisan::call('optimize:clear');
+        return response()->json(['message' => 'Cache cleared successfully', 'output' => Artisan::output()]);
+    });
 
-    try {
-        DB::select('SELECT 1');
-        $connection = DB::connection()->getConfig();
+    Route::get('ops/optimize', function () {
+        Artisan::call('optimize');
+        return response()->json(['message' => 'Optimized successfully', 'output' => Artisan::output()]);
+    });
 
-        $host = $connection['host'] ?? 'unknown host';
-        $database = $connection['database'] ?? 'unknown database';
+    Route::get('ops/storage-link', function () {
+        Artisan::call('storage:link');
+        return response()->json(['message' => 'Storage linked successfully', 'output' => Artisan::output()]);
+    });
 
-        $connectionStatus = "Connected to host: {$host}, database: {$database}";
-    } catch (\Exception $e) {
-        $connectionStatus = 'Could not connect to database: ' . $e->getMessage();
-    }
+    Route::get('ops/routes', function () {
+        Artisan::call('route:list');
+        return response()->json(['data' => explode("\n", Artisan::output())]);
+    });
 
-    return response()->json([
-        'message' => 'Migration executed',
-        'output' => $output,
-        'db_connection_status' => $connectionStatus,
-    ]);
-});
+    Route::get('ops/scribe', function () {
+        Artisan::call('scribe:generate');
+        return response()->json(['message' => 'Scribe docs generated', 'output' => Artisan::output()]);
+    });
 
-//rollback migration
-Route::get('migrate/rollback', function () {
-    Artisan::call('migrate:rollback', ['--force' => true]);
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Rollback executed',
-        'output' => $output,
-    ]);
-});
-
-// Database seeding route
-Route::get('seed', function () {
-    Artisan::call('db:seed');
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Seeder run successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
-});
-
-// Cache clearing route
-Route::get('clear', function () {
-    Artisan::call('optimize:clear');
-    $output = Artisan::output();
-
-    return response()->json(
-        [
-            'message' => 'Cache cleared successfully',
-            'code' => 200,
-            'output' => $output,
-        ],
-        200
-    );
-});
-
-// Routes listing route
-Route::get('routes', function () {
-    Artisan::call('route:list');
-    $output = Artisan::output();
-
-    return response()->json([
-        'data' => explode("\n", $output),
-        'code' => 200,
-        'message' => 'Routes listed successfully',
-    ], 200);
-});
-
-// Storage link creation route
-Route::get('storage-link', function () {
-    Artisan::call('storage:link');
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Storage linked successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
-});
-
-// Application optimization route
-Route::get('optimize', function () {
-    Artisan::call('optimize');
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Optimized successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
-});
-
-// Key generation route
-Route::get('key-generate', function () {
-    Artisan::call('key:generate');
-});
-
-// Database debugging route
-Route::get('/debug-db', function () {
-    try {
+    Route::get('ops/debug-db', function () {
         $data = DB::select('SELECT * FROM roles');
+        return response()->json(['status' => 'success', 'count' => count($data), 'data' => $data]);
+    });
 
-        return response()->json([
-            'status' => 'success',
-            'count' => count($data),
-            'data' => $data,
-        ], 200);
-    } catch (\Throwable $th) {
-        return response()->json([
-            'status' => 'error',
-            'message' => $th->getMessage(),
-        ], 500);
-    }
-});
+    Route::get('ops/show-db', function () {
+        Artisan::call('db:show');
+        return response()->json(['output' => Artisan::output()]);
+    });
 
-// Database information route
-Route::get('/show-db', function () {
-    Artisan::call('db:show');
-    $output = Artisan::output();
-
-    return response()->json([
-        'message' => 'Optimized successfully',
-        'code' => 200,
-        'output' => $output,
-    ], 200);
+    Route::get('ops/log-test', function () {
+        Log::info('Log test route accessed');
+        return response()->json(['message' => 'Log test successful']);
+    });
 });
 
 // Monitor Routes

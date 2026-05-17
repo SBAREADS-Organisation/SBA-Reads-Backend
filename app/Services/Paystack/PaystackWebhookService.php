@@ -54,7 +54,20 @@ class PaystackWebhookService
      */
     protected function handleChargeSuccess(array $data): bool
     {
-        Log::info('Paystack charge success handled', $data);
+        Log::info('Paystack charge success handled', ['reference' => $data['reference'] ?? null]);
+
+        // Idempotency: skip if we have already fully processed this charge
+        $alreadyProcessed = Transaction::where('payment_provider', 'paystack')
+            ->where('status', 'succeeded')
+            ->where(function ($q) use ($data) {
+                $q->where('reference', 'LIKE', '%' . $data['reference'] . '%')
+                  ->orWhere('payment_intent_id', $data['reference']);
+            })->exists();
+
+        if ($alreadyProcessed) {
+            Log::info('Paystack webhook duplicate — already processed', ['reference' => $data['reference']]);
+            return true;
+        }
 
         $transaction = Transaction::where('payment_provider', 'paystack')
             ->where('reference', $data['reference'])
@@ -349,33 +362,36 @@ class PaystackWebhookService
 
             $author = $purchase->book->author;
             if ($author) {
-                $author->increment('wallet_balance', $purchase->author_payout_amount);
+                // Wallet credit and payout record must succeed or fail together
+                DB::transaction(function () use ($author, $purchase) {
+                    $author->increment('wallet_balance', $purchase->author_payout_amount);
 
-                \App\Models\Transaction::create([
-                    'id'               => \Illuminate\Support\Str::uuid(),
-                    'user_id'          => $author->id,
-                    'reference'        => uniqid('audio_pay_'),
-                    'status'           => 'succeeded',
-                    'currency'         => $purchase->currency ?? 'NGN',
-                    'amount'           => $purchase->author_payout_amount,
-                    'payment_provider' => 'app',
-                    'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
-                    'type'             => 'payout',
-                    'direction'        => 'credit',
-                    'purpose_type'     => 'audio_book_purchase',
-                    'purpose_id'       => $purchase->id,
-                ]);
+                    \App\Models\Transaction::create([
+                        'id'               => \Illuminate\Support\Str::uuid(),
+                        'user_id'          => $author->id,
+                        'reference'        => uniqid('audio_pay_'),
+                        'status'           => 'succeeded',
+                        'currency'         => $purchase->currency ?? 'NGN',
+                        'amount'           => $purchase->author_payout_amount,
+                        'payment_provider' => 'app',
+                        'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
+                        'type'             => 'payout',
+                        'direction'        => 'credit',
+                        'purpose_type'     => 'audio_book_purchase',
+                        'purpose_id'       => $purchase->id,
+                    ]);
+                });
             }
 
-            // Update analytics
-            $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+            \App\Models\BookMetaDataAnalytics::firstOrCreate(
                 ['book_id' => $purchase->book_id],
                 ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-            );
-            $bookAnalytics->increment('purchases', 1);
-            $bookAnalytics->save();
+            )->increment('purchases');
         } catch (\Exception $e) {
-            Log::error('Error processing successful audio book purchase: ' . $e->getMessage());
+            Log::error('Error processing successful audio book purchase: ' . $e->getMessage(), [
+                'transaction_id' => $transaction->id,
+                'user_id'        => $user->id,
+            ]);
             throw $e;
         }
     }
@@ -391,48 +407,47 @@ class PaystackWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
-            // Only update if payment actually succeeded
             if ($purchase->status !== 'paid') {
                 $purchase->update(['status' => 'paid']);
             }
 
             foreach ($purchase->items as $item) {
-                // Add to user's purchased books using dedicated service
                 app(\App\Services\Book\BookPurchaseService::class)
                     ->addBooksToUserLibrary($user, [$item->book_id]);
 
-                // Update author wallet (only after successful payment)
                 $author = $item->book->author;
                 if ($author) {
-                    $author->increment('wallet_balance', $item->author_payout_amount_usd);
+                    // Wallet credit and payout record must succeed or fail together
+                    DB::transaction(function () use ($author, $item, $purchase) {
+                        $author->increment('wallet_balance', $item->author_payout_amount_usd);
 
-                    // Create payout transaction record
-                    \App\Models\Transaction::create([
-                        'id' => \Illuminate\Support\Str::uuid(),
-                        'user_id' => $author->id,
-                        'reference' => uniqid('pay_immediate_'),
-                        'status' => 'succeeded',
-                        'currency' => $purchase->currency ?? 'NGN',
-                        'amount' => $item->author_payout_amount,
-                        'payment_provider' => 'app',
-                        'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
-                        'type' => 'payout',
-                        'direction' => 'credit',
-                        'purpose_type' => 'digital_book_purchase',
-                        'purpose_id' => $purchase->id,
-                    ]);
+                        \App\Models\Transaction::create([
+                            'id'               => \Illuminate\Support\Str::uuid(),
+                            'user_id'          => $author->id,
+                            'reference'        => uniqid('pay_immediate_'),
+                            'status'           => 'succeeded',
+                            'currency'         => $purchase->currency ?? 'NGN',
+                            'amount'           => $item->author_payout_amount,
+                            'payment_provider' => 'app',
+                            'description'      => "Author payout for DigitalBookPurchase ID: {$purchase->id}",
+                            'type'             => 'payout',
+                            'direction'        => 'credit',
+                            'purpose_type'     => 'digital_book_purchase',
+                            'purpose_id'       => $purchase->id,
+                        ]);
+                    });
                 }
 
-                // Update analytics
-                $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                \App\Models\BookMetaDataAnalytics::firstOrCreate(
                     ['book_id' => $item->book_id],
                     ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-                );
-                $bookAnalytics->increment('purchases', 1);
-                $bookAnalytics->save();
+                )->increment('purchases');
             }
         } catch (\Exception $e) {
-            Log::error('Error processing successful digital book purchase: ' . $e->getMessage());
+            Log::error('Error processing successful digital book purchase: ' . $e->getMessage(), [
+                'transaction_id' => $transaction->id,
+                'user_id'        => $user->id,
+            ]);
             throw $e;
         }
     }
