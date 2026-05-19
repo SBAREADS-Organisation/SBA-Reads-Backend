@@ -227,7 +227,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 });
 
 Route::get('books', [BookController::class, 'index']);
-Route::get('books/featured', [BookController::class, 'featured']); // public featured list (no auth required)
+Route::get('books/featured', [BookController::class, 'featured']);
+Route::get('books/top-ranking', [BookController::class, 'topRanking']);
 
 // Order Routes
 Route::middleware(['auth:sanctum'])->group(function () {

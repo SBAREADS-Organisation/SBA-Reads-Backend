@@ -1420,6 +1420,26 @@ class BookController extends Controller
     }
 
     /**
+     * Return books ordered by their admin-assigned ranking (lower number = higher priority).
+     */
+    public function topRanking(): JsonResponse
+    {
+        try {
+            $books = Book::where('visibility', 'public')
+                ->where('archived', false)
+                ->whereIn('status', ['pending', 'approved', 'published'])
+                ->whereNotNull('ranking')
+                ->orderBy('ranking')
+                ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
+                ->get();
+
+            return $this->success(BookResource::collection($books), 'Top ranking books retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve top ranking books.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
      * Return books marked as featured.
      */
     public function featured(): JsonResponse
