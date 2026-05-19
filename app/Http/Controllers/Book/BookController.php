@@ -1762,6 +1762,33 @@ class BookController extends Controller
                 return $this->error('Validation failed.', 422, $validator->errors());
             }
             $user = $request->user();
+
+            // Bulk auto-heal: catch any paid purchases that never reached book_user
+            // (webhook failures, receipt validation races, etc.) so the library is
+            // always consistent regardless of which platform the user opens first.
+            $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
+
+            $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+                $q->where('user_id', $user->id)->where('status', 'paid')
+            )->pluck('book_id')->all();
+
+            $paidIapIds = Transaction::where('user_id', $user->id)
+                ->where('payment_provider', 'apple')
+                ->where('status', 'success')
+                ->whereNotNull('meta_data->book_id')
+                ->pluck(DB::raw('meta_data->>"$.book_id"'))
+                ->map(fn ($v) => (int) $v)
+                ->all();
+
+            $missingIds = array_values(array_diff(
+                array_unique(array_merge($paidDigitalIds, $paidIapIds)),
+                $ownedBookIds
+            ));
+
+            if (! empty($missingIds)) {
+                app(BookPurchaseService::class)->addBooksToUserLibrary($user, $missingIds);
+                Log::info("myPurchasedBooks bulk-healed {$user->id}: " . implode(',', $missingIds));
+            }
             $perPage = $request->input('items_per_page', 10000);
             // $search = $request->input('search');
             // $sortBy = $request->input('sort_by', 'purchase_date');
