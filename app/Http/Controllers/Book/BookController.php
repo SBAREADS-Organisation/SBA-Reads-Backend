@@ -1772,12 +1772,12 @@ class BookController extends Controller
                 $q->where('user_id', $user->id)->where('status', 'paid')
             )->pluck('book_id')->all();
 
+            // PostgreSQL JSON extraction: meta_data->>'book_id'
             $paidIapIds = Transaction::where('user_id', $user->id)
                 ->where('payment_provider', 'apple')
                 ->where('status', 'success')
-                ->whereNotNull('meta_data->book_id')
-                ->pluck(DB::raw('meta_data->>"$.book_id"'))
-                ->map(fn ($v) => (int) $v)
+                ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+                ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
                 ->all();
 
             $missingIds = array_values(array_diff(
