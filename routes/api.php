@@ -175,9 +175,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
-    Route::get('books/{id}', [BookController::class, 'show'])->name('book.show');
-    Route::get('books/{id}/reviews', [BookController::class, 'getReviews']);
-    Route::post('books/{id}/purchase-audio', [BookController::class, 'purchaseAudio'])->name('book.purchase-audio');
+    Route::get('books/{id}', [BookController::class, 'show'])->name('book.show')->where('id', '[0-9]+');
+    Route::get('books/{id}/reviews', [BookController::class, 'getReviews'])->where('id', '[0-9]+');
+    Route::post('books/{id}/purchase-audio', [BookController::class, 'purchaseAudio'])->name('book.purchase-audio')->where('id', '[0-9]+');
     Route::put('books/{book}', [BookController::class, 'update']);
     Route::patch('books/{book}/toggle-visibility', [BookController::class, 'toggleVisibility']);
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/archive', [BookController::class, 'toggleArchive']);
@@ -187,14 +187,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin,author'])->delete('books/{book}', [BookController::class, 'destroy']);
 
     // Reader-specific endpoints
-    Route::post('books/{id}/start-reading', [BookController::class, 'startReading']);
+    Route::post('books/{id}/start-reading', [BookController::class, 'startReading'])->where('id', '[0-9]+');
     Route::get('books/user/reading-progress', [BookController::class, 'userProgress']);
-    Route::post('books/{id}/reviews', [BookController::class, 'postReview']);
+    Route::post('books/{id}/reviews', [BookController::class, 'postReview'])->where('id', '[0-9]+');
     Route::get('books/bookmarks/all', [BookController::class, 'getAllBookmarks']);
-    Route::post('books/{id}/bookmark', [BookController::class, 'bookmark']);
+    Route::post('books/{id}/bookmark', [BookController::class, 'bookmark'])->where('id', '[0-9]+');
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
-    Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark']);
+    Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark'])->where('id', '[0-9]+');
 
     // Audio generation routes
     Route::post('books/{bookId}/generate-audio', [AudioController::class, 'generateAudio'])->name('book.generate-audio');
