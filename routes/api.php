@@ -184,6 +184,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/stock', [BookController::class, 'updateStock']);
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/featured', [BookController::class, 'setFeatured'])->name('book.set-featured');
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/ranking', [BookController::class, 'setRanking'])->name('book.set-ranking');
+    Route::middleware(['role:admin,superadmin'])->patch('books/{book}/audio-price', [BookController::class, 'setAudioPrice'])->name('book.set-audio-price');
     Route::middleware(['role:admin,superadmin,author'])->delete('books/{book}', [BookController::class, 'destroy']);
 
     // Reader-specific endpoints

@@ -1491,6 +1491,26 @@ class BookController extends Controller
     }
 
     /**
+     * Set the USD audio purchase price for a book (admin only).
+     */
+    public function setAudioPrice(Request $request, Book $book): JsonResponse
+    {
+        try {
+            $validated = $request->validate([
+                'audio_price' => 'required|numeric|min:0|max:9999.99',
+            ]);
+
+            $book->update(['audio_price' => $validated['audio_price']]);
+
+            return $this->success(['audio_price' => $book->audio_price], 'Audio price updated.');
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return $this->error('Validation failed.', 422, $e->errors());
+        } catch (\Exception $e) {
+            return $this->error('Failed to update audio price.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
      * Purchase the audio version of a single book at the flat $10 rate.
      * Split: 30% author, 70% platform.
      */

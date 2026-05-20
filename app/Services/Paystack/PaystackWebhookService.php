@@ -56,22 +56,27 @@ class PaystackWebhookService
     {
         Log::info('Paystack charge success handled', ['reference' => $data['reference'] ?? null]);
 
-        // Idempotency: skip if we have already fully processed this charge
-        $alreadyProcessed = Transaction::where('payment_provider', 'paystack')
-            ->where('status', 'succeeded')
+        // Find the transaction for this reference
+        $transaction = Transaction::where('payment_provider', 'paystack')
             ->where(function ($q) use ($data) {
                 $q->where('reference', 'LIKE', '%' . $data['reference'] . '%')
                   ->orWhere('payment_intent_id', $data['reference']);
-            })->exists();
+            })->first();
 
-        if ($alreadyProcessed) {
-            Log::info('Paystack webhook duplicate — already processed', ['reference' => $data['reference']]);
-            return true;
+        // Idempotency: skip only if the transaction succeeded AND the underlying purchase is fulfilled.
+        // We cannot rely on transaction.status=succeeded alone because handleCallback() marks the
+        // transaction succeeded *before* calling handleWebhook, causing fulfillment to be skipped.
+        if ($transaction && $transaction->status === 'succeeded') {
+            if ($this->isPurchaseFulfilled($transaction)) {
+                Log::info('Paystack webhook duplicate — already processed', ['reference' => $data['reference']]);
+                return true;
+            }
+            Log::info('Paystack: transaction succeeded but purchase not fulfilled, reprocessing', [
+                'reference' => $data['reference'],
+                'purpose_type' => $transaction->purpose_type,
+                'purpose_id' => $transaction->purpose_id,
+            ]);
         }
-
-        $transaction = Transaction::where('payment_provider', 'paystack')
-            ->where('reference', $data['reference'])
-            ->first();
 
         return DB::transaction(function () use ($data, $transaction) {
             // Create or update Paystack transaction
@@ -314,6 +319,28 @@ class PaystackWebhookService
         $computedSignature = hash_hmac('sha512', $payload, $secret);
 
         return hash_equals($computedSignature, $signature);
+    }
+
+    /**
+     * Check whether the purchase/order tied to a transaction has already been fulfilled.
+     * A Transaction with status=succeeded does NOT guarantee fulfillment because
+     * handleCallback() sets that status before the fulfillment step runs.
+     */
+    protected function isPurchaseFulfilled(Transaction $transaction): bool
+    {
+        switch ($transaction->purpose_type) {
+            case 'digital_book_purchase':
+                $purchase = \App\Models\DigitalBookPurchase::find($transaction->purpose_id);
+                return $purchase && $purchase->status === 'paid';
+            case 'audio_book_purchase':
+                $purchase = \App\Models\AudioBookPurchase::find($transaction->purpose_id);
+                return $purchase && $purchase->status === 'paid';
+            case 'order':
+                $order = \App\Models\Order::find($transaction->purpose_id);
+                return $order && $order->status === 'paid';
+            default:
+                return true;
+        }
     }
 
     /**
