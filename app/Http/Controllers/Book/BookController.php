@@ -1851,4 +1851,53 @@ class BookController extends Controller
             return $this->error('Failed to retrieve purchased books: ' . $e->getMessage(), 500);
         }
     }
+
+    /**
+     * Admin-only: force-heal a specific user's library by ensuring all paid
+     * purchases (digital, IAP, audio) are reflected in book_user.
+     * POST /admin/users/{userId}/heal-library
+     */
+    public function adminHealUserLibrary(int $userId): JsonResponse
+    {
+        $user = User::find($userId);
+        if (! $user) {
+            return $this->error('User not found.', 404);
+        }
+
+        $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
+
+        $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+            $q->where('user_id', $user->id)->where('status', 'paid')
+        )->pluck('book_id')->all();
+
+        $paidIapIds = Transaction::where('user_id', $user->id)
+            ->where('payment_provider', 'apple')
+            ->where('status', 'success')
+            ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+            ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
+            ->all();
+
+        $paidAudioIds = AudioBookPurchase::where('user_id', $user->id)
+            ->where('status', 'paid')
+            ->pluck('book_id')
+            ->all();
+
+        $allPaidIds = array_values(array_unique(array_merge($paidDigitalIds, $paidIapIds, $paidAudioIds)));
+        $missingIds = array_values(array_diff($allPaidIds, $ownedBookIds));
+
+        if (! empty($missingIds)) {
+            app(BookPurchaseService::class)->addBooksToUserLibrary($user, $missingIds);
+            Log::info("Admin healed library for user {$userId}: added books " . implode(',', $missingIds));
+        }
+
+        return $this->success([
+            'user_id'         => $userId,
+            'already_owned'   => count($ownedBookIds),
+            'paid_total'      => count($allPaidIds),
+            'healed_book_ids' => $missingIds,
+            'healed_count'    => count($missingIds),
+        ], empty($missingIds)
+            ? 'Library is already in sync — nothing to heal.'
+            : 'Library healed successfully.');
+    }
 }

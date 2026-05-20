@@ -75,6 +75,7 @@ class BookResource extends JsonResource
             'audio_duration' => $this->audio_duration,
             'audio_segments' => $this->audio_segments ?? [],
             'audio_chapters' => $this->audio_chapters ?? [],
+            'is_purchased'   => $this->resolveBookPurchased(),
             'audio_purchased' => $this->resolveAudioPurchased(),
             'categories' => $this->categories->map(function ($cat) {
                 return [
@@ -104,6 +105,21 @@ class BookResource extends JsonResource
             'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
             'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
         ];
+    }
+
+    private function resolveBookPurchased(): bool
+    {
+        $userId = auth()->id();
+        if (! $userId) return false;
+
+        try {
+            return \Illuminate\Support\Facades\DB::table('book_user')
+                ->where('user_id', $userId)
+                ->where('book_id', $this->id)
+                ->exists();
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     // Date audio became a separate purchase. Purchases before this are grandfathered.
