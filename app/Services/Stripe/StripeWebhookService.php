@@ -84,6 +84,9 @@ class StripeWebhookService
                 $purchase->update(['status' => 'paid']);
             }
 
+            app(\App\Services\Book\BookPurchaseService::class)
+                ->addBooksToUserLibrary($user, [$purchase->book_id]);
+
             $author = $purchase->book->author;
             if ($author) {
                 $author->increment('wallet_balance', $purchase->author_payout_amount);

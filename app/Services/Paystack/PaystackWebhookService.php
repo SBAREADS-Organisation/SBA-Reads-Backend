@@ -387,6 +387,9 @@ class PaystackWebhookService
                 $purchase->update(['status' => 'paid']);
             }
 
+            app(\App\Services\Book\BookPurchaseService::class)
+                ->addBooksToUserLibrary($user, [$purchase->book_id]);
+
             $author = $purchase->book->author;
             if ($author) {
                 // Wallet credit and payout record must succeed or fail together

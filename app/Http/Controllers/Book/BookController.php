@@ -1800,8 +1800,13 @@ class BookController extends Controller
                 ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
                 ->all();
 
+            $paidAudioIds = \App\Models\AudioBookPurchase::where('user_id', $user->id)
+                ->where('status', 'paid')
+                ->pluck('book_id')
+                ->all();
+
             $missingIds = array_values(array_diff(
-                array_unique(array_merge($paidDigitalIds, $paidIapIds)),
+                array_unique(array_merge($paidDigitalIds, $paidIapIds, $paidAudioIds)),
                 $ownedBookIds
             ));
 
