@@ -218,4 +218,123 @@ class AudioController extends Controller
             return $this->error('Could not fetch ElevenLabs quota: '.$e->getMessage(), 500);
         }
     }
+
+    /**
+     * Admin-only: re-detect chapter markers from stored text_content and save
+     * as audio_chapters without regenerating audio.  Useful for older books
+     * that were generated before chapter detection was added.
+     * POST /admin/books/{bookId}/audio-backfill-chapters
+     */
+    public function backfillChapters(int $bookId): \Illuminate\Http\JsonResponse
+    {
+        $book = Book::findOrFail($bookId);
+
+        if (empty($book->text_content)) {
+            return $this->error('No text content stored for this book. Regenerate audio to populate chapter data.', 422);
+        }
+
+        if (empty($book->audio_segments)) {
+            return $this->error('No audio segments found. Regenerate audio first.', 422);
+        }
+
+        $text           = $book->text_content;
+        $chapterMarkers = $this->detectChapterMarkers($text);
+
+        if (empty($chapterMarkers)) {
+            return $this->error('No chapter headings detected in this book\'s text (tried "Chapter N", "Introduction", "Prologue", etc.).', 422);
+        }
+
+        [, $chapterMap] = $this->chunkTextWithChapters($text, 4500, $chapterMarkers);
+
+        if (empty($chapterMap)) {
+            return $this->error('Chapter markers found but could not map them to segments.', 422);
+        }
+
+        $book->update(['audio_chapters' => $chapterMap]);
+
+        Log::info("Admin backfilled audio_chapters for book {$bookId}: ".count($chapterMap).' chapters.');
+
+        return $this->success([
+            'book_id'        => $bookId,
+            'chapter_count'  => count($chapterMap),
+            'audio_chapters' => $chapterMap,
+        ], 'Chapter map rebuilt from stored text. No audio was regenerated.');
+    }
+
+    private function detectChapterMarkers(string $text): array
+    {
+        $markers = [];
+
+        $chapterPattern = '/(?:^|\n)[ \t]*((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/';
+        $sectionPattern = '/(?:^|\n)[ \t]*((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/i';
+
+        foreach ([$chapterPattern, $sectionPattern] as $pat) {
+            preg_match_all($pat, $text, $matches, PREG_OFFSET_CAPTURE);
+            foreach ($matches[1] as $match) {
+                $pos   = $match[1];
+                $title = trim($match[0]);
+                if (strlen($title) > 60) {
+                    $title = rtrim(substr($title, 0, 57)).'…';
+                }
+                $markers[$pos] = $title;
+            }
+        }
+
+        ksort($markers);
+
+        return $markers;
+    }
+
+    private function chunkTextWithChapters(string $text, int $maxChars, array $chapterMarkers): array
+    {
+        $chunks      = [];
+        $chapterMap  = [];
+        $absolutePos = 0;
+        $remaining   = $text;
+        $markerPos   = array_keys($chapterMarkers);
+        $markerIdx   = 0;
+
+        while (strlen($remaining) > 0) {
+            if (strlen($remaining) <= $maxChars) {
+                $chunkLen  = strlen($remaining);
+                $chunkText = trim($remaining);
+            } else {
+                $slice    = substr($remaining, 0, $maxChars);
+                $breakPos = max(
+                    (int) strrpos($slice, '. '),
+                    (int) strrpos($slice, '! '),
+                    (int) strrpos($slice, '? '),
+                    (int) strrpos($slice, "\n")
+                );
+                if ($breakPos < $maxChars / 2) {
+                    $breakPos = $maxChars;
+                } else {
+                    $breakPos += 2;
+                }
+                $chunkLen  = $breakPos;
+                $chunkText = trim(substr($remaining, 0, $chunkLen));
+            }
+
+            $segIdx   = count($chunks);
+            $chunkEnd = $absolutePos + $chunkLen;
+
+            while ($markerIdx < count($markerPos) && $markerPos[$markerIdx] < $chunkEnd) {
+                $pos   = $markerPos[$markerIdx];
+                $title = $chapterMarkers[$pos];
+                if ($pos >= $absolutePos) {
+                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title];
+                }
+                $markerIdx++;
+            }
+
+            if (! empty($chunkText)) {
+                $chunks[] = $chunkText;
+            }
+
+            $remaining   = substr($remaining, $chunkLen);
+            $absolutePos = $chunkEnd;
+        }
+
+        return [$chunks, $chapterMap];
+    }
 }

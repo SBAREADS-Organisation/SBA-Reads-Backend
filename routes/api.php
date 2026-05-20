@@ -201,6 +201,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books/{bookId}/generate-audio', [AudioController::class, 'generateAudio'])->name('book.generate-audio');
     Route::get('books/{bookId}/audio-status', [AudioController::class, 'getAudioStatus'])->name('book.audio-status');
     Route::middleware(['role:admin,superadmin'])->post('books/{bookId}/reset-audio', [AudioController::class, 'resetAudio'])->name('book.reset-audio');
+    Route::middleware(['role:admin,superadmin'])->post('admin/books/{bookId}/audio-backfill-chapters', [AudioController::class, 'backfillChapters'])->name('admin.book.audio-backfill-chapters');
     Route::middleware(['role:admin,superadmin'])->get('admin/elevenlabs/quota', [AudioController::class, 'getElevenLabsQuota'])->name('admin.elevenlabs.quota');
 
     // AI feature routes
