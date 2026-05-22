@@ -57,30 +57,38 @@ class GenerateBookAudioJob implements ShouldQueue
             file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
 
             // Step 2: Extract text — try smalot/pdfparser first, fall back to pdftotext
-            $parser = new Parser;
-            $text   = trim(preg_replace('/\s+/', ' ', $parser->parseFile($tempPdfPath)->getText()));
+            // Preserve raw text with line breaks so skipFrontMatter can distinguish
+            // TOC entries (end with a page number) from real chapter headings.
+            $parser  = new Parser;
+            $rawText = $parser->parseFile($tempPdfPath)->getText();
 
-            if (empty($text)) {
+            if (empty(trim($rawText))) {
                 // pdftotext (poppler-utils) handles more PDF types including those with embedded fonts
                 Log::info("GenerateBookAudioJob: smalot returned empty for book {$this->book->id} — trying pdftotext fallback");
-                $text = $this->extractWithPdftotext($tempPdfPath);
+                $rawText = $this->extractWithPdftotext($tempPdfPath);
             }
 
             @unlink($tempPdfPath);
 
-            if (empty($text)) {
+            if (empty(trim($rawText))) {
                 throw new \RuntimeException(
                     'This PDF appears to be image-based (scanned). Please upload a text-based PDF so audio can be generated.'
                 );
             }
 
-            // Cache extracted text on the book so AI features can reuse it without re-downloading the PDF
+            // Cache the raw text so AI features and admin backfill can reuse it.
+            // Store before the front-matter strip so the full book (including TOC) is searchable.
             if (empty($this->book->text_content)) {
-                $this->book->updateQuietly(['text_content' => $text]);
+                $this->book->updateQuietly(['text_content' => $rawText]);
             }
 
-            // Skip front matter (copyright, ToC, dedication) — start from first chapter/intro
-            $text = $this->skipFrontMatter($text);
+            // Strip front matter (copyright, ToC, dedication) on raw text.
+            // Line structure is intact here, which lets us detect TOC lines
+            // (keyword + title text + trailing page number) vs real headings.
+            $rawText = $this->skipFrontMatter($rawText);
+
+            // Normalize for TTS — collapse all whitespace to single spaces
+            $text = trim(preg_replace('/\s+/', ' ', $rawText));
 
             $voiceId = $this->author->elevenlabs_voice_id;
             if (! $voiceId) {
@@ -167,23 +175,39 @@ class GenerateBookAudioJob implements ShouldQueue
         $escaped = escapeshellarg($pdfPath);
         $output  = shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
 
-        return trim(preg_replace('/\s+/', ' ', $output ?? ''));
+        // Return raw output — caller normalizes after skipFrontMatter so line
+        // structure is available for TOC detection.
+        return $output ?? '';
     }
 
     /**
-     * Strip everything before the first chapter/introduction marker.
-     * Avoids reading out copyright pages, ToC, dedications, etc.
+     * Strip everything before the first genuine chapter/introduction heading.
+     *
+     * Must be called on raw (un-normalized) text so that line endings are intact.
+     * TOC lines look like "Chapter 1 — The Voice You Were Made to Hear   9" —
+     * they end with a standalone page number.  Real headings do not.
+     * The MULTILINE flag makes ^ anchor to the start of every line.
      */
     private function skipFrontMatter(string $text): string
     {
-        $pattern = '/(?:^|\n)[ \t]*(Chapter|CHAPTER|Introduction|INTRODUCTION|Prologue|PROLOGUE|Preface|PREFACE|Part\s+(?:\d+|[IVXLC]+))\b/';
+        $pattern = '/^[ \t]*((?:Chapter|CHAPTER|Introduction|INTRODUCTION|Prologue|PROLOGUE|Preface|PREFACE|Part\s+(?:\d+|[IVXLC]+))\b[^\n]{0,100})/m';
 
-        if (preg_match($pattern, $text, $matches, PREG_OFFSET_CAPTURE)) {
-            $offset = $matches[0][1];
-            // Only skip if there's meaningful front matter (> 150 chars before first marker)
-            if ($offset > 150) {
-                return ltrim(substr($text, $offset));
+        $offset = 0;
+        while (preg_match($pattern, $text, $matches, PREG_OFFSET_CAPTURE, $offset)) {
+            $headingText  = trim($matches[1][0]);
+            $headingStart = $matches[1][1];
+            $fullMatchEnd = $matches[0][1] + strlen($matches[0][0]);
+
+            // A TOC line has a meaningful title (≥10 chars total) ending with a
+            // page number: "Chapter 1 — The Voice You Were Made to Hear   9"
+            // Pure headings like "Chapter 3" (9 chars) or "Introduction" are never flagged.
+            $isTocEntry = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText);
+
+            if (! $isTocEntry && $headingStart > 150) {
+                return ltrim(substr($text, $headingStart));
             }
+
+            $offset = $fullMatchEnd;
         }
 
         return $text;

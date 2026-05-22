@@ -237,7 +237,7 @@ class AudioController extends Controller
             return $this->error('No audio segments found. Regenerate audio first.', 422);
         }
 
-        $text           = $book->text_content;
+        $text           = $this->skipFrontMatter($book->text_content);
         $chapterMarkers = $this->detectChapterMarkers($text);
 
         if (empty($chapterMarkers)) {
@@ -261,12 +261,65 @@ class AudioController extends Controller
         ], 'Chapter map rebuilt from stored text. No audio was regenerated.');
     }
 
+    /**
+     * Strip everything before the first genuine chapter/introduction heading.
+     * Works on both raw text (newlines intact) and pre-normalized text (spaces only).
+     * On raw text, uses the MULTILINE flag and detects TOC lines by their trailing
+     * page number.  On normalized text, uses a lookahead heuristic: if within the
+     * next 200 chars after a keyword there is a "text + page-number + another keyword"
+     * sequence, the current keyword is still inside the TOC.
+     */
+    private function skipFrontMatter(string $text): string
+    {
+        $hasNewlines = str_contains($text, "\n");
+
+        if ($hasNewlines) {
+            // Raw text — use line anchoring + trailing-page-number check
+            $pattern = '/^[ \t]*((?:Chapter|CHAPTER|Introduction|INTRODUCTION|Prologue|PROLOGUE|Preface|PREFACE|Part\s+(?:\d+|[IVXLC]+))\b[^\n]{0,100})/m';
+            $offset  = 0;
+            while (preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                $headingText  = trim($m[1][0]);
+                $headingStart = $m[1][1];
+                $offset       = $m[0][1] + strlen($m[0][0]);
+                $isTocEntry   = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText);
+                if (! $isTocEntry && $headingStart > 150) {
+                    return ltrim(substr($text, $headingStart));
+                }
+            }
+        } else {
+            // Normalized text — use lookahead proximity heuristic
+            $pattern = '/(?:^|(?<=\s))((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten)\b|Introduction\b|Prologue\b|Preface\b)/';
+            $offset  = 0;
+            while (preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
+                $pos    = $m[1][1];
+                $end    = $m[0][1] + strlen($m[0][0]);
+                $offset = $end;
+                if ($pos < 200) {
+                    continue;
+                }
+                // Still in TOC if "text + page-number + another keyword" follows
+                $lookahead = substr($text, $end, 200);
+                $isInToc   = (bool) preg_match(
+                    '/[^.?!]{0,120}\s\d{1,4}\s+(?:Chapter|Introduction|Prologue|Epilogue|Preface|Part\s)/i',
+                    $lookahead
+                );
+                if (! $isInToc) {
+                    return ltrim(substr($text, $pos));
+                }
+            }
+        }
+
+        return $text;
+    }
+
     private function detectChapterMarkers(string $text): array
     {
         $markers = [];
 
-        $chapterPattern = '/(?:^|\n)[ \t]*((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/';
-        $sectionPattern = '/(?:^|\n)[ \t]*((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/i';
+        // (?:^|\n|(?<=\s)) works on both raw text (newlines present) and pre-normalized
+        // text (spaces only), so backfill works regardless of how text_content was stored.
+        $chapterPattern = '/(?:^|\n|(?<=\s))((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/m';
+        $sectionPattern = '/(?:^|\n|(?<=\s))((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/im';
 
         foreach ([$chapterPattern, $sectionPattern] as $pat) {
             preg_match_all($pat, $text, $matches, PREG_OFFSET_CAPTURE);
