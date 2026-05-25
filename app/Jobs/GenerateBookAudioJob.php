@@ -56,16 +56,18 @@ class GenerateBookAudioJob implements ShouldQueue
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
             file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
 
-            // Step 2: Extract text — try smalot/pdfparser first, fall back to pdftotext
-            // Preserve raw text with line breaks so skipFrontMatter can distinguish
-            // TOC entries (end with a page number) from real chapter headings.
-            $parser  = new Parser;
-            $rawText = $parser->parseFile($tempPdfPath)->getText();
+            // Step 2: Extract text — try smalot/pdfparser first, fall back to pdftotext.
+            // Collect per-page text so we can map each chapter heading to its exact page number.
+            $parser     = new Parser;
+            $pdfObj     = $parser->parseFile($tempPdfPath);
+            $pageParts  = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
+            $rawText    = implode("\n", $pageParts);
 
             if (empty(trim($rawText))) {
                 // pdftotext (poppler-utils) handles more PDF types including those with embedded fonts
                 Log::info("GenerateBookAudioJob: smalot returned empty for book {$this->book->id} — trying pdftotext fallback");
-                $rawText = $this->extractWithPdftotext($tempPdfPath);
+                $rawText   = $this->extractWithPdftotext($tempPdfPath);
+                $pageParts = []; // no per-page breakdown available from pdftotext
             }
 
             @unlink($tempPdfPath);
@@ -112,6 +114,16 @@ class GenerateBookAudioJob implements ShouldQueue
             $chapterMarkers = $this->detectChapterMarkers($text);
             [$chunks, $chapterMap] = $this->chunkTextWithChapters($text, 4500, $chapterMarkers);
             $totalChunks = count($chunks);
+
+            // Enrich each chapter entry with the PDF page it starts on so the
+            // frontend can navigate the PDF reader in sync with the audio player.
+            if (! empty($chapterMap) && ! empty($pageParts)) {
+                $chapterPageMap = $this->buildChapterPageMap($pageParts);
+                foreach ($chapterMap as &$entry) {
+                    $entry['page'] = $this->matchPageForTitle($entry['title'], $chapterPageMap);
+                }
+                unset($entry);
+            }
 
             // Store chapter map in Redis so FinalizeBookAudioJob can persist it
             if (! empty($chapterMap)) {
@@ -254,6 +266,56 @@ class GenerateBookAudioJob implements ShouldQueue
         ksort($markers);
 
         return $markers;
+    }
+
+    /**
+     * Scan each page's raw text for chapter/section headings and return a map of
+     * [normalised-title => 1-based-page-number]. First occurrence wins so the
+     * chapter's start page is always recorded, not a later mention.
+     */
+    private function buildChapterPageMap(array $pageParts): array
+    {
+        $map            = [];
+        $chapterPattern = '/(?:^|\n)((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/m';
+        $sectionPattern = '/(?:^|\n)((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/im';
+
+        foreach ($pageParts as $i => $pageText) {
+            $pageNum  = $i + 1;
+            $pageText = $this->sanitizeUtf8($pageText);
+            foreach ([$chapterPattern, $sectionPattern] as $pat) {
+                preg_match_all($pat, $pageText, $matches);
+                foreach ($matches[1] as $raw) {
+                    $title = trim($raw);
+                    if (strlen($title) > 60) {
+                        $title = rtrim(substr($title, 0, 57)).'…';
+                    }
+                    if ($title !== '' && ! isset($map[$title])) {
+                        $map[$title] = $pageNum;
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Find the page number for a chapter title using exact match first,
+     * then a prefix match to handle minor whitespace/truncation differences.
+     */
+    private function matchPageForTitle(string $needle, array $chapterPageMap): ?int
+    {
+        if (isset($chapterPageMap[$needle])) {
+            return $chapterPageMap[$needle];
+        }
+
+        foreach ($chapterPageMap as $key => $page) {
+            if (str_starts_with($needle, $key) || str_starts_with($key, $needle)) {
+                return $page;
+            }
+        }
+
+        return null;
     }
 
     /**

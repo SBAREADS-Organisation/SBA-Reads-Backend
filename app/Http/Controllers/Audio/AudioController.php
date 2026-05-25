@@ -250,6 +250,26 @@ class AudioController extends Controller
             return $this->error('Chapter markers found but could not map them to segments.', 422);
         }
 
+        // Estimate PDF page for each chapter using its char offset as a fraction of
+        // total text length, scaled to the author-supplied page count.
+        $totalChars = max(1, strlen($text));
+        $totalPages = (int) ($book->meta_data['pages'] ?? 0);
+        // Build a reverse map: title => charOffset from the markers array
+        $titleToOffset = [];
+        foreach ($chapterMarkers as $offset => $title) {
+            $titleToOffset[$title] = $offset;
+        }
+
+        if ($totalPages > 0) {
+            foreach ($chapterMap as &$entry) {
+                $charOffset = $titleToOffset[$entry['title']] ?? null;
+                if ($charOffset !== null) {
+                    $entry['page'] = max(1, (int) round(($charOffset / $totalChars) * $totalPages));
+                }
+            }
+            unset($entry);
+        }
+
         $book->update(['audio_chapters' => $chapterMap]);
 
         Log::info("Admin backfilled audio_chapters for book {$bookId}: ".count($chapterMap).' chapters.');
