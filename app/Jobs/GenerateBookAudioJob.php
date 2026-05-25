@@ -56,18 +56,25 @@ class GenerateBookAudioJob implements ShouldQueue
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
             file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
 
-            // Step 2: Extract text — try smalot/pdfparser first, fall back to pdftotext.
-            // Collect per-page text so we can map each chapter heading to its exact page number.
-            $parser     = new Parser;
-            $pdfObj     = $parser->parseFile($tempPdfPath);
-            $pageParts  = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
-            $rawText    = implode("\n", $pageParts);
+            // Step 2: Extract text — try smalot/pdfparser per-page first (gives us exact
+            // page numbers for chapter mapping), fall back to document-level getText() if
+            // pages are empty (some PDFs lack a proper page tree), then pdftotext last.
+            $parser    = new Parser;
+            $pdfObj    = $parser->parseFile($tempPdfPath);
+            $pageParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
+            $rawText   = implode("\n", $pageParts);
+
+            if (empty(trim($rawText))) {
+                // Some PDFs expose text via getText() even when per-page fails
+                $rawText   = $pdfObj->getText();
+                $pageParts = [];
+            }
 
             if (empty(trim($rawText))) {
                 // pdftotext (poppler-utils) handles more PDF types including those with embedded fonts
                 Log::info("GenerateBookAudioJob: smalot returned empty for book {$this->book->id} — trying pdftotext fallback");
                 $rawText   = $this->extractWithPdftotext($tempPdfPath);
-                $pageParts = []; // no per-page breakdown available from pdftotext
+                $pageParts = [];
             }
 
             @unlink($tempPdfPath);
