@@ -76,10 +76,23 @@ class GenerateBookAudioJob implements ShouldQueue
                 );
             }
 
+            // Strip invalid UTF-8 bytes (ligatures, smart-quotes, Win-1252 sequences)
+            // so json_encode never throws "Malformed UTF-8" when saving audio_chapters.
+            $rawText = $this->sanitizeUtf8($rawText);
+
             // Cache the raw text so AI features and admin backfill can reuse it.
             // Store before the front-matter strip so the full book (including TOC) is searchable.
             if (empty($this->book->text_content)) {
-                $this->book->updateQuietly(['text_content' => $rawText]);
+                $wordCount           = str_word_count(strip_tags($rawText));
+                $estimatedReadingMin = max(1, (int) ceil($wordCount / 238));
+                $currentMeta         = $this->book->meta_data ?? [];
+                $currentMeta['word_count']                 = $wordCount;
+                $currentMeta['estimated_reading_minutes']  = $estimatedReadingMin;
+
+                $this->book->updateQuietly([
+                    'text_content' => $rawText,
+                    'meta_data'    => $currentMeta,
+                ]);
             }
 
             // Strip front matter (copyright, ToC, dedication) on raw text.
@@ -220,18 +233,17 @@ class GenerateBookAudioJob implements ShouldQueue
     {
         $markers = [];
 
-        // "Chapter 1", "Chapter One", "CHAPTER IV", etc.
-        $chapterPattern = '/(?:^|\n)[ \t]*((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/';
+        // (?:^|\n|(?<=\s)) fires at line-start on raw text AND on space-separated
+        // words in normalized (no-newline) text, so both pipeline paths are covered.
+        $chapterPattern = '/(?:^|\n|(?<=\s))((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/m';
 
-        // Stand-alone section names (Introduction, Prologue, etc.)
-        $sectionPattern = '/(?:^|\n)[ \t]*((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/i';
+        $sectionPattern = '/(?:^|\n|(?<=\s))((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/im';
 
         foreach ([$chapterPattern, $sectionPattern] as $pat) {
             preg_match_all($pat, $text, $matches, PREG_OFFSET_CAPTURE);
             foreach ($matches[1] as $match) {
                 $pos   = $match[1];
-                $title = trim($match[0]);
-                // Truncate very long headings to a clean label
+                $title = $this->sanitizeUtf8(trim($match[0]));
                 if (strlen($title) > 60) {
                     $title = rtrim(substr($title, 0, 57)).'…';
                 }
@@ -242,6 +254,16 @@ class GenerateBookAudioJob implements ShouldQueue
         ksort($markers);
 
         return $markers;
+    }
+
+    /**
+     * Strip bytes that are invalid UTF-8 so json_encode never throws
+     * "Malformed UTF-8 characters" when persisting audio_chapters or text_content.
+     */
+    private function sanitizeUtf8(string $text): string
+    {
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        return ($clean !== false) ? $clean : mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     }
 
     /**

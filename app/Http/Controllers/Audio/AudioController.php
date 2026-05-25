@@ -237,7 +237,7 @@ class AudioController extends Controller
             return $this->error('No audio segments found. Regenerate audio first.', 422);
         }
 
-        $text           = $this->skipFrontMatter($book->text_content);
+        $text           = $this->skipFrontMatter($this->sanitizeUtf8($book->text_content));
         $chapterMarkers = $this->detectChapterMarkers($text);
 
         if (empty($chapterMarkers)) {
@@ -325,7 +325,7 @@ class AudioController extends Controller
             preg_match_all($pat, $text, $matches, PREG_OFFSET_CAPTURE);
             foreach ($matches[1] as $match) {
                 $pos   = $match[1];
-                $title = trim($match[0]);
+                $title = $this->sanitizeUtf8(trim($match[0]));
                 if (strlen($title) > 60) {
                     $title = rtrim(substr($title, 0, 57)).'…';
                 }
@@ -336,6 +336,12 @@ class AudioController extends Controller
         ksort($markers);
 
         return $markers;
+    }
+
+    private function sanitizeUtf8(string $text): string
+    {
+        $clean = @iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        return ($clean !== false) ? $clean : mb_convert_encoding($text, 'UTF-8', 'UTF-8');
     }
 
     private function chunkTextWithChapters(string $text, int $maxChars, array $chapterMarkers): array
