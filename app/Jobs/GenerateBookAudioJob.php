@@ -226,7 +226,13 @@ class GenerateBookAudioJob implements ShouldQueue
             // A TOC line has a meaningful title (≥10 chars total) ending with a
             // page number: "Chapter 1 — The Voice You Were Made to Hear   9"
             // Pure headings like "Chapter 3" (9 chars) or "Introduction" are never flagged.
-            $isTocEntry = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText);
+            // A TOC line either ends with a page number ("... 50")
+            // OR has a page number in the middle when the PDF extractor merges
+            // the next entry onto the same line ("... 50 Conclusion  52").
+            // The second pattern requires ≥20 chars before the number and 2+
+            // spaces of TOC-style padding before the digit block.
+            $isTocEntry = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText)
+                       || (bool) preg_match('/^.{20,}\s{2,}\d{1,4}\s+\S/', $headingText);
 
             if (! $isTocEntry && $headingStart > 150) {
                 return ltrim(substr($text, $headingStart));
