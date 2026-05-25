@@ -131,6 +131,10 @@ class BookResource extends JsonResource
         if (!$userId) return false;
 
         try {
+            // Authors always have audio access to their own books
+            if ($this->author_id === $userId) return true;
+            if ($this->authors->contains('id', $userId)) return true;
+
             // Paid audio purchase — always valid
             $hasAudioPurchase = AudioBookPurchase::where('user_id', $userId)
                 ->where('book_id', $this->id)
