@@ -237,7 +237,11 @@ class AudioController extends Controller
             return $this->error('No audio segments found. Regenerate audio first.', 422);
         }
 
+        // skipFrontMatter needs line structure intact, so run it on raw text first.
+        // Then normalize exactly as GenerateBookAudioJob does so chapter titles
+        // match what was originally stored in audio_chapters (newlines collapsed).
         $text           = $this->skipFrontMatter($this->sanitizeUtf8($book->text_content));
+        $text           = trim(preg_replace('/\s+/', ' ', $text));
         $chapterMarkers = $this->detectChapterMarkers($text);
 
         if (empty($chapterMarkers)) {
