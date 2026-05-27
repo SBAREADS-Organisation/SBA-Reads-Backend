@@ -77,6 +77,25 @@ class GenerateBookAudioJob implements ShouldQueue
                 $pageParts = [];
             }
 
+            // When smalot per-page extraction failed and we fell back to document-level
+            // getText() or pdftotext, $pageParts is empty and chapter-page mapping would
+            // be skipped. Try pdftotext with form-feed page separators (\x0C) to recover
+            // per-page structure. Must run before unlink() while the temp file still exists.
+            if (empty($pageParts) && ! empty(trim($rawText))) {
+                $escaped  = escapeshellarg($tempPdfPath);
+                $ptOutput = @shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
+                if ($ptOutput) {
+                    $parts = explode("\x0C", $ptOutput);
+                    if (isset($parts[count($parts) - 1]) && trim($parts[count($parts) - 1]) === '') {
+                        array_pop($parts);
+                    }
+                    if (! empty($parts)) {
+                        $pageParts = $parts;
+                        Log::info('GenerateBookAudioJob: recovered '.count($parts)." page parts via pdftotext for book {$this->book->id}");
+                    }
+                }
+            }
+
             @unlink($tempPdfPath);
 
             if (empty(trim($rawText))) {

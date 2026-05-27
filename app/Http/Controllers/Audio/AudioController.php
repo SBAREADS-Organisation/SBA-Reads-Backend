@@ -250,24 +250,68 @@ class AudioController extends Controller
             return $this->error('Chapter markers found but could not map them to segments.', 422);
         }
 
-        // Estimate PDF page for each chapter using its char offset as a fraction of
-        // total text length, scaled to the author-supplied page count.
-        $totalChars = max(1, strlen($text));
-        $totalPages = (int) ($book->meta_data['pages'] ?? 0);
-        // Build a reverse map: title => charOffset from the markers array
-        $titleToOffset = [];
-        foreach ($chapterMarkers as $offset => $title) {
-            $titleToOffset[$title] = $offset;
+        // Try to get exact page numbers by re-downloading the PDF and extracting
+        // per-page text — same approach as GenerateBookAudioJob.
+        $pageParts = [];
+        $pdfUrl    = $book->files[0]['public_url'] ?? null;
+        if ($pdfUrl) {
+            try {
+                $tempPdf = tempnam(sys_get_temp_dir(), 'sbareads_backfill_').'.pdf';
+                file_put_contents($tempPdf, \Illuminate\Support\Facades\Http::timeout(60)->get($pdfUrl)->body());
+
+                // Try smalot per-page first
+                $parser    = new \Smalot\PdfParser\Parser();
+                $pdfObj    = $parser->parseFile($tempPdf);
+                $pageParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
+                if (empty(trim(implode('', $pageParts)))) {
+                    $pageParts = [];
+                }
+
+                // Fall back to pdftotext with form-feed page separators
+                if (empty($pageParts) && shell_exec('which pdftotext')) {
+                    $escaped  = escapeshellarg($tempPdf);
+                    $ptOutput = @shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
+                    if ($ptOutput) {
+                        $parts = explode("\x0C", $ptOutput);
+                        if (isset($parts[count($parts) - 1]) && trim($parts[count($parts) - 1]) === '') {
+                            array_pop($parts);
+                        }
+                        if (! empty($parts)) {
+                            $pageParts = $parts;
+                        }
+                    }
+                }
+
+                @unlink($tempPdf);
+            } catch (\Throwable $e) {
+                Log::warning("backfillChapters: PDF download/parse failed for book {$bookId} — falling back to char-offset estimate. ".$e->getMessage());
+            }
         }
 
-        if ($totalPages > 0) {
+        if (! empty($pageParts)) {
+            // Exact per-page mapping — most accurate
+            $chapterPageMap = $this->buildChapterPageMap($pageParts);
             foreach ($chapterMap as &$entry) {
-                $charOffset = $titleToOffset[$entry['title']] ?? null;
-                if ($charOffset !== null) {
-                    $entry['page'] = max(1, (int) round(($charOffset / $totalChars) * $totalPages));
-                }
+                $entry['page'] = $this->matchPageForTitle($entry['title'], $chapterPageMap);
             }
             unset($entry);
+        } else {
+            // Fallback: proportional estimate from character offset
+            $totalChars    = max(1, strlen($text));
+            $totalPages    = (int) ($book->meta_data['pages'] ?? 0);
+            $titleToOffset = [];
+            foreach ($chapterMarkers as $offset => $title) {
+                $titleToOffset[$title] = $offset;
+            }
+            if ($totalPages > 0) {
+                foreach ($chapterMap as &$entry) {
+                    $charOffset    = $titleToOffset[$entry['title']] ?? null;
+                    $entry['page'] = $charOffset !== null
+                        ? max(1, (int) round(($charOffset / $totalChars) * $totalPages))
+                        : null;
+                }
+                unset($entry);
+            }
         }
 
         $book->update(['audio_chapters' => $chapterMap]);
@@ -279,6 +323,55 @@ class AudioController extends Controller
             'chapter_count'  => count($chapterMap),
             'audio_chapters' => $chapterMap,
         ], 'Chapter map rebuilt from stored text. No audio was regenerated.');
+    }
+
+    /**
+     * Scan each page's raw text for chapter/section headings.
+     * Returns [normalised-title => 1-based-page-number]; first occurrence wins.
+     */
+    private function buildChapterPageMap(array $pageParts): array
+    {
+        $map            = [];
+        $chapterPattern = '/(?:^|\n)((?:Chapter|CHAPTER)\s+(?:\d+|[IVXLCDM]+|One|Two|Three|Four|Five|Six|Seven|Eight|Nine|Ten|Eleven|Twelve|Thirteen|Fourteen|Fifteen|Sixteen|Seventeen|Eighteen|Nineteen|Twenty)\b[^\n]{0,80})/m';
+        $sectionPattern = '/(?:^|\n)((?:Introduction|Prologue|Epilogue|Afterword|Preface|Part\s+\d+)\b[^\n]{0,60})/im';
+
+        foreach ($pageParts as $i => $pageText) {
+            $pageNum  = $i + 1;
+            $pageText = $this->sanitizeUtf8($pageText);
+            foreach ([$chapterPattern, $sectionPattern] as $pat) {
+                preg_match_all($pat, $pageText, $matches);
+                foreach ($matches[1] as $raw) {
+                    $title = trim($raw);
+                    if (strlen($title) > 60) {
+                        $title = rtrim(substr($title, 0, 57)).'…';
+                    }
+                    if ($title !== '' && ! isset($map[$title])) {
+                        $map[$title] = $pageNum;
+                    }
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * Find the page for a chapter title: exact match first, then prefix match
+     * to handle minor whitespace/truncation differences between extraction paths.
+     */
+    private function matchPageForTitle(string $needle, array $chapterPageMap): ?int
+    {
+        if (isset($chapterPageMap[$needle])) {
+            return $chapterPageMap[$needle];
+        }
+
+        foreach ($chapterPageMap as $key => $page) {
+            if (str_starts_with($needle, $key) || str_starts_with($key, $needle)) {
+                return $page;
+            }
+        }
+
+        return null;
     }
 
     /**
