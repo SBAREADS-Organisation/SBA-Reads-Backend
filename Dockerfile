@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     libzip-dev \
     libssl-dev \
+    poppler-utils \
     && docker-php-ext-install pdo pdo_pgsql mbstring zip exif pcntl bcmath gd \
     && pecl install redis \
     && docker-php-ext-enable redis

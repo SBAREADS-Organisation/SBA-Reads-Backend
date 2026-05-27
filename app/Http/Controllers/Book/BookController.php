@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Book;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\Book\BookResource;
 use App\Http\Resources\ReadingProgress\ReadingProgressResource;
+use App\Jobs\BackfillAudioChapterPagesJob;
 use App\Jobs\NotifyReadersOfNewBookJob;
 use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
@@ -361,6 +362,19 @@ class BookController extends Controller
                         $book->load('purchasers:id');
                     }
                 }
+            }
+
+            // Auto-backfill: if the book has audio chapters but page numbers are
+            // missing, dispatch a background job to populate them. Throttled to
+            // once per 24 h per book so it doesn't re-queue on every request.
+            if (
+                $book->audio_status === 'ready'
+                && ! empty($book->audio_chapters)
+                && collect($book->audio_chapters)->contains(fn ($ch) => ($ch['page'] ?? null) === null)
+                && ! Cache::has("audio_chapter_backfill_{$book->id}")
+            ) {
+                Cache::put("audio_chapter_backfill_{$book->id}", true, now()->addHours(24));
+                BackfillAudioChapterPagesJob::dispatch($book)->onQueue('audio');
             }
 
             // Fetch similar books (by shared categories)
