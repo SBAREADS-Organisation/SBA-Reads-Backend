@@ -155,13 +155,15 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
                 $key = 'CHAPTER ' . trim($num);
                 if (! isset($map[$key])) $map[$key] = $pageNum;
             }
-            // Detect spaced-letter section words: "I N T R O D U C T I O N", "P R O L O G U E", etc.
+            // Detect spaced-letter section headings standing alone on a line.
+            // ^...$+m anchors prevent matching TOC entries like "Introduction: The Valley... 5".
+            // [ \t]* between letters handles fused groups like "I N T ROD U C T ION".
             $spacedSections = [
-                'INTRODUCTION' => '/I\s+N\s+T\s+R\s+O\s+D\s+U\s+C\s+T\s+I\s+O\s+N/i',
-                'PROLOGUE'     => '/P\s+R\s+O\s+L\s+O\s+G\s+U\s+E/i',
-                'EPILOGUE'     => '/E\s+P\s+I\s+L\s+O\s+G\s+U\s+E/i',
-                'PREFACE'      => '/P\s+R\s+E\s+F\s+A\s+C\s+E/i',
-                'AFTERWORD'    => '/A\s+F\s+T\s+E\s+R\s+W\s+O\s+R\s+D/i',
+                'INTRODUCTION' => '/^[ \t]*I[ \t]*N[ \t]*T[ \t]*R[ \t]*O[ \t]*D[ \t]*U[ \t]*C[ \t]*T[ \t]*I[ \t]*O[ \t]*N[ \t]*$/mi',
+                'PROLOGUE'     => '/^[ \t]*P[ \t]*R[ \t]*O[ \t]*L[ \t]*O[ \t]*G[ \t]*U[ \t]*E[ \t]*$/mi',
+                'EPILOGUE'     => '/^[ \t]*E[ \t]*P[ \t]*I[ \t]*L[ \t]*O[ \t]*G[ \t]*U[ \t]*E[ \t]*$/mi',
+                'PREFACE'      => '/^[ \t]*P[ \t]*R[ \t]*E[ \t]*F[ \t]*A[ \t]*C[ \t]*E[ \t]*$/mi',
+                'AFTERWORD'    => '/^[ \t]*A[ \t]*F[ \t]*T[ \t]*E[ \t]*R[ \t]*W[ \t]*O[ \t]*R[ \t]*D[ \t]*$/mi',
             ];
             foreach ($spacedSections as $normalizedKey => $pat) {
                 if (preg_match($pat, $pageText) && ! isset($map[$normalizedKey])) {
