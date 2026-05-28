@@ -79,6 +79,16 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
             }
         }
 
+        // Sanitize every title before saving — some books have UTF-8 sequences
+        // that survive iconv but still cause json_encode to throw.
+        foreach ($chapterMap as &$entry) {
+            $entry['title'] = mb_convert_encoding(
+                preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $entry['title'] ?? ''),
+                'UTF-8', 'UTF-8'
+            );
+        }
+        unset($entry);
+
         $book->update(['audio_chapters' => $chapterMap]);
     }
 
