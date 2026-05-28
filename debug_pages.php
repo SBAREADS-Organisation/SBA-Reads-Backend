@@ -17,10 +17,10 @@ $pageParts = explode("\x0C", $output);
 
 echo "Total pages extracted: " . count($pageParts) . "\n\n";
 
-// Print pages 5 through 15 so we can see what chapter headings look like
+// Print pages 1 through 10 to find the INTRODUCTION page
 foreach ($pageParts as $i => $page) {
     $pageNum = $i + 1;
-    if ($pageNum < 5 || $pageNum > 15) continue;
+    if ($pageNum < 1 || $pageNum > 10) continue;
     echo "===== PAGE {$pageNum} =====\n";
     // Show first 20 lines of each page
     $lines = explode("\n", $page);
