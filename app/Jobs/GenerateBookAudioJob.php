@@ -429,7 +429,8 @@ class GenerateBookAudioJob implements ShouldQueue
 
                 // Only record marker if it starts within this chunk (not before it)
                 if ($pos >= $absolutePos) {
-                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title];
+                    $segOffset    = round(max(0.0, ($pos - $absolutePos)) / max(1, $chunkLen), 3);
+                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title, 'segment_offset' => $segOffset];
                 }
 
                 $markerIdx++;

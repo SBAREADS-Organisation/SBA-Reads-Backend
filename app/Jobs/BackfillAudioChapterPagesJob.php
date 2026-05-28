@@ -242,7 +242,8 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
             while ($markerIdx < count($markerPos) && $markerPos[$markerIdx] < $chunkEnd) {
                 $pos   = $markerPos[$markerIdx];
                 if ($pos >= $absolutePos) {
-                    $chapterMap[] = ['segment' => $segIdx, 'title' => $chapterMarkers[$pos]];
+                    $segOffset    = round(max(0.0, ($pos - $absolutePos)) / max(1, $chunkLen), 3);
+                    $chapterMap[] = ['segment' => $segIdx, 'title' => $chapterMarkers[$pos], 'segment_offset' => $segOffset];
                 }
                 $markerIdx++;
             }
