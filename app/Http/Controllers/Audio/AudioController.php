@@ -263,16 +263,9 @@ class AudioController extends Controller
                 $tempPdf = tempnam(sys_get_temp_dir(), 'sbareads_backfill_').'.pdf';
                 file_put_contents($tempPdf, \Illuminate\Support\Facades\Http::timeout(60)->get($pdfUrl)->body());
 
-                // Try smalot per-page first
-                $parser    = new \Smalot\PdfParser\Parser();
-                $pdfObj    = $parser->parseFile($tempPdf);
-                $pageParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
-                if (empty(trim(implode('', $pageParts)))) {
-                    $pageParts = [];
-                }
-
-                // Fall back to pdftotext with form-feed page separators
-                if (empty($pageParts) && shell_exec('which pdftotext')) {
+                // pdftotext handles complex typography (spaced-letter headings, etc.) better than smalot
+                $pageParts = [];
+                if (shell_exec('which pdftotext')) {
                     $escaped  = escapeshellarg($tempPdf);
                     $ptOutput = @shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
                     if ($ptOutput) {
@@ -283,6 +276,16 @@ class AudioController extends Controller
                         if (! empty($parts)) {
                             $pageParts = $parts;
                         }
+                    }
+                }
+
+                // Fall back to smalot per-page
+                if (empty($pageParts)) {
+                    $parser    = new \Smalot\PdfParser\Parser();
+                    $pdfObj    = $parser->parseFile($tempPdf);
+                    $smalotParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
+                    if (! empty(trim(implode('', $smalotParts)))) {
+                        $pageParts = $smalotParts;
                     }
                 }
 

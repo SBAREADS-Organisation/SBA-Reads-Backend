@@ -103,11 +103,7 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
             if (! $response->successful()) return [];
             file_put_contents($tempPdf, $response->body());
 
-            $parser    = new Parser();
-            $pdfObj    = $parser->parseFile($tempPdf);
-            $pageParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
-            if (! empty(trim(implode('', $pageParts)))) return $pageParts;
-
+            // pdftotext handles complex typography (spaced-letter headings, etc.) better than smalot
             if (shell_exec('which pdftotext')) {
                 $escaped  = escapeshellarg($tempPdf);
                 $ptOutput = @shell_exec("pdftotext -layout {$escaped} - 2>/dev/null");
@@ -119,6 +115,12 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
                     if (! empty($parts)) return $parts;
                 }
             }
+
+            // Fall back to smalot per-page
+            $parser    = new Parser();
+            $pdfObj    = $parser->parseFile($tempPdf);
+            $pageParts = array_map(fn ($p) => $p->getText(), $pdfObj->getPages());
+            if (! empty(trim(implode('', $pageParts)))) return $pageParts;
         } catch (\Throwable $e) {
             Log::warning("BackfillAudioChapterPagesJob: PDF parse failed for book {$book->id} — ".$e->getMessage());
         } finally {
