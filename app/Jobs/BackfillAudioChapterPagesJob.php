@@ -140,7 +140,7 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
             foreach ([$chapterPattern, $sectionPattern] as $pat) {
                 preg_match_all($pat, $pageText, $matches);
                 foreach ($matches[1] as $raw) {
-                    $title = trim($raw);
+                    $title = trim(preg_replace('/\s+/', ' ', $raw));
                     if (strlen($title) > 60) $title = rtrim(substr($title, 0, 57)).'…';
                     if ($title !== '' && ! isset($map[$title])) {
                         $map[$title] = $pageNum;

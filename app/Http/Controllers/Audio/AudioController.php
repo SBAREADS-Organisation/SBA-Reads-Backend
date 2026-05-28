@@ -345,7 +345,7 @@ class AudioController extends Controller
             foreach ([$chapterPattern, $sectionPattern] as $pat) {
                 preg_match_all($pat, $pageText, $matches);
                 foreach ($matches[1] as $raw) {
-                    $title = trim($raw);
+                    $title = trim(preg_replace('/\s+/', ' ', $raw));
                     if (strlen($title) > 60) {
                         $title = rtrim(substr($title, 0, 57)).'…';
                     }
