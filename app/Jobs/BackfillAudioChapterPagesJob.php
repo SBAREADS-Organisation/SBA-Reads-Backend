@@ -147,6 +147,12 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
                     }
                 }
             }
+            // Detect decorative spaced-letter headings: "C H A P T E R" + number on nearby line
+            preg_match_all('/C\s+H\s+A\s+P\s+T\s+E\s+R[\s\n]+(\d+)/i', $pageText, $spacedMatches);
+            foreach ($spacedMatches[1] as $num) {
+                $key = 'CHAPTER ' . trim($num);
+                if (! isset($map[$key])) $map[$key] = $pageNum;
+            }
         }
 
         return $map;
