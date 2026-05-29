@@ -415,7 +415,7 @@ class AudioController extends Controller
         $hasNewlines = str_contains($text, "\n");
 
         if ($hasNewlines) {
-            // Raw text — use line anchoring + trailing-page-number check
+            // Raw text — use line anchoring + trailing-page-number check + proximity
             $pattern = '/^[ \t]*((?:Chapter|CHAPTER|Introduction|INTRODUCTION|Prologue|PROLOGUE|Preface|PREFACE|Part\s+(?:\d+|[IVXLC]+))\b[^\n]{0,100})/m';
             $offset  = 0;
             while (preg_match($pattern, $text, $m, PREG_OFFSET_CAPTURE, $offset)) {
@@ -424,9 +424,10 @@ class AudioController extends Controller
                 $offset       = $m[0][1] + strlen($m[0][0]);
                 $isTocEntry   = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText)
                              || (bool) preg_match('/^.{20,}\s{2,}\d{1,4}\s+\S/', $headingText);
-                if (! $isTocEntry && $headingStart > 150) {
-                    return ltrim(substr($text, $headingStart));
-                }
+                if ($isTocEntry || $headingStart <= 150) continue;
+                // Proximity check: another heading within 500 chars → still in TOC
+                if (preg_match($pattern, substr($text, $offset, 500))) continue;
+                return ltrim(substr($text, $headingStart));
             }
         } else {
             // Normalized text — use lookahead proximity heuristic

@@ -192,9 +192,18 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
             $headingText  = trim($m[1][0]);
             $headingStart = $m[1][1];
             $offset       = $m[0][1] + strlen($m[0][0]);
-            $isTocEntry   = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText)
-                         || (bool) preg_match('/^.{20,}\s{2,}\d{1,4}\s+\S/', $headingText);
-            if (! $isTocEntry && $headingStart > 150) return ltrim(substr($text, $headingStart));
+
+            // Classic TOC indicator: heading ends with a page number.
+            $isTocEntry = (bool) preg_match('/^.{10,}\s+\d{1,4}\s*$/', $headingText)
+                       || (bool) preg_match('/^.{20,}\s{2,}\d{1,4}\s+\S/', $headingText);
+            if ($isTocEntry || $headingStart <= 150) continue;
+
+            // Proximity check: if another chapter heading appears within the next
+            // 500 chars the headings are densely packed — still inside the TOC.
+            // Real body chapters are separated by many paragraphs of prose.
+            if (preg_match($pattern, substr($text, $offset, 500))) continue;
+
+            return ltrim(substr($text, $headingStart));
         }
         return $text;
     }
