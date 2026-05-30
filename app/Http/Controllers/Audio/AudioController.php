@@ -525,7 +525,8 @@ class AudioController extends Controller
                 $title = $chapterMarkers[$pos];
                 if ($pos >= $absolutePos) {
                     $segOffset    = round(max(0.0, ($pos - $absolutePos)) / max(1, $chunkLen), 3);
-                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title, 'segment_offset' => $segOffset];
+                    $textPreview  = $this->sanitizeUtf8(trim(mb_substr($remaining, $pos - $absolutePos, 2000)));
+                    $chapterMap[] = ['segment' => $segIdx, 'title' => $title, 'segment_offset' => $segOffset, 'text_preview' => $textPreview];
                 }
                 $markerIdx++;
             }
