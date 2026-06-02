@@ -76,6 +76,7 @@ Route::prefix('user')->group(function () {
             Route::post('/', [UserController::class, 'updateProfile']);
             Route::get('/{user_id}', [UserController::class, 'singleUserById'])->where('user_id', '[0-9]+');
             Route::post('/action/{action}/{user_id}', [UserController::class, 'adminAproveOrDeclineActionOnUser'])->name('admin-approve-decline-user');
+            Route::middleware(['role:admin,superadmin'])->post('/bulk-action', [UserController::class, 'bulkAction'])->name('users.bulk-action');
             Route::patch('/preference', [UserController::class, 'updatePreferences']);
             Route::patch('/settings', [UserController::class, 'updateSettings']);
             Route::post('/device-token', [UserController::class, 'updateDeviceToken']);
@@ -196,6 +197,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books/{id}/bookmark', [BookController::class, 'bookmark'])->where('id', '[0-9]+');
     Route::middleware(['role:admin,superadmin'])->post('books/{action}/{bookId}', [BookController::class, 'auditAction'])
         ->where('action', '^(request_changes|approve|decline|restore)$');
+    Route::middleware(['role:admin,superadmin'])->post('books/bulk-action', [BookController::class, 'bulkAction'])->name('books.bulk-action');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark'])->where('id', '[0-9]+');
 
     // Audio generation routes
@@ -232,6 +234,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 Route::get('books', [BookController::class, 'index']);
 Route::get('books/featured', [BookController::class, 'featured']);
 Route::get('books/top-ranking', [BookController::class, 'topRanking']);
+Route::get('books/best-sellers', [BookController::class, 'bestSellers']);
 
 // Order Routes
 Route::middleware(['auth:sanctum'])->group(function () {
@@ -289,6 +292,17 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
 
     // Admin Dashboard Route
     Route::get('dashboard', DashboardController::class);
+
+    // AI Auto-Review
+    Route::prefix('ai-review')->group(function () {
+        Route::get('settings',                  [\App\Http\Controllers\Admin\AIReviewController::class, 'getSettings']);
+        Route::patch('settings',                [\App\Http\Controllers\Admin\AIReviewController::class, 'updateSettings']);
+        Route::get('stats',                     [\App\Http\Controllers\Admin\AIReviewController::class, 'stats']);
+        Route::post('books/{bookId}',           [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewBook']);
+        Route::post('authors/{userId}',         [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAuthor']);
+        Route::post('run-all-pending-books',    [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAllPendingBooks']);
+        Route::post('run-all-pending-authors',  [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAllPendingAuthors']);
+    });
 });
 
 // Social Authentication Routes

@@ -65,6 +65,10 @@ class Book extends Model
         'ranking',
         'audio_price',
         'audio_chapters',
+        'ai_review_status',
+        'ai_review_notes',
+        'ai_review_confidence',
+        'ai_reviewed_at',
     ];
 
     protected $hidden = [

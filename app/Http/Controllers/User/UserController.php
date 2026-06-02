@@ -201,6 +201,11 @@ class UserController extends Controller
 
                 DB::commit();
 
+                // Queue AI review for new authors in the background
+                if ($user->account_type === 'author') {
+                    \App\Jobs\ProcessAuthorAIReviewJob::dispatch($user->id)->onQueue('ai');
+                }
+
                 return $this->success([
                     'user_id' => $user->id,
                     'email' => $user->email,
@@ -1101,6 +1106,54 @@ class UserController extends Controller
             "User status updated to '{$action}' successfully.",
             200
         );
+    }
+
+    /**
+     * Bulk status update for multiple users (authors or readers).
+     * Processes each user individually — partial failures do not block the rest.
+     */
+    public function bulkAction(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $allowedActions = ['active', 'suspended', 'unverified', 'verified', 'pending', 'banned', 'rejected'];
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'ids'    => 'required|array|min:1|max:200',
+            'ids.*'  => 'required|integer|exists:users,id',
+            'action' => 'required|string|in:' . implode(',', $allowedActions),
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Validation failed.', 422, $validator->errors());
+        }
+
+        ['ids' => $ids, 'action' => $action] = $validator->validated();
+        $succeeded = [];
+        $failed    = [];
+
+        foreach ($ids as $userId) {
+            try {
+                $user = User::findOrFail($userId);
+
+                if ($action === 'verified' && $user->account_type !== 'author') {
+                    $failed[] = ['id' => $userId, 'reason' => 'Only authors can be verified.'];
+                    continue;
+                }
+
+                $user->status = $action;
+                $user->save();
+                $succeeded[] = $userId;
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $userId, 'reason' => $e->getMessage()];
+                \Illuminate\Support\Facades\Log::warning("bulkAction user {$userId} failed: " . $e->getMessage());
+            }
+        }
+
+        $msg = count($succeeded) . ' user(s) updated.';
+        if (count($failed) > 0) {
+            $msg .= ' ' . count($failed) . ' failed.';
+        }
+
+        return $this->success(['succeeded' => $succeeded, 'failed' => $failed], $msg);
     }
 
     /**

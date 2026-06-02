@@ -7,6 +7,7 @@ use App\Http\Resources\Book\BookResource;
 use App\Http\Resources\ReadingProgress\ReadingProgressResource;
 use App\Jobs\BackfillAudioChapterPagesJob;
 use App\Jobs\NotifyReadersOfNewBookJob;
+use App\Jobs\ProcessBookAIReviewJob;
 use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
 use App\Mail\Book\BookDeleted;
@@ -278,6 +279,8 @@ class BookController extends Controller
                         'author_id' => $book->author_id,
                     ]);
                 }
+                // Queue AI review — runs in background, does not block the response
+                ProcessBookAIReviewJob::dispatch($book->id)->onQueue('ai');
             }
 
             return $this->success(
@@ -1450,6 +1453,90 @@ class BookController extends Controller
             return $this->success(BookResource::collection($books), 'Top ranking books retrieved successfully.');
         } catch (\Exception $e) {
             return $this->error('Failed to retrieve top ranking books.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Bulk approve / decline / archive / feature a set of books in one request.
+     * Processes each book individually so a single failure does not roll back
+     * the rest. Returns a summary of succeeded and failed IDs.
+     */
+    public function bulkAction(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'ids'    => 'required|array|min:1|max:200',
+            'ids.*'  => 'required|integer|exists:books,id',
+            'action' => 'required|string|in:approve,decline,archive,unarchive,feature,unfeature',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Validation failed.', 422, $validator->errors());
+        }
+
+        ['ids' => $ids, 'action' => $action] = $validator->validated();
+        $succeeded = [];
+        $failed    = [];
+
+        foreach ($ids as $bookId) {
+            try {
+                $book = Book::findOrFail($bookId);
+
+                match ($action) {
+                    'approve'   => tap($book, fn($b) => $b->update([
+                                        'status'      => 'approved',
+                                        'visibility'  => 'public',
+                                        'approved_by' => auth()->id(),
+                                        'approved_at' => now(),
+                                    ])),
+                    'decline'   => tap($book, fn($b) => $b->update(['status' => 'declined'])),
+                    'archive'   => tap($book, fn($b) => $b->update(['archived' => true])),
+                    'unarchive' => tap($book, fn($b) => $b->update(['archived' => false])),
+                    'feature'   => tap($book, fn($b) => $b->update(['is_featured' => true])),
+                    'unfeature' => tap($book, fn($b) => $b->update(['is_featured' => false])),
+                };
+
+                $succeeded[] = $bookId;
+            } catch (\Throwable $e) {
+                $failed[] = ['id' => $bookId, 'reason' => $e->getMessage()];
+                Log::warning("bulkAction book {$bookId} failed: " . $e->getMessage());
+            }
+        }
+
+        $msg = count($succeeded) . ' book(s) updated.';
+        if (count($failed) > 0) {
+            $msg .= ' ' . count($failed) . ' failed.';
+        }
+
+        return $this->success(['succeeded' => $succeeded, 'failed' => $failed], $msg);
+    }
+
+    /**
+     * Return books ordered by actual paid purchase count — real best sellers,
+     * not admin-assigned ranking. Counts rows in digital_book_purchase_items
+     * that belong to a paid DigitalBookPurchase for each book.
+     */
+    public function bestSellers(): JsonResponse
+    {
+        try {
+            $books = Book::where('books.visibility', 'public')
+                ->where('books.archived', false)
+                ->whereIn('books.status', ['pending', 'approved', 'published'])
+                ->select('books.*')
+                ->selectSub(
+                    \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
+                        ->join('digital_book_purchases as dp', 'digital_book_purchase_items.digital_book_purchase_id', '=', 'dp.id')
+                        ->where('dp.status', 'paid')
+                        ->whereColumn('digital_book_purchase_items.book_id', 'books.id'),
+                    'sales_count'
+                )
+                ->orderByDesc('sales_count')
+                ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
+                ->limit(50)
+                ->get();
+
+            return $this->success(BookResource::collection($books), 'Best sellers retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->error('Failed to retrieve best sellers.', 500, $e->getMessage(), $e);
         }
     }
 
