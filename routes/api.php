@@ -158,6 +158,12 @@ Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
     Route::post('appstore/verify-purchase', [AppStorePurchaseController::class, 'verifyPurchase'])->name('verify-appstore-purchase');
 });
 
+// Author NGN bank account registration (for NGN payouts via Paystack Transfer)
+Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->group(function () {
+    Route::get('ngn-banks',    [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
+    Route::post('ngn-account', [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
+});
+
 // Paystack Routes
 Route::prefix('paystack')->group(function () {
     Route::post('/payment/initialize', [\App\Http\Controllers\PaystackPaymentController::class, 'initializePayment'])

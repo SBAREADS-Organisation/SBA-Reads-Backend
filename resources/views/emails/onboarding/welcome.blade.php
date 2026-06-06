@@ -11,7 +11,7 @@
     @endif
   </p>
   <h1 style="margin:0 0 16px;font-size:26px;font-weight:700;color:#160c08;line-height:1.3;">
-    Great to have you, {{ $name }}! 🎉
+    Great to have you, {{ (strtolower($name) !== 'no name' && $name !== '') ? $name : 'there' }}! 🎉
   </h1>
   <p style="margin:0 0 28px;font-size:15px;color:#4a3728;line-height:1.7;">
     @if($accountType === 'author')

@@ -67,7 +67,7 @@ class UserResource extends JsonResource
         // For non-authors (readers, etc.), return standard format
         return [
             'id' => $this->id,
-            'name' => $this->name ?? 'NO NAME',
+            'name' => ($this->name && strtolower($this->name) !== 'no name') ? $this->name : null,
             'email' => $this->email,
             'account_type' => $this->account_type,
             'status' => $this->status,

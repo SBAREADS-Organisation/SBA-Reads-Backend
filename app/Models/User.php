@@ -55,6 +55,7 @@ class User extends Authenticatable
         'voice_sample_url',
         'elevenlabs_voice_id',
         'voice_status',
+        'paystack_recipient_code',
         'ai_review_status',
         'ai_review_notes',
         'ai_review_confidence',

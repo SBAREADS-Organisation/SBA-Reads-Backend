@@ -55,8 +55,8 @@ class AuthorDashboardController extends Controller
 
             // Gross sales = sum of book prices for every copy sold (NGN)
             $total_sales = $this->calculateTotalSales($authorBooks->toArray());
-            // Author revenue = 90% of gross sales (10% SBAReads commission)
-            $revenue = round($total_sales * 0.9, 2);
+            // Author revenue = 75% of gross sales (25% SBAReads commission)
+            $revenue = round($total_sales * 0.75, 2);
             $books_sold = $this->calculateBooksSold($authorBooks->toArray());
 
             // Detect dominant currency from the author's books

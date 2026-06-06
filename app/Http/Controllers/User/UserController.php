@@ -190,7 +190,10 @@ class UserController extends Controller
                     }
                 }
                 try {
-                    Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+                    $welcomeName = ($user->name && strtolower($user->name) !== 'no name')
+                        ? $user->name
+                        : ucfirst(strtolower(explode('@', $user->email)[0]));
+                    Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
                 } catch (\Throwable $mailErr) {
                     \Log::warning('Welcome email failed: ' . $mailErr->getMessage());
                 }
@@ -417,7 +420,10 @@ class UserController extends Controller
 
             Cache::forget($cacheKey);
 
-            Mail::to($user->email)->send(new WelcomeEmail($user->name ?? 'NO NAME', $user->account_type));
+            $welcomeName = ($user->name && strtolower($user->name) !== 'no name')
+                ? $user->name
+                : ucfirst(strtolower(explode('@', $user->email)[0]));
+            Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;
