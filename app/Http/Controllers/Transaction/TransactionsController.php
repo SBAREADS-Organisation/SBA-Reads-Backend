@@ -104,25 +104,30 @@ class TransactionsController extends Controller
                 });
             }
 
-            // Apply date range filter
-            if ($request->has('start_date') && $request->has('end_date')) {
-                $query->whereBetween('created_at', [$request->start_date, $request->end_date]);
+            // Apply date range filter — end_date is made inclusive of the full day
+            // so "2026-06-07" covers 00:00:00–23:59:59 rather than just midnight.
+            if ($request->filled('start_date') && $request->filled('end_date')) {
+                $query->whereBetween('created_at', [
+                    $request->start_date . ' 00:00:00',
+                    $request->end_date   . ' 23:59:59',
+                ]);
+            } elseif ($request->filled('start_date')) {
+                $query->where('created_at', '>=', $request->start_date . ' 00:00:00');
             }
 
             // Apply status filter
-            if ($request->has('status') && ! empty($request->status)) {
+            if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
 
             // Apply sorting
-            if ($request->has('sort_by') && $request->has('sort_order')) {
+            if ($request->filled('sort_by') && $request->filled('sort_order')) {
                 $query->orderBy($request->sort_by, $request->sort_order);
             } else {
                 $query->orderBy('created_at', 'desc');
             }
 
-            // Paginate results
-            $transactions = $query->paginate($request->get('per_page', 15));
+            $transactions = $query->paginate($request->get('per_page', 50));
 
             return $this->success($transactions, 'Transactions retrieved successfully');
         } catch (\Throwable $th) {
