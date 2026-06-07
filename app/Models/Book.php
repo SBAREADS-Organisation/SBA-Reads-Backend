@@ -109,7 +109,7 @@ class Book extends Model
             'is_featured'    => 'boolean',
             'ranking'        => 'integer',
             'audio_price'    => 'float',
-            'audio_chapters' => \App\Casts\SanitizedArray::class,
+            'audio_chapters' => 'array',
         ];
     }
 
@@ -180,6 +180,11 @@ class Book extends Model
     {
         return $this->hasOne(BookMetaDataAnalytics::class);
         // return $this->hasMany(BookMetaDataAnalytics::class);
+    }
+
+    protected function asJson($value): string|false
+    {
+        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
     }
 
     protected static function booted()
