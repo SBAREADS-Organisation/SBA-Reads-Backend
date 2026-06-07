@@ -9,7 +9,7 @@ class SanitizedArray implements CastsAttributes
 {
     public function get(Model $model, string $key, mixed $value, array $attributes): ?array
     {
-        if (is_null($value)) {
+        if (is_null($value) || $value === '') {
             return null;
         }
 
@@ -18,9 +18,10 @@ class SanitizedArray implements CastsAttributes
         return is_array($decoded) ? $this->sanitizeUtf8($decoded) : [];
     }
 
-    public function set(Model $model, string $key, mixed $value, array $attributes): ?string
+    public function set(Model $model, string $key, mixed $value, array $attributes): string
     {
-        return is_null($value) ? null : json_encode($value);
+        $encoded = json_encode($value);
+        return $encoded !== false ? $encoded : '[]';
     }
 
     protected function sanitizeUtf8(mixed $data): mixed
