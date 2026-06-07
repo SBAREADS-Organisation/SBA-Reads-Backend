@@ -182,9 +182,9 @@ class Book extends Model
         // return $this->hasMany(BookMetaDataAnalytics::class);
     }
 
-    protected function asJson($value): string|false
+    protected function asJson($value, $flags = 0): string|false
     {
-        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | $flags);
     }
 
     protected static function booted()
