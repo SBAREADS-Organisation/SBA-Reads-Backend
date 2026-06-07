@@ -109,7 +109,7 @@ class Book extends Model
             'is_featured'    => 'boolean',
             'ranking'        => 'integer',
             'audio_price'    => 'float',
-            'audio_chapters' => 'array',
+            'audio_chapters' => \App\Casts\SanitizedArray::class,
         ];
     }
 
