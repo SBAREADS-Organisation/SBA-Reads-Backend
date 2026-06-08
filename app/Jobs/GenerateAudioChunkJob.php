@@ -75,9 +75,13 @@ class GenerateAudioChunkJob implements ShouldQueue
                 return;
             }
 
-            // Quota exhausted: cancel the entire batch immediately — no chunk will succeed
-            if (str_starts_with($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
+            // Quota exhausted: cancel the entire batch immediately — no chunk will succeed.
+            // Also mark the book as failed so it shows correctly in the admin panel
+            // and can be bulk-reset via `php artisan audio:retry-failed` once credits are restored.
+            if (str_contains($e->getMessage(), 'ELEVENLABS_QUOTA_EXCEEDED')) {
                 Log::error("GenerateAudioChunkJob: quota exceeded — cancelling batch for book {$this->bookId}.");
+                \App\Models\Book::where('id', $this->bookId)
+                    ->update(['audio_status' => 'failed']);
                 $this->batch()?->cancel();
                 return;
             }

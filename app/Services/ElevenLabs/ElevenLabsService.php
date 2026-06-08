@@ -307,13 +307,17 @@ class ElevenLabsService
         }
 
         if ($status === 401 || $status === 403) {
-            // ElevenLabs also sends 401 for quota_exceeded — check the body before assuming auth failure
-            $errorStatus = json_decode($body, true)['detail']['status'] ?? '';
-            if ($errorStatus === 'quota_exceeded') {
+            // ElevenLabs sends 401 for both auth failure and quota exhaustion.
+            // Check body in multiple ways — their response format has varied across API versions.
+            $decoded     = json_decode($body, true) ?? [];
+            $errorStatus = $decoded['detail']['status']  // {"detail":{"status":"quota_exceeded"}}
+                        ?? $decoded['detail']             // {"detail":"quota_exceeded"}
+                        ?? '';
+            if (str_contains((string) $errorStatus, 'quota') || str_contains($body, 'quota_exceeded')) {
                 throw new \RuntimeException("ELEVENLABS_QUOTA_EXCEEDED: {$context}. {$body}");
             }
 
-            throw new \RuntimeException("ElevenLabs authentication error [{$status}] in {$context}. Check ELEVENLABS_API_KEY.");
+            throw new \RuntimeException("ElevenLabs authentication error [{$status}] in {$context}. Check ELEVENLABS_API_KEY. Body: ".substr($body, 0, 200));
         }
 
         if ($status >= 500) {
