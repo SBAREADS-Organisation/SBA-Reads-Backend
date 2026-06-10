@@ -24,7 +24,7 @@ class ProcessAuthorAIReviewJob implements ShouldQueue
 
     public function handle(): void
     {
-        $user = User::with('kyc_info')->find($this->userId);
+        $user = User::with('kycInfo')->find($this->userId);
 
         if (! $user || $user->account_type !== 'author') {
             return;
