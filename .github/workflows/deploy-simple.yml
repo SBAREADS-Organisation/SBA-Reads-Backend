@@ -85,7 +85,30 @@ jobs:
             sudo chmod -R u=rwX,go=rX /var/www/html
             sudo chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
-            # ── 9. Clear and rebuild Laravel caches ───────────────────────────
+            # ── 9. Apply PHP upload limits ────────────────────────────────────
+            sudo tee /etc/php/8.4/fpm/conf.d/99-uploads.ini > /dev/null <<'PHPEOF'
+            upload_max_filesize = 210M
+            post_max_size = 215M
+            memory_limit = 512M
+            max_execution_time = 300
+            max_input_time = 300
+            PHPEOF
+            sudo tee /etc/php/8.4/cli/conf.d/99-uploads.ini > /dev/null <<'PHPEOF'
+            upload_max_filesize = 210M
+            post_max_size = 215M
+            memory_limit = 512M
+            max_execution_time = 300
+            max_input_time = 300
+            PHPEOF
+
+            # Apply nginx upload limit
+            if ! grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
+              sudo sed -i '/http {/a\\tclient_max_body_size 210M;' /etc/nginx/nginx.conf
+            else
+              sudo sed -i 's/client_max_body_size .*/client_max_body_size 210M;/' /etc/nginx/nginx.conf
+            fi
+
+            # ── 10. Clear and rebuild Laravel caches ──────────────────────────
             sudo -u www-data php artisan optimize:clear
             sudo -u www-data php artisan config:cache || echo "Config cache failed"
             sudo -u www-data php artisan route:cache  || echo "Route cache failed"

@@ -147,6 +147,22 @@ return [
             'timeout'              => 120,
             'nice'                 => 0,
         ],
+
+        // AI review jobs — book and author review via Claude.
+        'supervisor-ai' => [
+            'connection'           => 'redis',
+            'queue'                => ['ai'],
+            'balance'              => 'auto',
+            'autoScalingStrategy'  => 'time',
+            'maxProcesses'         => 3,
+            'minProcesses'         => 1,
+            'maxTime'              => 0,
+            'maxJobs'              => 0,
+            'memory'               => 256,
+            'tries'                => 2,
+            'timeout'              => 90,
+            'nice'                 => 0,
+        ],
     ],
 
     /*
@@ -174,12 +190,18 @@ return [
                 'balanceMaxShift'   => 2,
                 'balanceCooldown'   => 3,
             ],
+            'supervisor-ai' => [
+                'maxProcesses'      => 3,
+                'balanceMaxShift'   => 1,
+                'balanceCooldown'   => 3,
+            ],
         ],
 
         'local' => [
             'supervisor-default' => ['maxProcesses' => 2],
             'supervisor-voice'   => ['maxProcesses' => 1],
             'supervisor-audio'   => ['maxProcesses' => 1],
+            'supervisor-ai'      => ['maxProcesses' => 1],
         ],
     ],
 ];

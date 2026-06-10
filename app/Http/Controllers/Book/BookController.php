@@ -88,7 +88,7 @@ class BookController extends Controller
             'books.*.files.array'                     => 'Invalid book files format.',
             'books.*.files.*.file'                    => 'One or more uploaded files are invalid.',
             'books.*.files.*.mimes'                   => 'Book files must be in PDF, JPG, JPEG, or PNG format.',
-            'books.*.files.*.max'                     => 'Your book file is too large. Maximum allowed size is 20 MB.',
+            'books.*.files.*.max'                     => 'Your book file is too large. Maximum allowed size is 200 MB.',
             'books.*.pricing.actual_price.required_with' => 'Please enter a price for your book.',
             'books.*.pricing.actual_price.numeric'    => 'The book price must be a number.',
             'books.*.pricing.actual_price.min'        => 'The book price cannot be negative.',
@@ -128,7 +128,7 @@ class BookController extends Controller
             // 'books.*.cover_image.public_id'      => 'nullable|string',
             'books.*.format' => 'nullable|string|max:50',
             'books.*.files' => 'required|array',
-            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:20480',
+            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:204800',
             // 'books.*.files.*.url'                => 'required_with:books.*.files|url',
             // 'books.*.files.*.public_id'          => 'nullable|string',
             'books.*.target_audience' => 'nullable|array',
@@ -1079,7 +1079,7 @@ class BookController extends Controller
         try {
             // dd($request->all());
             $validator = Validator::make($request->all(), [
-                'book' => 'required|file|mimes:pdf|max:20480', // max 20MB
+                'book' => 'required|file|mimes:pdf|max:204800', // max 200MB
             ]);
 
             if ($validator->fails()) {
