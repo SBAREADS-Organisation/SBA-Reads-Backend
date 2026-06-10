@@ -201,7 +201,7 @@ class BookService
         $purchase = DigitalBookPurchase::create([
             'user_id' => $user->id,
             'total_amount' => 0,
-            'currency' => $paymentProvider === 'paystack' ? 'ngn' : 'usd',
+            'currency' => $paymentProvider === 'paystack' ? 'NGN' : 'USD',
             'status' => 'pending',
             'payment_provider' => $paymentProvider,
         ]);
@@ -231,7 +231,7 @@ class BookService
 
         $transaction = $this->paymentService->createPayment([
             'amount' => $total,
-            'currency' => $paymentProvider === 'paystack' ? 'ngn' : 'usd',
+            'currency' => $paymentProvider === 'paystack' ? 'NGN' : 'USD',
             'description' => 'Digital books purchase',
             'purpose' => 'digital_book_purchase',
             'purpose_id' => $purchase->id,

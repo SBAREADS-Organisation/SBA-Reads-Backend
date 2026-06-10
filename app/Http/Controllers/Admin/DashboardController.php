@@ -39,12 +39,12 @@ class DashboardController extends Controller
             // Revenue calculations - dual currency support
             $revenue_usd = Transaction::where('type', 'earning')
                 ->where('status', 'succeeded')
-                ->where('currency', 'USD')
+                ->whereRaw('UPPER(currency) = ?', ['USD'])
                 ->sum('amount');
 
             $revenue_ngn = Transaction::where('type', 'earning')
                 ->where('status', 'succeeded')
-                ->where('currency', 'NGN')
+                ->whereRaw('UPPER(currency) = ?', ['NGN'])
                 ->sum('amount');
 
             $naira_revenue = Transaction::where('type', 'earning')
@@ -53,22 +53,21 @@ class DashboardController extends Controller
 
             // Total sales from all sources with dual currency
             $digital_sales_usd = DigitalBookPurchase::where('status', 'completed')
-                ->where('currency', 'USD')
+                ->whereRaw('UPPER(currency) = ?', ['USD'])
                 ->sum('total_amount');
             $digital_sales_ngn = DigitalBookPurchase::where('status', 'completed')
-                ->where('currency', 'NGN')
+                ->whereRaw('UPPER(currency) = ?', ['NGN'])
                 ->sum('total_amount');
 
             $physical_sales_usd = Order::where('status', 'completed')
-                ->where('currency', 'USD')
+                ->whereRaw('UPPER(currency) = ?', ['USD'])
                 ->sum('total_amount');
             $physical_sales_ngn = Order::where('status', 'completed')
-                ->where('currency', 'NGN')
+                ->whereRaw('UPPER(currency) = ?', ['NGN'])
                 ->sum('total_amount');
 
             $total_sales_usd = $digital_sales_usd + $physical_sales_usd;
             $total_sales_ngn = $digital_sales_ngn + $physical_sales_ngn;
-            $total_sales = $total_sales_usd + $total_sales_ngn;
 
             // Reader engagement metrics
             $reader_engagement = $this->calculateReaderEngagement();
@@ -101,7 +100,6 @@ class DashboardController extends Controller
                 'total_sales' => [
                     'usd' => round($total_sales_usd, 2),
                     'ngn' => round($total_sales_ngn, 2),
-                    'total' => round($total_sales, 2),
                 ],
                 'total_books_sold' => $total_books_sold,
                 'reader_engagement' => $reader_engagement,
@@ -145,10 +143,14 @@ class DashboardController extends Controller
 
     private function getWeeklyRevenue()
     {
-        return Transaction::where('type', 'earning')
+        $base = Transaction::where('type', 'earning')
             ->where('status', 'succeeded')
-            ->where('created_at', '>=', now()->subDays(7))
-            ->sum('amount');
+            ->where('created_at', '>=', now()->subDays(7));
+
+        return [
+            'usd' => round((clone $base)->whereRaw('UPPER(currency) = ?', ['USD'])->sum('amount'), 2),
+            'ngn' => round((clone $base)->whereRaw('UPPER(currency) = ?', ['NGN'])->sum('amount'), 2),
+        ];
     }
 
     private function getWeeklySignups()
