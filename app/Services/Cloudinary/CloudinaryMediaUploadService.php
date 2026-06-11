@@ -63,10 +63,18 @@ class CloudinaryMediaUploadService
 
             // dd($morphType, $mediable);
 
+            // PDFs and other document types must use 'raw' — Cloudinary classifies
+            // 'auto'-detected PDFs as images and applies the much smaller image size
+            // limit (~10 MB), causing uploads of larger files to fail.
+            $resourceType = match ($context) {
+                'book_content' => 'raw',
+                default        => 'auto',
+            };
+
             $uploadOptions = [
-                'folder' => $folder,
-                'public_id' => $fileName,
-                'resource_type' => 'auto', // handles images, videos, pdf, etc.
+                'folder'        => $folder,
+                'public_id'     => $fileName,
+                'resource_type' => $resourceType,
             ];
 
             $result = (new UploadApi)->upload($file->getRealPath(), $uploadOptions);
@@ -98,6 +106,11 @@ class CloudinaryMediaUploadService
                 'id' => $media->id,
             ];
         } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Cloudinary upload failed', [
+                'context'   => $context,
+                'message'   => $e->getMessage(),
+            ]);
+
             return $this->error(
                 'An error occurred while uploading the file to Cloudinary',
                 500,
