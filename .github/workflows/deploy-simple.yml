@@ -101,12 +101,32 @@ jobs:
             max_input_time = 300
             PHPEOF
 
-            # Apply nginx upload limit
+            # Apply nginx upload limit and timeouts to the global http block
             if ! grep -q "client_max_body_size" /etc/nginx/nginx.conf; then
               sudo sed -i '/http {/a\\tclient_max_body_size 210M;' /etc/nginx/nginx.conf
             else
               sudo sed -i 's/client_max_body_size .*/client_max_body_size 210M;/' /etc/nginx/nginx.conf
             fi
+            if ! grep -q "fastcgi_read_timeout" /etc/nginx/nginx.conf; then
+              sudo sed -i '/http {/a\\tfastcgi_read_timeout 300;' /etc/nginx/nginx.conf
+            else
+              sudo sed -i 's/fastcgi_read_timeout .*/fastcgi_read_timeout 300;/' /etc/nginx/nginx.conf
+            fi
+            if ! grep -q "client_body_timeout" /etc/nginx/nginx.conf; then
+              sudo sed -i '/http {/a\\tclient_body_timeout 300;' /etc/nginx/nginx.conf
+            else
+              sudo sed -i 's/client_body_timeout .*/client_body_timeout 300;/' /etc/nginx/nginx.conf
+            fi
+            # Also patch the active site config so FastCGI timeout applies at location level
+            for SITE_CONF in /etc/nginx/sites-enabled/*; do
+              if grep -q "fastcgi_pass" "$SITE_CONF"; then
+                if ! grep -q "fastcgi_read_timeout" "$SITE_CONF"; then
+                  sudo sed -i '/fastcgi_pass/a\\t\tfastcgi_read_timeout 300;' "$SITE_CONF"
+                else
+                  sudo sed -i 's/fastcgi_read_timeout .*/fastcgi_read_timeout 300;/' "$SITE_CONF"
+                fi
+              fi
+            done
 
             # ── 10. Clear and rebuild Laravel caches ──────────────────────────
             sudo -u www-data php artisan optimize:clear
