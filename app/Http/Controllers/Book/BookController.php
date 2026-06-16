@@ -1532,7 +1532,6 @@ class BookController extends Controller
                         ->whereColumn('digital_book_purchase_items.book_id', 'books.id'),
                     'sales_count'
                 )
-                ->having('sales_count', '>', 0)
                 ->orderByDesc('sales_count')
                 ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
                 ->limit(50)
