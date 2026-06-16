@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class BookService
@@ -112,24 +113,36 @@ class BookService
             $mediaUploadIds[] = $upload['id'];
         }
 
-        // Upload each file in 'files' array
+        // Upload each file in 'files' array — PDFs go to S3 to avoid Cloudinary's 10 MB image cap
         if (! empty($data['files']) && is_array($data['files'])) {
             $uploadedFiles = [];
             foreach ($data['files'] as $file) {
                 if ($file instanceof UploadedFile) {
-                    $upload = $this->cloudinaryMediaService->upload($file, 'book_content');
+                    $ext   = $file->getClientOriginalExtension() ?: 'pdf';
+                    $s3Key = 'books/content/' . date('Y/m/d') . '/' . Str::uuid() . '.' . $ext;
 
-                    if ($upload instanceof JsonResponse) {
-                        $errorData = $upload->getData(true);
-                        throw new \Exception('Failed to upload book content file: ' . ($errorData['error'] ?? 'Unknown error'));
-                    }
+                    Storage::disk('s3')->put($s3Key, file_get_contents($file->getRealPath()), 'public');
 
-                    $uploadedFiles[] = [
-                        'public_url' => (string) $upload['url'],
-                        'public_id' => $upload['public_id'],
+                    $s3Url = Storage::disk('s3')->url($s3Key);
+
+                    $media = \App\Models\MediaUpload::create([
+                        'context'       => 'book_content',
+                        'type'          => 'raw',
+                        'folder'        => 'books/content/' . date('Y/m/d'),
+                        'public_id'     => $s3Key,
+                        'url'           => $s3Url,
+                        'watermarked'   => false,
+                        'is_temporary'  => false,
+                        'mediable_type' => null,
+                        'mediable_id'   => null,
+                    ]);
+
+                    $uploadedFiles[]   = [
+                        'public_url' => $s3Url,
+                        'public_id'  => $s3Key,
                     ];
 
-                    $mediaUploadIds[] = $upload['id'];
+                    $mediaUploadIds[] = $media->id;
                 }
             }
             $data['files'] = $uploadedFiles;
@@ -181,10 +194,15 @@ class BookService
             $this->cloudinaryMediaService->delete($book->cover_image['public_id']);
         }
 
-        // Delete book content files from Cloudinary
+        // Delete book content files — S3 keys start with "books/content/", others are on Cloudinary
         if ($book->files && is_array($book->files)) {
             foreach ($book->files as $file) {
-                if (isset($file['public_id'])) {
+                if (! isset($file['public_id'])) {
+                    continue;
+                }
+                if (str_starts_with($file['public_id'], 'books/content/')) {
+                    Storage::disk('s3')->delete($file['public_id']);
+                } else {
                     $this->cloudinaryMediaService->delete($file['public_id']);
                 }
             }

@@ -1520,7 +1520,7 @@ class BookController extends Controller
         try {
             $books = Book::where('books.visibility', 'public')
                 ->where('books.archived', false)
-                ->whereIn('books.status', ['pending', 'approved', 'published'])
+                ->whereIn('books.status', ['approved', 'published'])
                 ->select('books.*')
                 ->selectSub(
                     \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
@@ -1529,6 +1529,7 @@ class BookController extends Controller
                         ->whereColumn('digital_book_purchase_items.book_id', 'books.id'),
                     'sales_count'
                 )
+                ->having('sales_count', '>', 0)
                 ->orderByDesc('sales_count')
                 ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
                 ->limit(50)
