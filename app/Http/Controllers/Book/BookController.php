@@ -181,9 +181,12 @@ class BookController extends Controller
             });
         }
 
-        // Sorting
+        // Sorting — qualify with table name to avoid ambiguity when a join is present (e.g. trending classification)
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc');
+        if (! str_contains($sortBy, '.')) {
+            $sortBy = 'books.' . $sortBy;
+        }
         $query->orderBy($sortBy, $sortDir);
 
         $books = $query->with([
