@@ -44,6 +44,8 @@ Route::prefix('auth')->group(function () {
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,5')->name('forgot-password');
     Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,5');
     Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,5');
+    Route::get('invite/{token}', [AuthController::class, 'verifyInvite'])->name('verify-invite');
+    Route::post('accept-invite', [AuthController::class, 'acceptInvite'])->middleware('throttle:10,5')->name('accept-invite');
 });
 
 // Withdrawal Routes

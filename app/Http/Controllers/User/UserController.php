@@ -4,6 +4,7 @@ namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\User\UserResource;
+use App\Mail\Onboarding\AdminInviteMail;
 use App\Mail\Onboarding\StripeOnboardingMail;
 use App\Mail\Onboarding\WelcomeEmail;
 use App\Mail\Registration\AuthorVerificationToken;
@@ -248,49 +249,45 @@ class UserController extends Controller
     public function createSuperAdmin(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name'     => 'required|string|max:255',
-            'email'    => 'required|email|unique:users,email',
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-                'regex:/[A-Z]/',
-                'regex:/[a-z]/',
-                'regex:/[0-9]/',
-                'regex:/[\W_]/',
-            ],
+            'name'  => 'required|string|max:255',
+            'email' => 'required|email|unique:users,email',
         ]);
 
         if ($validator->fails()) {
-            return $this->error(
-                'Validation failed',
-                400,
-                $validator->errors()
-            );
+            return $this->error('Validation failed', 400, $validator->errors());
         }
 
         try {
             $user = new User;
-            $user->name     = $request->name;
-            $user->email    = $request->email;
-            $user->password = Hash::make($request->password);
+            $user->name          = $request->name;
+            $user->email         = $request->email;
+            $user->password      = Hash::make(\Str::random(32));
             $user->account_type  = 'superadmin';
             $user->default_login = 'email';
-            $user->status        = 'active';
+            $user->status        = 'invited';
             $user->save();
 
-            // Assign superadmin role (create if not exists)
             $role = Role::firstOrCreate(['name' => 'superadmin']);
             $user->assignRole($role);
 
-            $user->refresh();
+            $token     = \Str::random(64);
+            $adminUrl  = config('app.admin_url', 'https://admin.sbareads.com');
+            $inviteUrl = "{$adminUrl}/accept-invite?token={$token}&email=" . urlencode($user->email);
+
+            Cache::put("admin_invite:{$token}", [
+                'user_id' => $user->id,
+                'email'   => $user->email,
+                'role'    => 'superadmin',
+            ], now()->addHours(72));
+
+            Mail::to($user->email)->send(new AdminInviteMail($user, $inviteUrl, 'superadmin'));
 
             return $this->success([
                 'user_id' => $user->id,
                 'name'    => $user->name,
                 'email'   => $user->email,
                 'role'    => $user->getRoleNames()->first(),
-            ], 'Super admin created successfully', 201);
+            ], 'Super admin invited successfully. An invite email has been sent.', 201);
         } catch (\Exception $e) {
             return $this->error(
                 'An error occurred while creating the super admin: ' . $e->getMessage(),
@@ -1171,23 +1168,10 @@ class UserController extends Controller
             'email'          => 'required|email|unique:users,email',
             'name'           => 'required|string|max:255',
             'dashboard_role' => 'nullable|string|in:admin,editor,operations',
-            'password' => [
-                'required',
-                'string',
-                'min:8',
-                'regex:/[A-Z]/',
-                'regex:/[a-z]/',
-                'regex:/[0-9]/',
-                'regex:/[\W_]/',
-            ],
         ]);
 
         if ($validator->fails()) {
-            return $this->error(
-                'Validation failed',
-                400,
-                $validator->errors()
-            );
+            return $this->error('Validation failed', 400, $validator->errors());
         }
 
         try {
@@ -1196,21 +1180,29 @@ class UserController extends Controller
             $dashboardRole = $request->input('dashboard_role', 'admin');
 
             $user = new User;
-            $user->name         = $request->name;
-            $user->email        = $request->email;
-            $user->password     = Hash::make($request->password);
-            $user->account_type = 'manager';
+            $user->name          = $request->name;
+            $user->email         = $request->email;
+            $user->password      = Hash::make(\Str::random(32));
+            $user->account_type  = 'manager';
             $user->default_login = 'email';
-            $user->status       = 'active';
-            $user->preferences  = ['dashboard_role' => $dashboardRole];
+            $user->status        = 'invited';
+            $user->preferences   = ['dashboard_role' => $dashboardRole];
             $user->save();
 
-            // Assign admin role (Spatie — controls API access)
             $role = Role::firstOrCreate(['name' => 'admin']);
             $user->assignRole($role);
 
-            // Send welcome email
-            Mail::to($user->email)->send(new WelcomeEmail($user->name, $user->account_type));
+            $token     = \Str::random(64);
+            $adminUrl  = config('app.admin_url', 'https://admin.sbareads.com');
+            $inviteUrl = "{$adminUrl}/accept-invite?token={$token}&email=" . urlencode($user->email);
+
+            Cache::put("admin_invite:{$token}", [
+                'user_id' => $user->id,
+                'email'   => $user->email,
+                'role'    => 'admin',
+            ], now()->addHours(72));
+
+            Mail::to($user->email)->send(new AdminInviteMail($user, $inviteUrl, 'admin'));
 
             DB::commit();
 
@@ -1221,7 +1213,7 @@ class UserController extends Controller
                 'role'           => $user->getRoleNames()->first(),
                 'account_type'   => $user->account_type,
                 'dashboard_role' => $dashboardRole,
-            ], 'Admin invited successfully', 201);
+            ], 'Admin invited successfully. An invite email has been sent.', 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->error(

@@ -91,11 +91,12 @@ class AuthController extends Controller
             );
 
             return $this->success([
-                'user_id' => $user->id,
-                'email' => $user->email,
-                'role' => $user->getRoleNames()->first(),
-                'token' => $token,
+                'user_id'      => $user->id,
+                'email'        => $user->email,
+                'role'         => $user->getRoleNames()->first(),
+                'token'        => $token,
                 'account_type' => $user->account_type,
+                'redirect_to'  => in_array($user->account_type, ['manager', 'superadmin']) ? 'admin' : 'app',
             ], 'Login successful', 200);
         } catch (\Exception $e) {
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
@@ -268,6 +269,85 @@ class AuthController extends Controller
         } catch (\Exception $e) {
 
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Verify an admin invite token and return the invited user's info.
+     */
+    public function verifyInvite(string $token)
+    {
+        $data = Cache::get("admin_invite:{$token}");
+
+        if (! $data) {
+            return $this->error('This invite link is invalid or has expired.', 404);
+        }
+
+        $user = User::find($data['user_id']);
+
+        if (! $user || $user->status !== 'invited') {
+            return $this->error('This invite has already been used or is no longer valid.', 400);
+        }
+
+        return $this->success([
+            'email' => $data['email'],
+            'name'  => $user->name,
+            'role'  => $data['role'],
+        ], 'Invite is valid.');
+    }
+
+    /**
+     * Accept an admin invite: set password and activate the account.
+     */
+    public function acceptInvite(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'token'                 => 'required|string',
+                'password'              => [
+                    'required', 'string', 'min:8', 'confirmed',
+                    'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/',
+                ],
+                'password_confirmation' => 'required|string',
+            ], [
+                'password.regex' => 'Password must include uppercase, lowercase, a number, and a special character.',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->error('Validation failed', 400, $validator->errors());
+            }
+
+            $data = Cache::get("admin_invite:{$request->token}");
+
+            if (! $data) {
+                return $this->error('This invite link is invalid or has expired.', 400);
+            }
+
+            $user = User::find($data['user_id']);
+
+            if (! $user || $user->status !== 'invited') {
+                return $this->error('This invite has already been used or is no longer valid.', 400);
+            }
+
+            $user->update([
+                'password' => Hash::make($request->password),
+                'status'   => 'active',
+            ]);
+
+            Cache::forget("admin_invite:{$request->token}");
+
+            $token = $user->createToken('auth_token')->plainTextToken;
+
+            return $this->success([
+                'user_id'      => $user->id,
+                'email'        => $user->email,
+                'role'         => $user->getRoleNames()->first(),
+                'account_type' => $user->account_type,
+                'token'        => $token,
+                'redirect_to'  => 'admin',
+            ], 'Account activated successfully. Welcome to SBA Reads Admin.');
+        } catch (\Throwable $th) {
+            return $this->error('An error occurred while activating your account.', 500, $th->getMessage(), $th);
         }
     }
 
