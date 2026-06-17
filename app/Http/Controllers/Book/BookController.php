@@ -1028,19 +1028,9 @@ class BookController extends Controller
             // Check if user is admin/superadmin
             $isAdmin = $user->hasRole(['admin', 'superadmin']);
 
-            // For admins, reason is required. For authors, no validation at all.
             if ($isAdmin) {
-                $validator = validator($request->all(), [
-                    'reason' => 'required|string|max:255',
-                ]);
-
-                if ($validator->fails()) {
-                    return $this->error($validator->errors(), 422, 'Validation failed.');
-                }
-
-                $reason = $request->input('reason');
+                $reason = $request->input('reason', 'Admin deleted book');
             } else {
-                // For authors, no payload required
                 $reason = 'Author requested deletion';
             }
 
