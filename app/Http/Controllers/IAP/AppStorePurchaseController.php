@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
+use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Imdhemy\Purchases\Facades\Product;
+
+// Apple's commission rate: 30% standard, 15% for small businesses.
+// We use 30% as the conservative default so author earnings are never overstated.
+const APPLE_COMMISSION = 0.30;
+const AUTHOR_REVENUE_SHARE = 0.75;
 
 class AppStorePurchaseController extends Controller
 {
@@ -191,6 +197,71 @@ class AppStorePurchaseController extends Controller
 
                 if (! empty($bookIdsToGrant)) {
                     $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
+                }
+
+                // Credit each book's authors with their pending IAP earnings.
+                // Apple remits our 70% monthly; we flag these as 'iap_pending' and
+                // process payouts in a batch after Apple has actually paid us.
+                //
+                // We lock the USD/NGN exchange rate at the time of sale so authors
+                // know exactly what they'll receive — rate is stored in meta_data.
+                $rateAtSale = null;
+                try {
+                    $rateAtSale = app(CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
+                } catch (\Throwable) {
+                    $rateAtSale = (float) config('services.currency.ngn_usd_fallback', 1600);
+                }
+
+                foreach ($bookIdsToGrant as $bookId) {
+                    $book    = Book::find($bookId);
+                    $authors = $book?->authors ?? collect();
+                    $price   = (float) ($book->actual_price ?? $book->discounted_price ?? 0);
+
+                    $netFromApple  = $price * (1 - APPLE_COMMISSION);
+                    $authorEarning = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+
+                    foreach ($authors as $author) {
+                        $alreadyCredited = Transaction::where('payment_intent_id', 'iap_author_' . $user->id . '_' . $bookId)
+                            ->where('user_id', $author->id)
+                            ->exists();
+
+                        if ($alreadyCredited) continue;
+
+                        Transaction::create([
+                            'id'               => Str::uuid(),
+                            'user_id'          => $author->id,
+                            'reference'        => uniqid('iap_earn_'),
+                            'payment_intent_id'=> 'iap_author_' . $user->id . '_' . $bookId,
+                            'amount'           => $authorEarning,
+                            'currency'         => 'USD',
+                            'payment_provider' => 'apple',
+                            'status'           => 'iap_pending',
+                            'type'             => 'earning',
+                            'direction'        => 'credit',
+                            'description'      => "App Store sale: {$book->title} (pending Apple remittance)",
+                            'purpose_type'     => 'iap_book_purchase',
+                            'purpose_id'       => $bookId,
+                            'meta_data'        => [
+                                'buyer_id'       => $user->id,
+                                'book_id'        => $bookId,
+                                'gross_price'    => $price,
+                                'apple_cut'      => round($price * APPLE_COMMISSION, 2),
+                                'net_from_apple' => round($netFromApple, 2),
+                                'author_earning' => $authorEarning,
+                                'environment'    => $environment,
+                                // Rate locked at time of sale so payout uses this, not a future rate
+                                'ngn_rate_at_sale' => $rateAtSale,
+                            ],
+                        ]);
+
+                        Log::info('IAP: author pending earning created', [
+                            'author_id'       => $author->id,
+                            'book_id'         => $bookId,
+                            'amount_usd'      => $authorEarning,
+                            'ngn_rate_locked' => $rateAtSale,
+                            'environment'     => $environment,
+                        ]);
+                    }
                 }
 
                 Log::info('IAP: verification complete', [

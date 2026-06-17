@@ -9,6 +9,7 @@ use App\Http\Controllers\Author\AuthorDashboardController;
 use App\Http\Controllers\Book\BookController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\IAP\AppStorePurchaseController;
+use App\Http\Controllers\KYC\AdminKYCController;
 use App\Http\Controllers\KYC\KYCController;
 use App\Http\Controllers\Notification\NotificationsController;
 use App\Http\Controllers\Order\OrderController;
@@ -124,6 +125,7 @@ Route::prefix('user')->group(function () {
             Route::get('onboard', [UserController::class, 'onboard'])->name('onboard-account');
             Route::post('initiate', [KYCController::class, 'initiate_KYC'])->name('initiate-kyc');
             Route::post('upload-document', [KYCController::class, 'uploadDocument'])->name('upload-document');
+            Route::post('upload-manual-document', [KYCController::class, 'uploadManualDocument'])->name('upload-manual-document');
             Route::get('status', [KYCController::class, 'kycStatus'])->name('kyc-status');
         });
 
@@ -158,13 +160,17 @@ Route::prefix('subscriptions')->group(function () {
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
 Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
-    Route::post('appstore/verify-purchase', [AppStorePurchaseController::class, 'verifyPurchase'])->name('verify-appstore-purchase');
+    Route::post('appstore/verify-purchase',   [AppStorePurchaseController::class,    'verifyPurchase'])->name('verify-appstore-purchase');
+    Route::post('googleplay/verify-purchase', [\App\Http\Controllers\IAP\GooglePlayPurchaseController::class, 'verifyPurchase'])->name('verify-googleplay-purchase');
 });
 
-// Author NGN bank account registration (for NGN payouts via Paystack Transfer)
+// Author wallet — unified balance + payout setup
 Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->group(function () {
-    Route::get('ngn-banks',    [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
-    Route::post('ngn-account', [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
+    Route::get('balance',         [\App\Http\Controllers\Author\AuthorWalletController::class, 'balance']);
+    Route::get('ngn-banks',       [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
+    Route::post('ngn-account',    [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
+    Route::get('payout-info',     [\App\Http\Controllers\Author\NGNBankAccountController::class, 'payoutInfo']);
+    Route::post('switch-stripe',  [\App\Http\Controllers\Author\NGNBankAccountController::class, 'switchToStripe']);
 });
 
 // Paystack Routes
@@ -299,6 +305,20 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
         Route::delete('/{id}', [SubscriptionController::class, 'destroy'])->name('delete-subscription');
     });
 
+    // Admin KYC Management (manual verification for Nigerian and other non-Stripe authors)
+    Route::prefix('kyc')->group(function () {
+        Route::get('pending', [AdminKYCController::class, 'pendingManual'])->name('admin.kyc.pending');
+        Route::post('{user}/approve', [AdminKYCController::class, 'approve'])->name('admin.kyc.approve');
+        Route::post('{user}/reject', [AdminKYCController::class, 'reject'])->name('admin.kyc.reject');
+    });
+
+    // Admin IAP Payout Management (process Apple App Store earnings batch)
+    Route::prefix('iap-payouts')->group(function () {
+        Route::get('pending', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'pending'])->name('admin.iap.pending');
+        Route::post('process', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'process'])->name('admin.iap.process');
+        Route::post('process/{author}', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'process'])->name('admin.iap.process.author');
+    });
+
     // Admin Dashboard Route
     Route::get('dashboard', DashboardController::class);
 
@@ -309,8 +329,10 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
         Route::get('stats',                     [\App\Http\Controllers\Admin\AIReviewController::class, 'stats']);
         Route::post('books/{bookId}',           [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewBook']);
         Route::post('authors/{userId}',         [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAuthor']);
+        Route::post('kyc/{userId}',             [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewKYC']);
         Route::post('run-all-pending-books',    [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAllPendingBooks']);
         Route::post('run-all-pending-authors',  [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAllPendingAuthors']);
+        Route::post('run-all-pending-kyc',      [\App\Http\Controllers\Admin\AIReviewController::class, 'reviewAllPendingKYC']);
     });
 });
 

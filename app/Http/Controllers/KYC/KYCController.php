@@ -3,17 +3,25 @@
 namespace App\Http\Controllers\KYC;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessKYCVerificationJob;
 use App\Models\User;
+use App\Models\UserKycInfo;
 use App\Services\Slack\SlackWebhookService;
 use App\Services\Stripe\StripeConnectService;
 use Carbon\Carbon;
+use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Stripe\Account as StripeAccount;
 use Stripe\Webhook;
+
+// Countries where Stripe Connect identity verification works reliably.
+// Authors from other countries go through manual admin KYC review.
+const STRIPE_KYC_COUNTRIES = ['US', 'GB', 'CA', 'AU', 'FR', 'DE', 'IT', 'ES'];
 
 class KYCController extends Controller
 {
@@ -56,12 +64,12 @@ class KYCController extends Controller
             ]);
 
             $validator = Validator::make($request->all(), [
-                'first_name' => 'required|string|max:255',
-                'last_name' => 'required|string|max:255',
-                'dob.day' => 'required|integer|min:1|max:31',
-                'dob.month' => 'required|integer|min:1|max:12',
-                'dob.year' => 'required|integer|digits:4',
-                'dob_combined' => [
+                'first_name'          => 'required|string|max:255',
+                'last_name'           => 'required|string|max:255',
+                'dob.day'             => 'required|integer|min:1|max:31',
+                'dob.month'           => 'required|integer|min:1|max:12',
+                'dob.year'            => 'required|integer|digits:4',
+                'dob_combined'        => [
                     'required',
                     'date_format:Y-n-j',
                     function ($attribute, $value, $fail) use ($request) {
@@ -78,78 +86,98 @@ class KYCController extends Controller
                         }
                     },
                 ],
-                'address.line1' => 'required|string|max:255',
-                'address.city' => 'required|string|max:255',
-                'address.postal_code' => 'required|string|max:20',
-                'address.state' => 'required|string|size:2',
-                'gender' => 'required|in:male,female,other',
-                'phone' => 'required|string|max:20',
-                'country' => ['required', 'size:2', 'alpha', Rule::in($this->getValidCountryCodes())],
+                'address.line1'       => 'required|string|max:255',
+                'address.city'        => 'required|string|max:255',
+                'address.postal_code' => 'nullable|string|max:20',
+                'address.state'       => 'nullable|string|max:50', // full state names for non-US countries
+                'gender'              => 'required|in:male,female,other',
+                'phone'               => 'required|string|max:20',
+                'country'             => ['required', 'size:2', 'alpha', Rule::in($this->getValidCountryCodes())],
             ]);
             if ($validator->fails()) {
                 return $this->error('Validation failed', 400, $validator->errors());
             }
 
-            // Early exit if already verified (checking the *current* user object)
-            if ($user->kyc_status === 'verified') {
+            // Early exit if already verified or pending admin review
+            if (in_array($user->kyc_status, ['verified', 'pending_manual'])) {
                 return $this->success(
-                    [
-                        'account_id' => $user->kyc_account_id,
-                        'status' => $user->kyc_status,
-                    ],
-                    'KYC already verified',
+                    ['account_id' => $user->kyc_account_id, 'status' => $user->kyc_status],
+                    $user->kyc_status === 'verified'
+                        ? 'KYC already verified.'
+                        : 'KYC is pending admin review.',
                     200
                 );
             }
 
-            // Early exit if already requires document upload
             if ($user->kyc_status === 'document-required') {
-                return $this->error('KYC already requires document upload', 400);
+                return $this->error('KYC already requires document upload.', 400);
             }
 
-            // --- Call the Stripe Service to Create or Update Account ---
-            // The service is responsible for determining create/update and saving to DB.
-            $stripeAccountResponse = null;
-            if (! $user->kyc_account_id) {
-                // If user doesn't have an account ID, call the creation method
-                $stripeAccountResponse = $this->stripe->createCustomAccount($request->all(), $user);
-            } else {
-                // If user has an account ID, call the update method
-                $stripeAccountResponse = $this->stripe->updateCustomAccount($request->all(), $user);
+            $country   = strtoupper($request->input('country'));
+            $useStripe = in_array($country, STRIPE_KYC_COUNTRIES);
+            $dob       = Carbon::create(
+                $request->input('dob.year'),
+                $request->input('dob.month'),
+                $request->input('dob.day')
+            )->toDateString();
+
+            // Always persist KYC data locally so admin has a record regardless of path
+            UserKycInfo::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'first_name'    => $request->input('first_name'),
+                    'last_name'     => $request->input('last_name'),
+                    'dob'           => $dob,
+                    'address_line1' => $request->input('address.line1'),
+                    'city'          => $request->input('address.city'),
+                    'state'         => $request->input('address.state'),
+                    'postal_code'   => $request->input('address.postal_code'),
+                    'country'       => $country,
+                    'phone'         => $request->input('phone'),
+                    'gender'        => $request->input('gender'),
+                ]
+            );
+
+            // ── Manual KYC path: Nigeria + other non-Stripe countries ─────────────
+            if (! $useStripe) {
+                $user->update([
+                    'kyc_status'       => 'pending_manual',
+                    'ai_review_status' => null, // reset so job knows to re-evaluate
+                ]);
+
+                // Dispatch AI verification — it will auto-approve or flag for manual review
+                ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+
+                return $this->success(
+                    ['status' => 'pending_manual'],
+                    'Your details have been submitted. We are verifying your identity — you will be notified shortly.',
+                    200
+                );
             }
+
+            // ── Stripe KYC path: US, UK, CA, AU, EU ──────────────────────────────
+            $stripeAccountResponse = $user->kyc_account_id
+                ? $this->stripe->updateCustomAccount($request->all(), $user)
+                : $this->stripe->createCustomAccount($request->all(), $user);
 
             if ($stripeAccountResponse instanceof JsonResponse) {
-                // This indicates an error response from your Stripe service
                 $responseData = $stripeAccountResponse->getData(true);
-                $errorDetails = $responseData['error'] ?? 'Unknown error from Stripe service.';
-
                 return $this->error(
                     'Stripe API Error',
                     $stripeAccountResponse->getStatusCode(),
-                    config('app.debug') ? $errorDetails : null
-                );
-            } elseif ($stripeAccountResponse instanceof StripeAccount) {
-                // This indicates a successful Stripe API call
-                $finalAccountId = $stripeAccountResponse->id;
-                $user->refresh();
-                $finalAccountStatus = $user->kyc_status;
-            } else {
-                // This should ideally not happen if your service returns only StripeAccount or JsonResponse
-
-                return $this->error(
-                    'Internal Server Error: Unexpected Stripe service response.',
-                    500,
-                    config('app.debug') ? 'Stripe service returned an unhandled type.' : null
+                    config('app.debug') ? ($responseData['error'] ?? null) : null
                 );
             }
 
-            // --- Final Success Response ---
+            if (! ($stripeAccountResponse instanceof StripeAccount)) {
+                return $this->error('Internal Server Error: Unexpected Stripe service response.', 500);
+            }
+
+            $user->refresh();
+
             return $this->success(
-                [
-                    'account_id' => $finalAccountId,
-                    'status' => $finalAccountStatus,
-                ],
-                'KYC initiated/updated successfully',
+                ['account_id' => $stripeAccountResponse->id, 'status' => $user->kyc_status],
+                'KYC initiated successfully.',
                 200
             );
         } catch (\Throwable $th) {
@@ -212,6 +240,73 @@ class KYCController extends Controller
                 $th->getMessage(),
                 $th
             );
+        }
+    }
+
+    /**
+     * Upload a verification document for manual KYC review (Nigeria / non-Stripe countries).
+     *
+     * Stripe authors use uploadDocument() instead (which uploads directly to Stripe).
+     * This endpoint is for authors going through admin manual review.
+     *
+     * Accepted types: nin_slip, bvn_slip, passport, drivers_license, national_id
+     */
+    public function uploadManualDocument(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+
+            if (! in_array($user->kyc_status, ['pending_manual', null, ''])) {
+                return $this->error('Document upload is only available for authors pending manual review.', 400);
+            }
+
+            $validator = Validator::make($request->all(), [
+                'document'      => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+                'document_type' => 'required|string|in:nin_slip,bvn_slip,passport,drivers_license,national_id',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->error('Validation failed', 400, $validator->errors());
+            }
+
+            $kycInfo = UserKycInfo::where('user_id', $user->id)->first();
+            if (! $kycInfo) {
+                return $this->error('Please complete your KYC details first before uploading a document.', 400);
+            }
+
+            $file     = $request->file('document');
+            $uploaded = Cloudinary::uploadFile($file->getRealPath(), [
+                'folder'        => 'kyc_documents',
+                'resource_type' => 'auto',
+                'public_id'     => 'kyc_' . $user->id . '_' . now()->timestamp,
+            ])->getSecurePath();
+
+            $publicId = Cloudinary::getPublicId();
+
+            $kycInfo->update([
+                'document_type'        => $request->input('document_type'),
+                'document_url'         => $uploaded,
+                'document_public_id'   => $publicId ?? null,
+                'document_uploaded_at' => now(),
+            ]);
+
+            Log::info('KYC manual document uploaded', [
+                'user_id'       => $user->id,
+                'document_type' => $request->input('document_type'),
+            ]);
+
+            // Re-trigger AI verification now that a document is available.
+            // Document presence significantly boosts the AI confidence score.
+            ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+
+            return $this->success(
+                ['document_uploaded' => true, 'document_type' => $request->input('document_type')],
+                'Document uploaded. We are re-verifying your identity — you will be notified shortly.',
+                200
+            );
+        } catch (\Throwable $th) {
+            Log::error('KYC manual document upload failed: ' . $th->getMessage(), ['user_id' => Auth::id()]);
+            return $this->error('Failed to upload document. Please try again.', 500);
         }
     }
 

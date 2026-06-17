@@ -56,10 +56,16 @@ class User extends Authenticatable
         'elevenlabs_voice_id',
         'voice_status',
         'paystack_recipient_code',
+        'payout_method',
+        'bank_name',
+        'bank_account_name',
+        'bank_account_number',
+        'bank_code',
         'ai_review_status',
         'ai_review_notes',
         'ai_review_confidence',
         'ai_reviewed_at',
+        'wallet_balance',
     ];
 
     /**

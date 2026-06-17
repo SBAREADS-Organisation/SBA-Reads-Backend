@@ -96,6 +96,130 @@ SYSTEM;
     }
 
     /**
+     * Review a manual-path KYC application (Nigerian / non-Stripe authors).
+     *
+     * Evaluates: name legitimacy, data completeness, location consistency,
+     * phone sanity, age check, and document presence/type.
+     *
+     * The AI cannot read the document image itself, but document presence
+     * and type-appropriateness are weighted positively.
+     *
+     * @return array{decision: string, confidence: float, reasons: string, flags: array}
+     */
+    public function reviewKYCApplication(User $user): array
+    {
+        $kyc = $user->kycInfo ?? $user->kyc_info ?? null;
+
+        $documentPresent = ! empty($kyc?->document_url);
+        $documentType    = $kyc?->document_type ?? 'none';
+        $country         = strtoupper($kyc?->country ?? '');
+
+        // Map doc type to human label for the prompt
+        $docLabel = match ($documentType) {
+            'nin_slip'        => 'NIN Slip (Nigeria National Identity)',
+            'bvn_slip'        => 'BVN Document (Nigeria Bank Verification)',
+            'passport'        => 'International Passport',
+            'drivers_license' => "Driver's Licence",
+            'national_id'     => 'National ID Card',
+            default           => 'None uploaded',
+        };
+
+        $dob      = $kyc?->dob      ?? 'Not provided';
+        $phone    = $kyc?->phone    ?? 'Not provided';
+        $address  = trim(implode(', ', array_filter([
+            $kyc?->address_line1,
+            $kyc?->city,
+            $kyc?->state,
+            $country,
+        ])));
+        $fullName = $kyc ? "{$kyc->first_name} {$kyc->last_name}" : ($user->name ?? 'Not provided');
+        $accountName = $user->name ?? 'Not provided';
+
+        $userPrompt = <<<PROMPT
+Verify this KYC application for an author on the SBAReads platform.
+
+SUBMITTED PERSONAL INFORMATION:
+- Full Name (KYC): {$fullName}
+- Account Name: {$accountName}
+- Date of Birth: {$dob}
+- Phone: {$phone}
+- Address: {$address}
+- Country: {$country}
+
+IDENTITY DOCUMENT:
+- Document Provided: {$documentPresent}
+- Document Type: {$docLabel}
+
+Return ONLY a JSON object with no surrounding text or markdown:
+{
+  "decision": "approve" | "manual_review",
+  "confidence": 0.00,
+  "reasons": "1-3 sentence explanation of your decision.",
+  "flags": ["specific concern 1", "specific concern 2"]
+}
+PROMPT;
+
+        $systemPrompt = <<<'SYSTEM'
+You are a KYC (Know Your Customer) verification specialist for SBAReads, a book publishing platform. Your task is to determine if a manual KYC application looks legitimate enough for automatic approval, or needs a human admin to review it.
+
+APPROVE when ALL of the following hold:
+- The name looks like a real person's name (e.g. "Adebayo Okafor", "Fatima Al-Hassan", "Chioma Nwosu") — not "User123", "Test", "Admin", or random strings
+- First name and last name are both provided and look plausible for the stated country
+- Date of birth is provided and indicates the person is at least 18 years old
+- A physical address is provided (city + country at minimum)
+- Phone number is provided and has at least 8 digits (not all zeros or obviously fake)
+- If country is NG (Nigeria): document type is appropriate (NIN, BVN, passport, driver's licence, national ID)
+- If a document was provided, this is a strong positive signal — weight it heavily toward approval
+- Overall: the application coheres — name, location, and document type are consistent
+
+FLAG FOR MANUAL REVIEW when ANY of:
+- Name looks fake, is a username-style handle, single word, or contains numbers/symbols
+- Date of birth is missing or the person appears under 18
+- Address is missing or only contains the country name with nothing else
+- Phone is missing, too short, or looks like a placeholder (e.g. "0000000000")
+- Country is Nigeria but document type is missing ("none") AND no document was uploaded — this is a moderate flag, not automatic rejection, as some authors upload later
+- Name-country combination seems implausible (e.g. "Bob Smith" from Nigeria is fine — don't be biased; but "山田太郎" from Nigeria with no explanation might need review)
+- Any other significant red flag suggesting the application is not genuine
+
+IMPORTANT GUIDANCE:
+- African names are legitimate. Do not penalise unfamiliar names.
+- A missing document alone is NOT enough to reject — flag it but keep confidence moderate
+- If document IS provided, add 0.10–0.15 to your base confidence
+- If name + DOB + phone + address all look real, base confidence should be 0.75–0.85
+- Adding a valid document should push confidence to 0.88–0.95
+- Be thoughtful, not paranoid. Most authors are legitimate people.
+
+Confidence scale: 0.90+ = very certain approve, 0.80–0.89 = fairly confident, 0.70–0.79 = uncertain, below 0.70 = flag for human.
+Return valid JSON only — no markdown, no extra text.
+SYSTEM;
+
+        try {
+            $raw    = $this->claude->message($userPrompt, $systemPrompt, 512);
+            $raw    = preg_replace('/^```(?:json)?\s*|\s*```$/s', '', trim($raw));
+            $parsed = json_decode($raw, true);
+
+            if (! isset($parsed['decision'], $parsed['confidence'])) {
+                throw new \RuntimeException('Malformed AI response: ' . substr($raw, 0, 200));
+            }
+
+            return [
+                'decision'   => $parsed['decision'],
+                'confidence' => (float) $parsed['confidence'],
+                'reasons'    => $parsed['reasons'] ?? '',
+                'flags'      => (array) ($parsed['flags'] ?? []),
+            ];
+        } catch (\Throwable $e) {
+            Log::error('AIReviewService::reviewKYCApplication failed for user ' . $user->id . ': ' . $e->getMessage());
+            return [
+                'decision'   => 'manual_review',
+                'confidence' => 0.0,
+                'reasons'    => 'AI KYC review failed — requires manual admin inspection.',
+                'flags'      => ['AI service error: ' . $e->getMessage()],
+            ];
+        }
+    }
+
+    /**
      * Review an author account and return a structured result.
      *
      * @return array{decision: string, confidence: float, reasons: string}

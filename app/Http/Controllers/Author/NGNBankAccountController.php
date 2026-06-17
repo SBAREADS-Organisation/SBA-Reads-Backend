@@ -26,20 +26,33 @@ class NGNBankAccountController extends Controller
         $user = $request->user();
 
         try {
+            // Resolve bank name from code for display purposes
+            $banks    = $this->paystack->listBanks();
+            $bankName = collect($banks)->firstWhere('code', $validated['bank_code'])['name'] ?? $validated['bank_code'];
+
             $recipientCode = $this->paystack->createRecipient(
                 $validated['account_name'],
                 $validated['account_number'],
                 $validated['bank_code'],
             );
 
-            $user->update(['paystack_recipient_code' => $recipientCode]);
+            $user->update([
+                'paystack_recipient_code' => $recipientCode,
+                'payout_method'           => 'paystack',
+                'bank_name'               => $bankName,
+                'bank_account_name'       => $validated['account_name'],
+                'bank_account_number'     => $validated['account_number'],
+                'bank_code'               => $validated['bank_code'],
+            ]);
 
             return $this->success([
+                'payout_method'           => 'paystack',
                 'paystack_recipient_code' => $recipientCode,
+                'bank_name'               => $bankName,
                 'account_name'            => $validated['account_name'],
                 'account_number'          => $validated['account_number'],
                 'bank_code'               => $validated['bank_code'],
-            ], 'Nigerian bank account registered for NGN payouts.');
+            ], 'Nigerian bank account registered successfully. Payouts will be sent to this account.');
         } catch (\RuntimeException $e) {
             return $this->error($e->getMessage(), 422);
         }
@@ -52,5 +65,39 @@ class NGNBankAccountController extends Controller
     {
         $banks = $this->paystack->listBanks();
         return $this->success($banks, 'Nigerian banks retrieved.');
+    }
+
+    /**
+     * Get the author's current payout setup.
+     */
+    public function payoutInfo(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        return $this->success([
+            'payout_method'           => $user->payout_method,
+            'paystack_recipient_code' => $user->paystack_recipient_code,
+            'bank_name'               => $user->bank_name,
+            'bank_account_name'       => $user->bank_account_name,
+            'bank_account_number'     => $user->bank_account_number ? '****' . substr($user->bank_account_number, -4) : null,
+            'bank_code'               => $user->bank_code,
+            'stripe_connected'        => ! empty($user->kyc_account_id),
+        ], 'Payout info retrieved.');
+    }
+
+    /**
+     * Switch payout method to Stripe (for authors who have both connected).
+     */
+    public function switchToStripe(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if (empty($user->kyc_account_id)) {
+            return $this->error('You have not connected a Stripe account. Complete Stripe onboarding first.', 422);
+        }
+
+        $user->update(['payout_method' => 'stripe']);
+
+        return $this->success(['payout_method' => 'stripe'], 'Payout method switched to Stripe (USD).');
     }
 }

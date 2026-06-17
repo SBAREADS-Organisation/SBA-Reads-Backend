@@ -2,9 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Mail\Generic\GenericAppNotification;
 use App\Models\DigitalBookPurchase;
 use App\Models\Order;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\Payments\PaymentService;
 use App\Services\Paystack\PaystackTransferService;
 use Illuminate\Bus\Queueable;
@@ -13,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Stripe\Exception\ApiErrorException;
 use Stripe\StripeClient;
@@ -57,6 +60,24 @@ class ProcessAuthorPayout implements ShouldQueue
                 break;
 
             default:
+        }
+    }
+
+    private function notifyPayoutFailed(User $author, float $amount, string $currency, string $reason): void
+    {
+        if (! $author->email) return;
+        try {
+            Mail::to($author->email)->queue(new GenericAppNotification(
+                'SBA Reads — Payout Failed',
+                "Hi {$author->first_name},\n\n"
+                . "We were unable to send your payout of {$currency} {$amount}.\n\n"
+                . "Reason: {$reason}\n\n"
+                . "Please check your payout account details in the SBA Reads app under Wallet → Payout Method and ensure they are correct.\n\n"
+                . "If the issue persists, contact support@sbareads.com.\n\n"
+                . "— The SBA Reads Team"
+            ));
+        } catch (\Throwable $e) {
+            Log::warning("Could not send payout failure email to author {$author->id}: " . $e->getMessage());
         }
     }
 
@@ -115,28 +136,24 @@ class ProcessAuthorPayout implements ShouldQueue
         $authorPayouts = []; // [author_user_id => total_payout_amount_cents]
 
         foreach ($purchase->items as $item) {
-            // Skip if this specific item's payout is already handled
             if (in_array($item->payout_status, ['initiated', 'completed', 'failed'])) {
                 continue;
             }
 
-            if (!$item->book || !$item->author || empty($item->author->kyc_account_id)) {
-                $item->update(['payout_status' => 'failed', 'payout_error' => 'Missing author or Stripe account.']);
+            $author       = $item->author;
+            $payoutMethod = $author->payout_method ?? ($author->paystack_recipient_code ? 'paystack' : ($author->kyc_account_id ? 'stripe' : null));
 
+            if (! $item->book || ! $author || ! $payoutMethod) {
+                $item->update(['payout_status' => 'failed', 'payout_error' => 'Author has not set up a payout method (Stripe or Nigerian bank account).']);
                 continue;
             }
 
-            // Calculate amounts in cents for precision
-            // Use price_at_purchase (which is decimal) and convert to cents
-            $itemPriceInCents = $paymentService->convertToSubunit($item->price_at_purchase, $purchase->currency);
+            $itemPriceInCents     = $paymentService->convertToSubunit($item->price_at_purchase, $purchase->currency);
             $itemTotalAmountCents = $itemPriceInCents * $item->quantity;
-
-            $authorPayoutPercentage = 0.75; // 75% — 25% platform commission
-
-            $authorItemPayoutCents = (int)round($itemTotalAmountCents * $authorPayoutPercentage);
+            $authorItemPayoutCents = (int) round($itemTotalAmountCents * 0.75);
             $platformItemFeeCents  = $itemTotalAmountCents - $authorItemPayoutCents;
 
-            $authorPayouts[$item->author->id] = ($authorPayouts[$item->author->id] ?? 0) + $authorItemPayoutCents;
+            $authorPayouts[$author->id] = ($authorPayouts[$author->id] ?? 0) + $authorItemPayoutCents;
 
             $item->author_payout_amount = $authorItemPayoutCents / 100;
             $item->platform_fee_amount  = $platformItemFeeCents / 100;
@@ -144,47 +161,44 @@ class ProcessAuthorPayout implements ShouldQueue
             $item->save();
         }
 
-        // Perform transfers for each unique author
         $totalPlatformFeeCollectedCents = 0;
-        $allTransfersSuccessful = true;
-
-        $isNGN      = strtoupper($purchase->currency) === 'NGN';
-        $paystackSvc = $isNGN ? new PaystackTransferService() : null;
+        $allTransfersSuccessful         = true;
+        $paystackSvc                    = new PaystackTransferService();
 
         foreach ($authorPayouts as $authorUserId => $payoutAmountCents) {
-            $author = $purchase->items->firstWhere('author_id', $authorUserId)->author;
+            $author       = $purchase->items->firstWhere('author_id', $authorUserId)->author;
+            $payoutMethod = $author->payout_method ?? ($author->paystack_recipient_code ? 'paystack' : 'stripe');
 
             if ($payoutAmountCents <= 0) continue;
 
-            // Route: NGN purchases → Paystack Transfer, all others → Stripe Transfer
-            $provider = $isNGN ? 'paystack' : 'stripe';
-
-            // NGN authors must have registered a Paystack recipient code
-            if ($isNGN && empty($author->paystack_recipient_code)) {
+            // Validate the author has the right credentials for their chosen method
+            if ($payoutMethod === 'paystack' && empty($author->paystack_recipient_code)) {
                 foreach ($purchase->items->where('author_id', $authorUserId) as $item) {
                     if ($item->payout_status === 'initiated') {
-                        $item->update([
-                            'payout_status' => 'failed',
-                            'payout_error'  => 'Author has not registered a Nigerian bank account for NGN payouts.',
-                        ]);
+                        $item->update(['payout_status' => 'failed', 'payout_error' => 'Nigerian bank account not registered. Go to Settings → Payout to add your bank account.']);
                     }
                 }
                 $allTransfersSuccessful = false;
-                Log::warning("NGN payout skipped — author {$authorUserId} has no paystack_recipient_code.");
+                Log::warning("Payout skipped — author {$authorUserId} selected Paystack but has no recipient code.");
                 continue;
             }
 
-            if (!$isNGN && empty($author->kyc_account_id)) {
+            if ($payoutMethod === 'stripe' && empty($author->kyc_account_id)) {
                 foreach ($purchase->items->where('author_id', $authorUserId) as $item) {
                     if ($item->payout_status === 'initiated') {
-                        $item->update([
-                            'payout_status' => 'failed',
-                            'payout_error'  => 'Author has no connected Stripe account.',
-                        ]);
+                        $item->update(['payout_status' => 'failed', 'payout_error' => 'Stripe account not connected. Complete Stripe onboarding in Settings → Payout.']);
                     }
                 }
                 $allTransfersSuccessful = false;
                 continue;
+            }
+
+            // For Paystack payouts convert USD → NGN if the purchase was in USD
+            $payoutCurrency       = $payoutMethod === 'paystack' ? 'NGN' : strtoupper($purchase->currency);
+            $payoutAmountInTarget = $payoutAmountCents;
+            if ($payoutMethod === 'paystack' && strtoupper($purchase->currency) !== 'NGN') {
+                $rate                 = app(\App\Services\Paystack\CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
+                $payoutAmountInTarget = (int) round(($payoutAmountCents / 100) * $rate * 100); // convert to kobo
             }
 
             $transaction = Transaction::create([
@@ -192,9 +206,9 @@ class ProcessAuthorPayout implements ShouldQueue
                 'user_id'          => $author->id,
                 'reference'        => uniqid('pay_'),
                 'status'           => 'pending',
-                'currency'         => strtoupper($purchase->currency),
-                'amount'           => $payoutAmountCents / 100,
-                'payment_provider' => $provider,
+                'currency'         => $payoutCurrency,
+                'amount'           => $payoutAmountInTarget / 100,
+                'payment_provider' => $payoutMethod,
                 'description'      => "Author payout for DigitalBookPurchase ID: {$purchase->id}",
                 'type'             => 'payout',
                 'direction'        => 'credit',
@@ -203,10 +217,10 @@ class ProcessAuthorPayout implements ShouldQueue
             ]);
 
             try {
-                if ($isNGN) {
-                    // ── Paystack Transfer (NGN) ────────────────────────────────────
+                if ($payoutMethod === 'paystack') {
+                    // ── Paystack Transfer ────────────────────────────────────────
                     $transferData = $paystackSvc->initiateTransfer(
-                        $payoutAmountCents, // already in kobo for NGN
+                        $payoutAmountInTarget,
                         $author->paystack_recipient_code,
                         "SBAReads royalty — purchase #{$purchase->id}"
                     );
@@ -215,13 +229,15 @@ class ProcessAuthorPayout implements ShouldQueue
                         'status'      => 'succeeded',
                         'payout_data' => json_encode([
                             'transfer_code' => $transferData['transfer_code'] ?? null,
-                            'amount'        => $payoutAmountCents / 100,
+                            'amount'        => $payoutAmountInTarget / 100,
                             'currency'      => 'NGN',
                             'recipient'     => $author->paystack_recipient_code,
                         ]),
                     ]);
                 } else {
-                    // ── Stripe Transfer (USD / EUR / GBP) ─────────────────────────
+                    // ── Stripe Transfer ──────────────────────────────────────────
+                    // Idempotency key prevents double-payout if the queue retries this job
+                    $idempotencyKey = 'dbp_' . $purchase->id . '_author_' . $author->id;
                     $transfer = $this->stripe->transfers->create([
                         'amount'         => $payoutAmountCents,
                         'currency'       => $purchase->currency,
@@ -232,12 +248,12 @@ class ProcessAuthorPayout implements ShouldQueue
                             'author_user_id'           => $author->id,
                             'type'                     => 'author_royalty_batch',
                         ],
-                    ]);
+                    ], ['idempotency_key' => $idempotencyKey]);
 
                     $transaction->update([
-                        'status'           => 'succeeded',
-                        'payment_intent_id'=> $transfer->id,
-                        'payout_data'      => json_encode([
+                        'status'            => 'succeeded',
+                        'payment_intent_id' => $transfer->id,
+                        'payout_data'       => json_encode([
                             'transfer_id' => $transfer->id,
                             'amount'      => $payoutAmountCents / 100,
                             'currency'    => $purchase->currency,
@@ -269,6 +285,7 @@ class ProcessAuthorPayout implements ShouldQueue
                     'status'      => 'failed',
                     'payout_data' => json_encode(['error' => $e->getMessage()]),
                 ]);
+                $this->notifyPayoutFailed($author, $payoutAmountCents / 100, strtoupper($payoutCurrency), $e->getMessage());
             } catch (\Throwable $e) {
                 $allTransfersSuccessful = false;
                 foreach ($purchase->items->where('author_id', $authorUserId) as $item) {
@@ -280,6 +297,7 @@ class ProcessAuthorPayout implements ShouldQueue
                     'status'      => 'failed',
                     'payout_data' => json_encode(['error' => $e->getMessage()]),
                 ]);
+                $this->notifyPayoutFailed($author, $payoutAmountCents / 100, strtoupper($payoutCurrency), $e->getMessage());
             }
         }
 
@@ -326,27 +344,23 @@ class ProcessAuthorPayout implements ShouldQueue
         $authorPayouts = []; // [author_user_id => total_payout_amount_cents]
 
         foreach ($order->items as $item) {
-            // Skip if this specific item's payout is already handled
             if (in_array($item->payout_status, ['initiated', 'completed', 'failed'])) {
                 continue;
             }
 
-            if (!$item->book || !$item->author || empty($item->author->kyc_account_id)) {
-                $item->update(['payout_status' => 'failed', 'payout_error' => 'Missing author or Stripe account.']);
+            $author       = $item->author;
+            $payoutMethod = $author->payout_method ?? ($author->paystack_recipient_code ? 'paystack' : ($author->kyc_account_id ? 'stripe' : null));
 
+            if (! $item->book || ! $author || ! $payoutMethod) {
+                $item->update(['payout_status' => 'failed', 'payout_error' => 'Author has not set up a payout method.']);
                 continue;
             }
 
-            // Calculate amounts in cents for precision
-            // Use price_at_purchase (which is decimal) and convert to cents
-            $itemTotalAmountCents = $paymentService->convertToSubunit($item->total_price, 'USD');
-
-            $authorPayoutPercentage = 0.75; // 75% — 25% platform commission
-
-            $authorItemPayoutCents = (int)round($itemTotalAmountCents * $authorPayoutPercentage);
+            $itemTotalAmountCents  = $paymentService->convertToSubunit($item->total_price, 'USD');
+            $authorItemPayoutCents = (int) round($itemTotalAmountCents * 0.75);
             $platformItemFeeCents  = $itemTotalAmountCents - $authorItemPayoutCents;
 
-            $authorPayouts[$item->author->id] = ($authorPayouts[$item->author->id] ?? 0) + $authorItemPayoutCents;
+            $authorPayouts[$author->id] = ($authorPayouts[$author->id] ?? 0) + $authorItemPayoutCents;
 
             $item->author_payout_amount = $authorItemPayoutCents / 100;
             $item->platform_fee_amount  = $platformItemFeeCents / 100;
@@ -354,73 +368,111 @@ class ProcessAuthorPayout implements ShouldQueue
             $item->save();
         }
 
-        // Perform transfers for each unique author
         $totalPlatformFeeCollectedCents = 0;
-        $allTransfersSuccessful = true;
+        $allTransfersSuccessful         = true;
+        $paystackSvc                    = new PaystackTransferService();
 
         foreach ($authorPayouts as $authorUserId => $payoutAmountCents) {
-            $author = $order->items->firstWhere('author_id', $authorUserId)->author; // Get author (User) object
+            $author       = $order->items->firstWhere('author_id', $authorUserId)->author;
+            $payoutMethod = $author->payout_method ?? ($author->paystack_recipient_code ? 'paystack' : 'stripe');
 
-            if ($payoutAmountCents <= 0) {
+            if ($payoutAmountCents <= 0) continue;
 
+            if ($payoutMethod === 'paystack' && empty($author->paystack_recipient_code)) {
+                foreach ($order->items->where('author_id', $authorUserId) as $item) {
+                    if ($item->payout_status === 'initiated') {
+                        $item->update(['payout_status' => 'failed', 'payout_error' => 'Nigerian bank account not registered.']);
+                    }
+                }
+                $allTransfersSuccessful = false;
                 continue;
             }
 
-            // create a transaction
-            $reference = uniqid("pay" . '_');
+            if ($payoutMethod === 'stripe' && empty($author->kyc_account_id)) {
+                foreach ($order->items->where('author_id', $authorUserId) as $item) {
+                    if ($item->payout_status === 'initiated') {
+                        $item->update(['payout_status' => 'failed', 'payout_error' => 'Stripe account not connected.']);
+                    }
+                }
+                $allTransfersSuccessful = false;
+                continue;
+            }
+
+            // Convert USD → NGN for Paystack payouts
+            $payoutCurrency       = $payoutMethod === 'paystack' ? 'NGN' : 'USD';
+            $payoutAmountInTarget = $payoutAmountCents;
+            if ($payoutMethod === 'paystack') {
+                $rate                 = app(\App\Services\Paystack\CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
+                $payoutAmountInTarget = (int) round(($payoutAmountCents / 100) * $rate * 100);
+            }
 
             $transaction = Transaction::create([
-                'id' => Str::uuid(),
-                'user_id' => $author->id,
-                'reference' => $reference,
-                'status' => 'pending',
-                'currency' => 'USD',
-                'amount' => $payoutAmountCents / 100,
-                'payment_provider' => 'stripe',
-                'description' => "Author payout for Order ID: {$order->id}",
-                'type' => 'payout',
-                'direction' => 'credit',
-                'purpose_type' => 'order',
-                'purpose_id' => $order->id,
+                'id'               => Str::uuid(),
+                'user_id'          => $author->id,
+                'reference'        => uniqid('pay_'),
+                'status'           => 'pending',
+                'currency'         => $payoutCurrency,
+                'amount'           => $payoutAmountInTarget / 100,
+                'payment_provider' => $payoutMethod,
+                'description'      => "Author payout for Order ID: {$order->id}",
+                'type'             => 'payout',
+                'direction'        => 'credit',
+                'purpose_type'     => 'order',
+                'purpose_id'       => $order->id,
             ]);
 
-
             try {
+                if ($payoutMethod === 'paystack') {
+                    $transferData = $paystackSvc->initiateTransfer(
+                        $payoutAmountInTarget,
+                        $author->paystack_recipient_code,
+                        "SBAReads royalty — order #{$order->id}"
+                    );
 
-                // Create the Stripe Transfer
-                $transfer = $this->stripe->transfers->create([
-                    'amount' => $payoutAmountCents, // Amount to send to the author (in cents)
-                    'currency' => 'USD',
-                    'destination' => $author->kyc_account_id,
-                    'transfer_group' => 'order_' . $order->id, // Group all transfers for this order
-                    'metadata' => [
-                        'order_id' => $order->id,
-                        'author_user_id' => $author->id,
-                        'payment_intent_id' => $order->stripe_payment_intent_id,
-                        'type' => 'author_royalty_batch',
-                    ],
-                ]);
+                    $transaction->update([
+                        'status'      => 'succeeded',
+                        'payout_data' => json_encode([
+                            'transfer_code' => $transferData['transfer_code'] ?? null,
+                            'amount'        => $payoutAmountInTarget / 100,
+                            'currency'      => 'NGN',
+                            'recipient'     => $author->paystack_recipient_code,
+                        ]),
+                    ]);
 
-                // Update the transaction with the transfer ID
-                $transaction->update([
-                    'status' => 'succeeded',
-                    'payment_intent_id' => $transfer->id,
-                    'payout_data' => json_encode([
-                        'transfer_id' => $transfer->id,
-                        'amount' => $payoutAmountCents / 100,
-                        'currency' => 'USD',
-                        'destination' => $author->kyc_account_id,
-                    ]),
-                ]);
+                    foreach ($order->items->where('author_id', $authorUserId) as $item) {
+                        if ($item->payout_status === 'initiated') {
+                            $item->update(['payout_status' => 'completed']);
+                        }
+                    }
+                } else {
+                    $idempotencyKey = 'order_' . $order->id . '_author_' . $author->id;
+                    $transfer = $this->stripe->transfers->create([
+                        'amount'         => $payoutAmountCents,
+                        'currency'       => 'USD',
+                        'destination'    => $author->kyc_account_id,
+                        'transfer_group' => 'order_' . $order->id,
+                        'metadata'       => [
+                            'order_id'          => $order->id,
+                            'author_user_id'    => $author->id,
+                            'type'              => 'author_royalty_batch',
+                        ],
+                    ], ['idempotency_key' => $idempotencyKey]);
 
+                    $transaction->update([
+                        'status'            => 'succeeded',
+                        'payment_intent_id' => $transfer->id,
+                        'payout_data'       => json_encode([
+                            'transfer_id' => $transfer->id,
+                            'amount'      => $payoutAmountCents / 100,
+                            'currency'    => 'USD',
+                            'destination' => $author->kyc_account_id,
+                        ]),
+                    ]);
 
-                // Update all relevant order items for this author
-                foreach ($order->items->where('author_id', $authorUserId) as $item) {
-                    if ($item->payout_status === 'initiated') { // Only update if it was part of this batch
-                        $item->update([
-                            'payout_status' => 'completed',
-                            'stripe_transfer_id' => $transfer->id, // Store the transfer ID
-                        ]);
+                    foreach ($order->items->where('author_id', $authorUserId) as $item) {
+                        if ($item->payout_status === 'initiated') {
+                            $item->update(['payout_status' => 'completed', 'stripe_transfer_id' => $transfer->id]);
+                        }
                     }
                 }
                 // Sum platform fees (already in cents, convert to major unit for total_platform_fee_amount if needed)
@@ -429,32 +481,29 @@ class ProcessAuthorPayout implements ShouldQueue
                     return $paymentService->convertToSubunit($item->platform_fee_amount, 'USD');
                 });
             } catch (ApiErrorException $e) {
-
                 $allTransfersSuccessful = false;
-                // Mark relevant order items as failed
                 foreach ($order->items->where('author_id', $authorUserId) as $item) {
                     if ($item->payout_status === 'initiated') {
                         $item->update(['payout_status' => 'failed', 'payout_error' => $e->getMessage()]);
                     }
                 }
-
                 $transaction->update([
-                    'status' => 'failed',
+                    'status'      => 'failed',
                     'payout_data' => json_encode(['error' => $e->getMessage()]),
                 ]);
+                $this->notifyPayoutFailed($author, $payoutAmountCents / 100, strtoupper($payoutCurrency), $e->getMessage());
             } catch (\Throwable $e) {
-
                 $allTransfersSuccessful = false;
                 foreach ($order->items->where('author_id', $authorUserId) as $item) {
                     if ($item->payout_status === 'initiated') {
                         $item->update(['payout_status' => 'failed', 'payout_error' => $e->getMessage()]);
                     }
                 }
-
                 $transaction->update([
-                    'status' => 'failed',
+                    'status'      => 'failed',
                     'payout_data' => json_encode(['error' => $e->getMessage()]),
                 ]);
+                $this->notifyPayoutFailed($author, $payoutAmountCents / 100, strtoupper($payoutCurrency), $e->getMessage());
             }
         }
 

@@ -20,6 +20,14 @@ class UserKycInfo extends Model
         'country',
         'phone',
         'gender',
+        'document_type',
+        'document_url',
+        'document_public_id',
+        'document_uploaded_at',
+    ];
+
+    protected $casts = [
+        'document_uploaded_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

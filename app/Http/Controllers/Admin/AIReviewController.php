@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessAuthorAIReviewJob;
 use App\Jobs\ProcessBookAIReviewJob;
+use App\Jobs\ProcessKYCVerificationJob;
 use App\Models\AppSetting;
 use App\Models\Book;
 use App\Models\User;
@@ -22,6 +23,7 @@ class AIReviewController extends Controller
             'ai_auto_approve_books'   => AppSetting::bool('ai_auto_approve_books'),
             'ai_auto_approve_authors' => AppSetting::bool('ai_auto_approve_authors'),
             'ai_auto_decline_books'   => AppSetting::bool('ai_auto_decline_books'),
+            'ai_auto_approve_kyc'     => AppSetting::bool('ai_auto_approve_kyc', true),
             'ai_confidence_threshold' => AppSetting::float('ai_confidence_threshold', 0.85),
         ], 'AI review settings retrieved.');
     }
@@ -35,6 +37,7 @@ class AIReviewController extends Controller
             'ai_auto_approve_books'   => 'sometimes|boolean',
             'ai_auto_approve_authors' => 'sometimes|boolean',
             'ai_auto_decline_books'   => 'sometimes|boolean',
+            'ai_auto_approve_kyc'     => 'sometimes|boolean',
             'ai_confidence_threshold' => 'sometimes|numeric|min:0.5|max:1.0',
         ]);
 
@@ -101,6 +104,44 @@ class AIReviewController extends Controller
     }
 
     /**
+     * Manually re-trigger AI KYC verification for a single author.
+     * Useful when admin wants to re-run after a document was uploaded.
+     */
+    public function reviewKYC(int $userId): JsonResponse
+    {
+        $user = User::findOrFail($userId);
+
+        if ($user->kyc_status !== 'pending_manual') {
+            return $this->error("Cannot re-run KYC AI for this author: current status is '{$user->kyc_status}'.", 422);
+        }
+
+        // Reset AI status so the job will process it
+        $user->update(['ai_review_status' => null]);
+        ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+
+        return $this->success(['user_id' => $userId], 'AI KYC verification re-queued.');
+    }
+
+    /**
+     * Batch re-run AI KYC for all authors pending manual review.
+     * Use this to process a backlog of existing pending_manual authors.
+     */
+    public function reviewAllPendingKYC(): JsonResponse
+    {
+        $users = User::where('account_type', 'author')
+                     ->where('kyc_status', 'pending_manual')
+                     ->select('id')
+                     ->get();
+
+        foreach ($users as $user) {
+            User::where('id', $user->id)->update(['ai_review_status' => null]);
+            ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+        }
+
+        return $this->success(['queued' => $users->count()], "{$users->count()} KYC applications queued for AI verification.");
+    }
+
+    /**
      * AI review queue stats for the admin dashboard.
      */
     public function stats(): JsonResponse
@@ -118,6 +159,16 @@ class AIReviewController extends Controller
                                            ->whereNull('ai_review_status')->count(),
                 'ai_verified'       => User::where('ai_review_status', 'verified')->count(),
                 'ai_needs_review'   => User::where('ai_review_status', 'needs_review')->count(),
+            ],
+            'kyc' => [
+                'ai_verified'          => User::where('kyc_status', 'verified')
+                                              ->where('ai_review_status', 'verified')->count(),
+                'ai_reviewing'         => User::where('kyc_status', 'pending_manual')
+                                              ->where('ai_review_status', 'pending')->count(),
+                'pending_human_review' => User::where('kyc_status', 'pending_manual')
+                                              ->where('ai_review_status', 'needs_review')->count(),
+                'awaiting_ai'          => User::where('kyc_status', 'pending_manual')
+                                              ->whereNull('ai_review_status')->count(),
             ],
         ], 'AI review stats retrieved.');
     }

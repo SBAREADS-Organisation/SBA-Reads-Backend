@@ -72,8 +72,11 @@ return [
     ],
 
     'currency' => [
-        'api_key' => env('CURRENCY_API_KEY', '0892ece648e6384b851037a3'),
-        'base_url' => env('CURRENCY_BASE_URL', 'https://v6.exchangerate-api.com/v6'),
+        'api_key'          => env('CURRENCY_API_KEY', '0892ece648e6384b851037a3'),
+        'base_url'         => env('CURRENCY_BASE_URL', 'https://v6.exchangerate-api.com/v6'),
+        // Fallback NGN/USD rate when the live exchange-rate API is unavailable.
+        // Review and update this value quarterly to reflect market rates.
+        'ngn_usd_fallback' => env('NGN_USD_FALLBACK_RATE', 1600),
     ],
 
     'elevenlabs' => [

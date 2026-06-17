@@ -205,11 +205,6 @@ class UserController extends Controller
 
                 DB::commit();
 
-                // Queue AI review for new authors in the background
-                if ($user->account_type === 'author') {
-                    \App\Jobs\ProcessAuthorAIReviewJob::dispatch($user->id)->onQueue('ai');
-                }
-
                 return $this->success([
                     'user_id' => $user->id,
                     'email' => $user->email,
@@ -421,6 +416,10 @@ class UserController extends Controller
                 ? $user->name
                 : ucfirst(strtolower(explode('@', $user->email)[0]));
             Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
+
+            // Queue AI review in background (runs with whatever data is available now;
+            // re-runs after KYC submission if admin triggers it)
+            \App\Jobs\ProcessAuthorAIReviewJob::dispatch($user->id)->onQueue('ai');
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;

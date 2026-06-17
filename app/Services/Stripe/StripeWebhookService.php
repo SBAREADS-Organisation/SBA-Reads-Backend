@@ -443,27 +443,50 @@ class StripeWebhookService
                 return;
             }
 
-            // Update the payout record to failed status
             $stripePayout->update([
-                'status' => 'failed',
-                'failure_code' => $payout->failure_code,
+                'status'          => 'failed',
+                'failure_code'    => $payout->failure_code,
                 'failure_message' => $payout->failure_message,
                 'stripe_response' => $payout->toArray(),
             ]);
 
-            // Optionally, you could add the failed amount back to user's wallet
-            // $stripePayout->user->increment('wallet_balance', $stripePayout->amount);
-
-            Log::error('Payout failed', [
-                'payout_id' => $payout->id,
-                'user_id' => $stripePayout->user_id,
-                'failure_code' => $payout->failure_code,
-                'failure_message' => $payout->failure_message
+            Log::error('Stripe payout failed', [
+                'payout_id'       => $payout->id,
+                'user_id'         => $stripePayout->user_id,
+                'failure_code'    => $payout->failure_code,
+                'failure_message' => $payout->failure_message,
             ]);
+
+            // Notify the author by email so they can fix their bank details
+            $author = \App\Models\User::find($stripePayout->user_id);
+            if ($author?->email) {
+                $humanReason = match ($payout->failure_code) {
+                    'account_closed'             => 'The destination bank account has been closed.',
+                    'account_frozen'             => 'The destination bank account is frozen.',
+                    'bank_account_restricted'    => 'The bank account has restrictions that prevent this payout.',
+                    'debit_not_authorized'       => 'Your bank does not allow debits from this account.',
+                    'insufficient_funds'         => 'Insufficient funds in the platform account.',
+                    'invalid_account_number'     => 'The bank account number on file appears to be invalid.',
+                    'no_account'                 => 'No bank account was found with the provided details.',
+                    default                      => $payout->failure_message ?? 'An unknown error occurred.',
+                };
+
+                \Illuminate\Support\Facades\Mail::to($author->email)->queue(
+                    new \App\Mail\Generic\GenericAppNotification(
+                        'SBA Reads — Payout Failed',
+                        "Hi {$author->first_name},\n\n"
+                        . "A withdrawal of {$stripePayout->currency} {$stripePayout->amount} to your bank account could not be completed.\n\n"
+                        . "Reason: {$humanReason}\n\n"
+                        . "Please log in to the SBA Reads app, go to Wallet → Payout Method, and verify your bank account details are correct.\n\n"
+                        . "If you need help, contact us at support@sbareads.com.\n\n"
+                        . "— The SBA Reads Team"
+                    )
+                );
+            }
         } catch (\Exception $e) {
-            Log::error('Failed to handle payout failed', [
+            Log::error('Failed to handle payout failed event', [
                 'payout_id' => $payout->id,
-                'error' => $e->getMessage()
+                'error'     => $e->getMessage(),
             ]);
         }
     }

@@ -850,14 +850,16 @@ class StripeConnectService
             if (empty($currency) || strlen($currency) !== 3) {
                 return $this->error('Valid 3-letter currency code is required', 422);
             }
-            //CHECK if the account balance is sufficient for the payout
+            // Check if the account balance is sufficient for the payout
             $balanceResponse = $this->retrieveAccountBalance($stripeAccountId);
             if ($balanceResponse->getStatusCode() !== 200) {
                 return $this->error('Unable to retrieve account balance for payout', 500);
             }
-            $balanceData = $balanceResponse->getData();
-            $availableBalances = $balanceData->data->available ?? [];
-            $availableAmount = $availableBalances->{strtolower($currency)} ?? 0;
+            // Decode via content string so we always get an array regardless of getData() quirks
+            $balanceData       = json_decode($balanceResponse->getContent(), true);
+            $availableBalances = $balanceData['data']['available'] ?? [];
+            $currencyKey       = strtolower($currency);
+            $availableAmount   = $availableBalances[$currencyKey] ?? 0;
             if ($availableAmount < $amount) {
                 return $this->error('Insufficient balance for the requested payout', 422);
             }
