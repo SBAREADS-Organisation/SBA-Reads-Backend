@@ -109,10 +109,6 @@ class KYCController extends Controller
                 );
             }
 
-            if ($user->kyc_status === 'document-required') {
-                return $this->error('KYC already requires document upload.', 400);
-            }
-
             $country   = strtoupper($request->input('country'));
             $useStripe = in_array($country, STRIPE_KYC_COUNTRIES);
             $dob       = Carbon::create(
