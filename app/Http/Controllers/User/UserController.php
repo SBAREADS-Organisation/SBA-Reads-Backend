@@ -293,9 +293,9 @@ class UserController extends Controller
             ], 'Super admin created successfully', 201);
         } catch (\Exception $e) {
             return $this->error(
-                'An error occurred while creating the super admin.',
+                'An error occurred while creating the super admin: ' . $e->getMessage(),
                 500,
-                config('app.debug') ? $e->getMessage() : 'An error occurred while creating the super admin.',
+                $e->getMessage(),
                 $e
             );
         }
@@ -1225,9 +1225,9 @@ class UserController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->error(
-                'An error occurred while inviting the admin.',
+                'An error occurred while inviting the admin: ' . $e->getMessage(),
                 500,
-                config('app.debug') ? $e->getMessage() : 'An error occurred while inviting the admin.',
+                $e->getMessage(),
                 $e
             );
         }

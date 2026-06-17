@@ -171,8 +171,8 @@ class BookService
         ]);
 
         $book->update([
-            'product_id'       => "com.sbareads.book.{$book->id}",
-            'audio_product_id' => "com.sbareads.audio.{$book->id}",
+            'product_id'       => "sbareads.book.{$book->id}",
+            'audio_product_id' => "sbareads.audio.{$book->id}",
         ]);
 
         return $book;
@@ -194,13 +194,15 @@ class BookService
             $this->cloudinaryMediaService->delete($book->cover_image['public_id']);
         }
 
-        // Delete book content files — S3 keys start with "books/content/", others are on Cloudinary
+        // Delete book content files — check public_url domain to tell S3 from Cloudinary
+        // (both use books/content/ as the path prefix so checking public_id alone is unreliable)
         if ($book->files && is_array($book->files)) {
             foreach ($book->files as $file) {
                 if (! isset($file['public_id'])) {
                     continue;
                 }
-                if (str_starts_with($file['public_id'], 'books/content/')) {
+                $url = $file['public_url'] ?? $file['url'] ?? '';
+                if (str_contains($url, 'amazonaws.com')) {
                     Storage::disk('s3')->delete($file['public_id']);
                 } else {
                     $this->cloudinaryMediaService->delete($file['public_id']);
