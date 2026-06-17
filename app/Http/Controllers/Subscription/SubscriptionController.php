@@ -23,25 +23,35 @@ class SubscriptionController extends Controller
                 'subscription_id' => 'required|exists:subscriptions,id',
             ]);
 
-            // Check if validation fails
             if ($validation->fails()) {
-                return $this->error(
-                    'Validation failed',
-                    400,
-                    $validation->errors()
-                );
+                return $this->error('Validation failed', 400, $validation->errors());
             }
 
-            return $this->service->subscribe($request->user(), $request->subscription_id);
+            $userSubscription = $this->service->subscribe($request->user(), $request->subscription_id);
+
+            return $this->success($userSubscription, 'Subscribed successfully.', 201);
         } catch (\Throwable $th) {
-            // throw $th;
-            // dd($th);
             return $this->error(
                 'An error occurred while subscribing to the plan.',
                 500,
-                config('app.debug') ? $th->getMessage() : null,
+                $th->getMessage(),
                 $th
             );
+        }
+    }
+
+    public function current(Request $request)
+    {
+        try {
+            $subscription = $this->service->getCurrentSubscription($request->user());
+
+            if (! $subscription) {
+                return $this->success(null, 'No active subscription.');
+            }
+
+            return $this->success($subscription, 'Active subscription retrieved.');
+        } catch (\Throwable $th) {
+            return $this->error('Failed to retrieve subscription.', 500, $th->getMessage(), $th);
         }
     }
 

@@ -30,88 +30,36 @@ class SubscriptionService
     {
         $subscription = Subscription::findOrFail($subscriptionId);
 
-        $subscription = json_decode(json_encode($subscription));
-
-        // dd($user->activeSubscription());
-        // // Check if the user already has an active subscription
-        // if ($user->activeSubscription()) {
-        //     return response()->json([
-        //         'data' => null,
-        //         'code' => 400,
-        //         'message' => 'You already have an active subscription.',
-        //         'error' => 'You already have an active subscription.'
-        //     ], 400);
-        // }
-
         return DB::transaction(function () use ($user, $subscription) {
+            // Expire any existing active subscription
             $user->activeSubscription()?->update(['status' => 'expired']);
 
+            // Activate immediately — payment integration will be wired in a later release
             $userSubscription = UserSubscription::create([
-                'user_id' => $user->id,
+                'user_id'         => $user->id,
                 'subscription_id' => $subscription->id,
-                'starts_at' => now(),
-                'ends_at' => now()->addDays($subscription->duration_in_days),
-                'status' => 'in-transaction',
+                'starts_at'       => now(),
+                'ends_at'         => now()->addDays($subscription->duration_in_days),
+                'status'          => 'active',
             ]);
 
-            $userSubscription = json_decode(json_encode($userSubscription));
+            $userSubscription->load('subscription');
 
-            $transaction = $this->paymentService->createPayment([
-                'amount' => $subscription->price * 100,
-                // pick currency from subscription model currencies []
-                'currency' => $subscription->currencies[0] ?? 'usd',
-                // 'currency' => 'usd',
-                'description' => "Subscription to {$subscription->title}",
-                'purpose' => 'subscription',
-                // 'purpose_id' => $subscription->id,
-                'purpose_id' => $userSubscription->id,
-                'meta_data' => [
-                    'subscription_id' => $subscription->id,
-                    'user_id' => $user->id,
-                ],
-            ], $user);
-
-            $transaction = json_decode(json_encode($transaction));
-
-            dd($transaction);
-
-            if (isset($transaction->error)) {
-                // Rollback the subscription creation if payment fails
-                $userSubscription->delete();
-
-                return response()->json([
-                    'data' => null,
-                    'code' => 400,
-                    'message' => $transaction->error,
-                    'error' => $transaction->error,
-                ], 400);
-            }
-            dd($transaction);
-            // Transaction::create([
-            //     'user_id' => $user->id,
-            //     'type' => 'subscription',
-            //     'amount' => $subscription->price,
-            //     'reference' => uniqid('sub_'),
-            //     'status' => 'success',
-            // ]);
-
-            // $user->notify(new SubscriptionActivatedNotification($userSubscription));
-            // return transaction details and user subscription details
-            $response = [
-                'client_secret' => $transaction->client_secret,
-                'subscription' => $userSubscription,
-                'transaction' => $transaction,
-            ];
-            // $user->notify(new SubscriptionActivatedNotification($userSubscription));
-            // dd($response);
-
-            return response()->json([
-                'code' => 200,
-                'data' => $response,
-                'message' => 'Subscription successfully activated.',
-                'error' => null,
-            ], 200);
+            return $userSubscription;
         });
+    }
+
+    /**
+     * Get the current active subscription for a user.
+     */
+    public function getCurrentSubscription($user): ?UserSubscription
+    {
+        return UserSubscription::where('user_id', $user->id)
+            ->where('status', 'active')
+            ->where('ends_at', '>', now())
+            ->with('subscription')
+            ->latest()
+            ->first();
     }
 
     /**

@@ -90,6 +90,7 @@ Route::prefix('user')->group(function () {
 
         // User Subscriptions Routes
         Route::prefix('subscriptions')->group(function () {
+            Route::get('current', [SubscriptionController::class, 'current'])->name('subscription-current');
             Route::get('history', [SubscriptionController::class, 'history'])->name('subscription-history');
             Route::post('subscribe', [SubscriptionController::class, 'subscribe'])->name('subscribe');
         });
