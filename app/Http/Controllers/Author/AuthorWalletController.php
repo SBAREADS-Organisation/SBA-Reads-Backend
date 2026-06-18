@@ -5,16 +5,19 @@ namespace App\Http\Controllers\Author;
 use App\Http\Controllers\Controller;
 use App\Models\Transaction;
 use App\Services\Paystack\CurrencyConversionService;
+use App\Services\Paystack\PaystackTransferService;
 use App\Services\Stripe\StripeConnectService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class AuthorWalletController extends Controller
 {
     public function __construct(
-        protected StripeConnectService   $stripe,
-        protected CurrencyConversionService $fx
+        protected StripeConnectService      $stripe,
+        protected CurrencyConversionService $fx,
+        protected PaystackTransferService   $paystack,
     ) {}
 
     /**
@@ -78,34 +81,46 @@ class AuthorWalletController extends Controller
             ], 'Wallet balance retrieved.');
         }
 
-        // ── Paystack authors: earnings go straight to bank on each purchase ──
-        // We don't hold a balance — compute lifetime credits from transactions.
+        // ── Paystack authors ────────────────────────────────────────────────────
         if ($payoutMethod === 'paystack') {
+            $rate = $this->safeRate('USD', 'NGN');
+
+            // All credited earnings (NGN direct + USD converted)
             $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
-                ->where('direction', 'credit')
-                ->where('status', 'succeeded')
-                ->where('currency', 'NGN')
-                ->sum('amount');
+                ->where('direction', 'credit')->where('status', 'succeeded')
+                ->where('currency', 'NGN')->sum('amount');
 
-            // USD credits converted to NGN (USD purchases routed through Paystack)
             $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
-                ->where('direction', 'credit')
-                ->where('status', 'succeeded')
-                ->whereIn('currency', ['USD', 'usd'])
+                ->where('direction', 'credit')->where('status', 'succeeded')
+                ->whereIn('currency', ['USD', 'usd'])->sum('amount');
+
+            $lifetimeTotal = $lifetimeNGN + ($lifetimeUSD * $rate);
+
+            // Subtract amounts already manually withdrawn via Paystack transfer
+            $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
+                ->where('direction', 'debit')
+                ->whereIn('status', ['succeeded', 'pending'])
+                ->where('payment_provider', 'paystack')
+                ->where('purpose_type', 'paystack_payout')
                 ->sum('amount');
 
-            $rate           = $lifetimeUSD > 0 ? $this->safeRate('USD', 'NGN') : 1;
-            $lifetimeTotal  = $lifetimeNGN + ($lifetimeUSD * $rate);
+            $available = max(0.0, $lifetimeTotal - $alreadyPaidOut);
+
+            $hasRecipient = ! empty($author->paystack_recipient_code);
+            $canWithdraw  = $available >= 100 && $hasRecipient; // min 100 NGN
+
+            $withdrawNote = ! $hasRecipient
+                ? 'Add a Nigerian bank account to withdraw your earnings.'
+                : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null);
 
             return $this->success([
                 'payout_method'    => 'paystack',
-                'available'        => ['amount' => $lifetimeTotal, 'currency' => 'NGN'],
-                'pending_iap'      => ['amount' => $iapPending * $this->safeRate('USD', 'NGN'), 'currency' => 'NGN'],
-                'lifetime_earned'  => ['amount' => $lifetimeTotal, 'currency' => 'NGN'],
+                'available'        => ['amount' => round($available, 2), 'currency' => 'NGN'],
+                'pending_iap'      => ['amount' => round($iapPending * $rate, 2), 'currency' => 'NGN'],
+                'lifetime_earned'  => ['amount' => round($lifetimeTotal, 2), 'currency' => 'NGN'],
                 'stripe_account_id'=> null,
-                // Paystack pushes to bank immediately — nothing to "withdraw"
-                'can_withdraw'     => false,
-                'withdraw_note'    => 'Your earnings are automatically sent to your registered bank account after each sale. No manual withdrawal needed.',
+                'can_withdraw'     => $canWithdraw,
+                'withdraw_note'    => $withdrawNote,
             ], 'Wallet balance retrieved.');
         }
 
@@ -124,6 +139,90 @@ class AuthorWalletController extends Controller
             'can_withdraw'     => false,
             'withdraw_note'    => 'Set up a payout method to withdraw your earnings.',
         ], 'Wallet balance retrieved.');
+    }
+
+    /**
+     * Manually withdraw accumulated NGN earnings via Paystack Transfer.
+     *
+     * Works for both pre-revamp authors (who have unremitted credit history)
+     * and current Paystack authors. USD credits are converted to NGN at the
+     * live rate before computing available balance.
+     */
+    public function paystackWithdraw(Request $request): JsonResponse
+    {
+        $author = $request->user();
+
+        if (empty($author->paystack_recipient_code)) {
+            return $this->error('Please add a Nigerian bank account before withdrawing.', 422);
+        }
+
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:100',
+        ]);
+
+        $amountNGN = (float) $validated['amount'];
+        $rate      = $this->safeRate('USD', 'NGN');
+
+        // Compute available balance (same logic as balance())
+        $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
+            ->where('direction', 'credit')->where('status', 'succeeded')
+            ->where('currency', 'NGN')->sum('amount');
+
+        $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
+            ->where('direction', 'credit')->where('status', 'succeeded')
+            ->whereIn('currency', ['USD', 'usd'])->sum('amount');
+
+        $lifetimeTotal = $lifetimeNGN + ($lifetimeUSD * $rate);
+
+        $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
+            ->where('direction', 'debit')
+            ->whereIn('status', ['succeeded', 'pending'])
+            ->where('payment_provider', 'paystack')
+            ->where('purpose_type', 'paystack_payout')
+            ->sum('amount');
+
+        $available = max(0.0, $lifetimeTotal - $alreadyPaidOut);
+
+        if ($amountNGN > $available) {
+            return $this->error(
+                'Amount exceeds available balance. Available: ₦' . number_format($available, 2),
+                422
+            );
+        }
+
+        try {
+            $amountKobo = (int) round($amountNGN * 100);
+
+            $transfer = $this->paystack->initiateTransfer(
+                $amountKobo,
+                $author->paystack_recipient_code,
+                'Author royalty withdrawal'
+            );
+
+            // Record the payout so future balance() calls subtract it
+            Transaction::create([
+                'id'               => (string) Str::uuid(),
+                'user_id'          => $author->id,
+                'reference'        => $transfer['reference'] ?? ('ps_wd_' . uniqid()),
+                'status'           => 'pending',
+                'currency'         => 'NGN',
+                'amount'           => $amountNGN,
+                'direction'        => 'debit',
+                'payment_provider' => 'paystack',
+                'purpose_type'     => 'paystack_payout',
+                'description'      => 'Withdrawal to Nigerian bank account',
+                'meta_data'        => $transfer,
+            ]);
+
+            return $this->success([
+                'amount'        => $amountNGN,
+                'currency'      => 'NGN',
+                'transfer_code' => $transfer['transfer_code'] ?? null,
+                'status'        => $transfer['status'] ?? 'pending',
+            ], 'Withdrawal initiated. Funds will arrive in your bank account within 1–3 business days.');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

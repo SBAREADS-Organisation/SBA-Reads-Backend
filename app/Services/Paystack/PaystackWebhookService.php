@@ -149,7 +149,6 @@ class PaystackWebhookService
         return DB::transaction(function () use ($data) {
             Log::info('Paystack transfer success handled', $data);
 
-            // Find and update related withdrawal transaction
             $transferReference = $data['reference'] ?? null;
             if ($transferReference) {
                 $withdrawal = \App\Models\Withdrawal::where('reference', $transferReference)
@@ -163,10 +162,17 @@ class PaystackWebhookService
                         'provider_response' => json_encode($data)
                     ]);
 
-                    // Update related transaction if exists
                     $transaction = \App\Models\Transaction::where('reference', $withdrawal->reference)->first();
                     if ($transaction) {
                         $transaction->update(['status' => 'succeeded']);
+                    }
+                } else {
+                    // Fallback: direct paystack_payout Transaction (no Withdrawal record)
+                    $payoutTxn = \App\Models\Transaction::where('reference', $transferReference)
+                        ->where('purpose_type', 'paystack_payout')
+                        ->first();
+                    if ($payoutTxn) {
+                        $payoutTxn->update(['status' => 'succeeded']);
                     }
                 }
             }
@@ -217,6 +223,14 @@ class PaystackWebhookService
                         if ($user) {
                             $user->increment('wallet_balance', $withdrawal->amount);
                         }
+                    }
+                } else {
+                    // Fallback: direct paystack_payout Transaction (no Withdrawal record)
+                    $payoutTxn = \App\Models\Transaction::where('reference', $transferReference)
+                        ->where('purpose_type', 'paystack_payout')
+                        ->first();
+                    if ($payoutTxn) {
+                        $payoutTxn->update(['status' => 'failed']);
                     }
                 }
             }

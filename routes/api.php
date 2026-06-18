@@ -169,8 +169,9 @@ Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->gro
     Route::get('balance',         [\App\Http\Controllers\Author\AuthorWalletController::class, 'balance']);
     Route::get('ngn-banks',       [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
     Route::post('ngn-account',    [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
-    Route::get('payout-info',     [\App\Http\Controllers\Author\NGNBankAccountController::class, 'payoutInfo']);
-    Route::post('switch-stripe',  [\App\Http\Controllers\Author\NGNBankAccountController::class, 'switchToStripe']);
+    Route::get('payout-info',        [\App\Http\Controllers\Author\NGNBankAccountController::class, 'payoutInfo']);
+    Route::post('switch-stripe',     [\App\Http\Controllers\Author\NGNBankAccountController::class, 'switchToStripe']);
+    Route::post('paystack-withdraw', [\App\Http\Controllers\Author\AuthorWalletController::class,   'paystackWithdraw']);
 });
 
 // Paystack Routes

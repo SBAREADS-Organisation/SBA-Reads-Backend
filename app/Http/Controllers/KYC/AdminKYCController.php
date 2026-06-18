@@ -45,6 +45,7 @@ class AdminKYCController extends Controller
                     'last_name'            => $author->kycInfo?->last_name,
                     'dob'                  => $author->kycInfo?->dob,
                     'phone'                => $author->kycInfo?->phone,
+                    'gender'               => $author->kycInfo?->gender,
                     'address'              => $author->kycInfo?->address_line1,
                     'city'                 => $author->kycInfo?->city,
                     'state'                => $author->kycInfo?->state,
