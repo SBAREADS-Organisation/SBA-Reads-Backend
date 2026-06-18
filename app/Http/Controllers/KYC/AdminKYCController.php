@@ -25,7 +25,15 @@ class AdminKYCController extends Controller
     public function pendingManual(Request $request): JsonResponse
     {
         $authors = User::where('account_type', 'author')
-            ->where('kyc_status', 'pending_manual')
+            ->where(function ($q) {
+                $q->where('kyc_status', 'pending_manual')
+                  ->orWhere(function ($q2) {
+                      // Authors who are stuck in 'in-review' but have a manual document
+                      // (e.g. Stripe webhook fired before the AI job ran, or both paths started)
+                      $q2->where('kyc_status', 'in-review')
+                         ->whereHas('kycInfo', fn ($q3) => $q3->whereNotNull('document_url'));
+                  });
+            })
             ->with('kycInfo')
             ->orderByRaw("FIELD(ai_review_status, 'needs_review', 'pending', NULL)")
             ->orderByDesc('ai_reviewed_at')
@@ -68,7 +76,7 @@ class AdminKYCController extends Controller
             return $this->error('User is not an author.', 422);
         }
 
-        if ($user->kyc_status !== 'pending_manual') {
+        if (! in_array($user->kyc_status, ['pending_manual', 'in-review'])) {
             return $this->error("Cannot approve: current KYC status is '{$user->kyc_status}'.", 422);
         }
 
