@@ -184,8 +184,14 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
+            Log::error('KYC initiation failed', [
+                'user_id' => optional(Auth::user())->id,
+                'error'   => $th->getMessage(),
+                'file'    => $th->getFile(),
+                'line'    => $th->getLine(),
+            ]);
             return $this->error(
-                'Error initiating KYC',
+                $th->getMessage(),
                 500,
                 config('app.debug') ? $th->getMessage() : null,
                 $th
