@@ -1250,16 +1250,23 @@ class UserController extends Controller
      */
     public function onboard(Request $request)
     {
-        // Get the authenticated user
         $user = $request->user();
 
-        // Ensure the user has a Stripe account ID
+        // Guard: already verified or in review — no onboarding link needed
+        if ($user->kyc_status === 'verified') {
+            return $this->error('Your identity has already been verified.', 400);
+        }
+
+        if ($user->kyc_status === 'in-review') {
+            return $this->error('Your identity is currently being reviewed. We\'ll notify you once it\'s complete.', 400);
+        }
+
+        if ($user->kyc_status === 'pending_manual') {
+            return $this->error('Your account is undergoing manual review. No further action is needed.', 400);
+        }
+
         if (empty($user->kyc_account_id)) {
-            // In a real scenario, you would first create a Stripe account for the user here
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Stripe account not yet created.'
-            ], 400);
+            return $this->error('Stripe account not yet created. Please complete your KYC details first.', 400);
         }
 
         // Initialize the Stripe client
