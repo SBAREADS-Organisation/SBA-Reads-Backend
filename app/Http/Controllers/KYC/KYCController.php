@@ -98,13 +98,16 @@ class KYCController extends Controller
                 return $this->error('Validation failed', 400, $validator->errors());
             }
 
-            // Early exit if already verified or pending admin review
-            if (in_array($user->kyc_status, ['verified', 'pending_manual'])) {
+            // Early exit if already verified, pending admin review, or currently in Stripe review
+            if (in_array($user->kyc_status, ['verified', 'pending_manual', 'in-review'])) {
+                $messages = [
+                    'verified'       => 'KYC already verified.',
+                    'pending_manual' => 'KYC is pending admin review.',
+                    'in-review'      => 'Your identity is currently being reviewed — we\'ll notify you when complete.',
+                ];
                 return $this->success(
                     ['account_id' => $user->kyc_account_id, 'status' => $user->kyc_status],
-                    $user->kyc_status === 'verified'
-                        ? 'KYC already verified.'
-                        : 'KYC is pending admin review.',
+                    $messages[$user->kyc_status],
                     200
                 );
             }
@@ -142,7 +145,11 @@ class KYCController extends Controller
                 ]);
 
                 // Dispatch AI verification — it will auto-approve or flag for manual review
-                ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+                try {
+                    ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+                } catch (\Throwable $e) {
+                    Log::error('KYC job dispatch failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+                }
 
                 return $this->success(
                     ['status' => 'pending_manual'],
@@ -252,7 +259,7 @@ class KYCController extends Controller
         try {
             $user = Auth::user();
 
-            if (! in_array($user->kyc_status, ['pending_manual', null, ''])) {
+            if (! in_array($user->kyc_status, ['pending_manual', 'in-review', null, ''])) {
                 return $this->error('Document upload is only available for authors pending manual review.', 400);
             }
 

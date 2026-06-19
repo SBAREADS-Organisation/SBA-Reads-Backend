@@ -129,6 +129,14 @@ Route::prefix('user')->group(function () {
             Route::get('status', [KYCController::class, 'kycStatus'])->name('kyc-status');
         });
 
+        // Two-Factor Authentication (user-facing — available to all authenticated users)
+        Route::prefix('2fa')->group(function () {
+            Route::get('status',  [\App\Http\Controllers\Auth\TwoFactorController::class, 'status']);
+            Route::post('setup',  [\App\Http\Controllers\Auth\TwoFactorController::class, 'setup']);
+            Route::post('enable', [\App\Http\Controllers\Auth\TwoFactorController::class, 'enable']);
+            Route::post('disable',[\App\Http\Controllers\Auth\TwoFactorController::class, 'disable']);
+        });
+
         // User Payment Method Routes
         Route::prefix('payment_method')->group(function () {
             Route::get('list', [UserController::class, 'listPaymentMethods'])->name('list-payment-methods');
@@ -311,6 +319,14 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
         Route::get('pending', [AdminKYCController::class, 'pendingManual'])->name('admin.kyc.pending');
         Route::post('{user}/approve', [AdminKYCController::class, 'approve'])->name('admin.kyc.approve');
         Route::post('{user}/reject', [AdminKYCController::class, 'reject'])->name('admin.kyc.reject');
+    });
+
+    // Two-Factor Authentication Management
+    Route::prefix('2fa')->group(function () {
+        Route::get('status',  [\App\Http\Controllers\Auth\TwoFactorController::class, 'status']);
+        Route::post('setup',  [\App\Http\Controllers\Auth\TwoFactorController::class, 'setup']);
+        Route::post('enable', [\App\Http\Controllers\Auth\TwoFactorController::class, 'enable']);
+        Route::post('disable',[\App\Http\Controllers\Auth\TwoFactorController::class, 'disable']);
     });
 
     // Admin IAP Payout Management (process Apple App Store earnings batch)

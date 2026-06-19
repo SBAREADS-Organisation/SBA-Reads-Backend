@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\Login\LoginNotification;
 use App\Models\User;
+use App\Services\Auth\TotpService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -16,6 +17,8 @@ use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
+    public function __construct(protected TotpService $totp) {}
+
     public function login(Request $request)
     {
         try {
@@ -66,6 +69,18 @@ class AuthController extends Controller
             // Check if Account is Suspended
             if ($user->status === 'suspended') {
                 return $this->error('Your account is suspended. Contact support.', 403);
+            }
+
+            // 2FA gate — only enforced for accounts that have it enabled
+            if (! empty($user->mfa_secret)) {
+                $code = $request->input('totp_code');
+                if (! $code) {
+                    // Signal to the frontend: show the TOTP input step
+                    return response()->json(['two_factor_required' => true], 200);
+                }
+                if (! $this->totp->verify($user->mfa_secret, $code)) {
+                    return $this->error('Invalid authenticator code. Please try again.', 401);
+                }
             }
 
             // Update Last Login Timestamp
