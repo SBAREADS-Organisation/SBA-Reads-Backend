@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
+use App\Services\IAP\IAPTierService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,15 +42,18 @@ class GooglePlayPurchaseController extends Controller
             'purchase_token' => 'required|string',
             'product_id'     => 'required|string',
             'purchase_type'  => 'nullable|string|in:book,audio',
+            'book_id'        => 'nullable|integer',
         ]);
 
-        $purchaseToken = $request->input('purchase_token');
-        $productId     = $request->input('product_id');
-        $purchaseType  = $request->input('purchase_type', 'book');
+        $purchaseToken     = $request->input('purchase_token');
+        $productId         = $request->input('product_id');
+        $purchaseType      = $request->input('purchase_type', 'book');
+        $bookIdFromRequest = (int) $request->input('book_id', 0);
 
         Log::info('Google Play IAP verification started', [
             'user_id'    => $user->id,
             'product_id' => $productId,
+            'book_id'    => $bookIdFromRequest,
         ]);
 
         try {
@@ -69,12 +73,17 @@ class GooglePlayPurchaseController extends Controller
 
             $orderId = $verification->getTransactionId();
 
-            return DB::transaction(function () use ($user, $productId, $orderId, $purchaseType, $verification) {
+            return DB::transaction(function () use ($user, $productId, $orderId, $purchaseType, $verification, $bookIdFromRequest) {
                 $bookPurchaseService = app(BookPurchaseService::class);
 
                 $book = Book::where('product_id', $productId)
                     ->orWhere('audio_product_id', $productId)
                     ->first();
+
+                // Tier lookup: shared price-tier SKUs (new books)
+                if (! $book && IAPTierService::isTierSku($productId) && $bookIdFromRequest) {
+                    $book = Book::find($bookIdFromRequest);
+                }
 
                 if (! $book) {
                     Log::warning("Google Play IAP: book not found for product_id: {$productId}", ['user_id' => $user->id]);

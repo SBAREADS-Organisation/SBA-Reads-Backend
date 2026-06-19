@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
+use App\Services\IAP\IAPTierService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,12 +45,13 @@ class AppStorePurchaseController extends Controller
             'book_id'       => 'nullable|integer',
         ]);
 
-        $purchaseType = $request->input('purchase_type', 'book');
+        $purchaseType      = $request->input('purchase_type', 'book');
+        $bookIdFromRequest = (int) $request->input('book_id', 0);
 
         Log::info('IAP verification started', [
             'user_id'       => $user->id,
             'purchase_type' => $purchaseType,
-            'book_id'       => $request->book_id,
+            'book_id'       => $bookIdFromRequest,
         ]);
 
         try {
@@ -116,7 +118,7 @@ class AppStorePurchaseController extends Controller
                 return response()->json(['error' => 'No purchase items found in receipt'], 400);
             }
 
-            return DB::transaction(function () use ($user, $receiptInfo, $environment, $purchaseType) {
+            return DB::transaction(function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
                 $grantedBooks        = [];
                 $bookPurchaseService = app(BookPurchaseService::class);
                 $bookIdsToGrant      = [];
@@ -127,9 +129,17 @@ class AppStorePurchaseController extends Controller
                     $productId       = is_array($item) ? $item['product_id']              : $item->getProductId();
                     $originalTransId = is_array($item) ? $item['original_transaction_id'] : $item->getOriginalTransactionId();
 
+                    // Primary lookup: per-book product_id (legacy books)
                     $book = Book::where('product_id', $productId)
                         ->orWhere('audio_product_id', $productId)
                         ->first();
+
+                    // Tier lookup: shared price-tier SKUs (new books).
+                    // The mobile sends book_id alongside the receipt so we can
+                    // identify which specific book was purchased at that tier.
+                    if (! $book && IAPTierService::isTierSku($productId) && $bookIdFromRequest) {
+                        $book = Book::find($bookIdFromRequest);
+                    }
 
                     if (! $book) {
                         Log::warning("IAP: book not found for product_id: {$productId}", [

@@ -7,33 +7,26 @@ use App\Services\Auth\TotpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Hash;
 
 class TwoFactorController extends Controller
 {
     public function __construct(protected TotpService $totp) {}
 
-    /**
-     * Generate a fresh TOTP secret and return the QR code URI.
-     * The secret is held in cache until the admin verifies it with enable().
-     */
     public function setup(Request $request): JsonResponse
     {
         $user   = $request->user();
         $secret = $this->totp->generateSecret();
 
-        // 10-minute window to complete setup
         Cache::put("2fa_setup:{$user->id}", $secret, now()->addMinutes(10));
 
         return $this->success([
-            'secret'       => $secret,
-            'otpauth_url'  => $this->totp->otpauthUrl('SBA Reads Admin', $user->email, $secret),
+            'secret'          => $secret,
+            'otpauth_url'     => $this->totp->otpauthUrl('SBA Reads', $user->email, $secret),
             'already_enabled' => ! empty($user->mfa_secret),
         ], 'Scan the QR code with your authenticator app, then verify with the 6-digit code.');
     }
 
-    /**
-     * Verify the code from the authenticator app and activate 2FA.
-     */
     public function enable(Request $request): JsonResponse
     {
         $request->validate(['code' => 'required|digits:6']);
@@ -49,15 +42,20 @@ class TwoFactorController extends Controller
             return $this->error('Invalid code — check your authenticator app and try again.', 422);
         }
 
-        $user->update(['mfa_secret' => $secret]);
+        [$plaintext, $hashed] = $this->generateRecoveryCodes();
+
+        $user->update([
+            'mfa_secret'          => $secret,
+            'mfa_recovery_codes'  => $hashed,
+        ]);
         Cache::forget("2fa_setup:{$user->id}");
 
-        return $this->success(['two_factor_enabled' => true], 'Two-factor authentication is now active.');
+        return $this->success([
+            'two_factor_enabled' => true,
+            'recovery_codes'     => $plaintext,
+        ], 'Two-factor authentication is now active. Save your recovery codes in a safe place.');
     }
 
-    /**
-     * Disable 2FA. Requires a live TOTP code to confirm account ownership.
-     */
     public function disable(Request $request): JsonResponse
     {
         $request->validate(['code' => 'required|digits:6']);
@@ -72,19 +70,42 @@ class TwoFactorController extends Controller
             return $this->error('Invalid code — check your authenticator app and try again.', 422);
         }
 
-        $user->update(['mfa_secret' => null]);
+        $user->update(['mfa_secret' => null, 'mfa_recovery_codes' => null]);
 
         return $this->success(['two_factor_enabled' => false], 'Two-factor authentication has been disabled.');
     }
 
-    /**
-     * Return whether 2FA is currently enabled for the authenticated admin.
-     */
     public function status(Request $request): JsonResponse
     {
         return $this->success(
             ['enabled' => ! empty($request->user()->mfa_secret)],
             '2FA status retrieved.'
         );
+    }
+
+    /**
+     * Generate 8 single-use recovery codes.
+     *
+     * Each code is 10 characters formatted as XXXXX-XXXXX using an
+     * unambiguous character set (no 0/O or 1/I confusion).
+     * Returns [plaintext[], hashed[]] — store hashed, show plaintext once.
+     */
+    private function generateRecoveryCodes(int $count = 8): array
+    {
+        $chars     = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $plaintext = [];
+        $hashed    = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $raw = '';
+            for ($j = 0; $j < 10; $j++) {
+                $raw .= $chars[random_int(0, strlen($chars) - 1)];
+            }
+            $formatted   = substr($raw, 0, 5) . '-' . substr($raw, 5);
+            $plaintext[] = $formatted;
+            $hashed[]    = Hash::make($formatted);
+        }
+
+        return [$plaintext, $hashed];
     }
 }

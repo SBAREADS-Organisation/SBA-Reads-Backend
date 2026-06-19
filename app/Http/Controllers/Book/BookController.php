@@ -24,6 +24,7 @@ use App\Notifications\Book\Milestone\MilestoneReachedNotification;
 use App\Services\Book\BookPurchaseService;
 use App\Services\Book\BookService;
 use App\Services\Book\PdfTocExtractorService;
+use App\Services\IAP\IAPTierService;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\Request;
@@ -1202,13 +1203,24 @@ class BookController extends Controller
             }
 
             if ($action === 'approve') {
-                $book->status = 'approved';
-                $book->visibility = 'public';
+                $book->status      = 'approved';
+                $book->visibility  = 'public';
                 $book->approved_by = $user->id;
                 $book->approved_at = now();
                 if ($reviewNotes) {
                     $book->review_notes = $reviewNotes;
                 }
+
+                // Auto-assign IAP tier SKUs so the book is purchaseable via
+                // App Store / Play Store immediately — no per-book store submission.
+                // Only set the tier if not already assigned (preserves manual overrides).
+                if (empty($book->price_tier) && $book->actual_price > 0) {
+                    $book->price_tier = IAPTierService::skuForPrice((float) $book->actual_price);
+                }
+                if (empty($book->audio_price_tier) && $book->audio_price > 0) {
+                    $book->audio_price_tier = IAPTierService::audioSkuForPrice((float) $book->audio_price);
+                }
+
                 $book->save();
 
                 // dd($book);

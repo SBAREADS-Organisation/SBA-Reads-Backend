@@ -73,13 +73,21 @@ class AuthController extends Controller
 
             // 2FA gate — only enforced for accounts that have it enabled
             if (! empty($user->mfa_secret)) {
-                $code = $request->input('totp_code');
-                if (! $code) {
-                    // Signal to the frontend: show the TOTP input step
+                $totpCode     = $request->input('totp_code');
+                $recoveryCode = $request->input('recovery_code');
+
+                if (! $totpCode && ! $recoveryCode) {
                     return response()->json(['two_factor_required' => true], 200);
                 }
-                if (! $this->totp->verify($user->mfa_secret, $code)) {
-                    return $this->error('Invalid authenticator code. Please try again.', 401);
+
+                if ($totpCode) {
+                    if (! $this->totp->verify($user->mfa_secret, $totpCode)) {
+                        return $this->error('Invalid authenticator code. Please try again.', 401);
+                    }
+                } else {
+                    if (! $this->verifyAndConsumeRecoveryCode($user, $recoveryCode)) {
+                        return $this->error('Invalid recovery code. Please try again.', 401);
+                    }
                 }
             }
 
@@ -397,6 +405,28 @@ class AuthController extends Controller
         Mail::send('emails.otp', $data, function ($message) use ($user) {
             $message->to($user->email)->subject('Password Reset OTP — SBA Reads');
         });
+    }
+
+    /**
+     * Check a recovery code against the user's stored hashed codes.
+     * Consumes the code on success so it cannot be reused.
+     */
+    private function verifyAndConsumeRecoveryCode(User $user, string $input): bool
+    {
+        $codes = $user->mfa_recovery_codes ?? [];
+        if (empty($codes)) {
+            return false;
+        }
+
+        foreach ($codes as $index => $hashed) {
+            if (Hash::check($input, $hashed)) {
+                unset($codes[$index]);
+                $user->update(['mfa_recovery_codes' => array_values($codes)]);
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

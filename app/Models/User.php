@@ -49,6 +49,7 @@ class User extends Authenticatable
         'profile_info',
         'last_login_at',
         'mfa_secret',
+        'mfa_recovery_codes',
         'deleted',
         'archived',
         'device_token',
@@ -96,6 +97,7 @@ class User extends Authenticatable
             'preferences' => 'array',
             'profile_picture' => 'array',
             'kyc_metadata' => 'array',
+            'mfa_recovery_codes' => 'array',
         ];
     }
 
