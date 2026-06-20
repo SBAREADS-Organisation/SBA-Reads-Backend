@@ -28,41 +28,15 @@ class AdminKYCController extends Controller
             ->where(function ($q) {
                 $q->where('kyc_status', 'pending_manual')
                   ->orWhere(function ($q2) {
-                      // Authors who are stuck in 'in-review' but have a manual document
-                      // (e.g. Stripe webhook fired before the AI job ran, or both paths started)
                       $q2->where('kyc_status', 'in-review')
                          ->whereHas('kycInfo', fn ($q3) => $q3->whereNotNull('document_url'));
                   });
             })
             ->with('kycInfo')
-            ->orderByRaw("FIELD(ai_review_status, 'needs_review', 'pending', NULL)")
+            ->orderByRaw("CASE ai_review_status WHEN 'needs_review' THEN 0 WHEN 'pending' THEN 1 ELSE 2 END")
             ->orderByDesc('ai_reviewed_at')
             ->paginate(20)
-            ->through(fn ($author) => [
-                'id'                   => $author->id,
-                'name'                 => $author->name,
-                'email'                => $author->email,
-                'created_at'           => $author->created_at,
-                'has_document'         => ! empty($author->kycInfo?->document_url),
-                'ai_review_status'     => $author->ai_review_status,
-                'ai_review_notes'      => $author->ai_review_notes,
-                'ai_review_confidence' => $author->ai_review_confidence,
-                'ai_reviewed_at'       => $author->ai_reviewed_at,
-                'kyc_info'             => [
-                    'first_name'           => $author->kycInfo?->first_name,
-                    'last_name'            => $author->kycInfo?->last_name,
-                    'dob'                  => $author->kycInfo?->dob,
-                    'phone'                => $author->kycInfo?->phone,
-                    'gender'               => $author->kycInfo?->gender,
-                    'address'              => $author->kycInfo?->address_line1,
-                    'city'                 => $author->kycInfo?->city,
-                    'state'                => $author->kycInfo?->state,
-                    'country'              => $author->kycInfo?->country,
-                    'document_type'        => $author->kycInfo?->document_type,
-                    'document_url'         => $author->kycInfo?->document_url,
-                    'document_uploaded_at' => $author->kycInfo?->document_uploaded_at,
-                ],
-            ]);
+            ->through(fn ($author) => $this->formatAuthor($author));
 
         return $this->success($authors, 'AI-flagged KYC applications retrieved.');
     }
@@ -128,5 +102,52 @@ class AdminKYCController extends Controller
         }
 
         return $this->success(['kyc_status' => 'rejected'], 'Author KYC rejected.');
+    }
+
+    /**
+     * List all verified manual-path authors (AI auto-approved + admin approved).
+     * Excludes Stripe-only authors who have no kycInfo record.
+     */
+    public function approved(Request $request): JsonResponse
+    {
+        $authors = User::where('account_type', 'author')
+            ->where('kyc_status', 'verified')
+            ->whereHas('kycInfo')
+            ->with('kycInfo')
+            ->orderByDesc('ai_reviewed_at')
+            ->paginate(20)
+            ->through(fn ($author) => $this->formatAuthor($author));
+
+        return $this->success($authors, 'Approved KYC submissions retrieved.');
+    }
+
+    private function formatAuthor(User $author): array
+    {
+        return [
+            'id'                   => $author->id,
+            'name'                 => $author->name,
+            'email'                => $author->email,
+            'created_at'           => $author->created_at,
+            'kyc_status'           => $author->kyc_status,
+            'has_document'         => ! empty($author->kycInfo?->document_url),
+            'ai_review_status'     => $author->ai_review_status,
+            'ai_review_notes'      => $author->ai_review_notes,
+            'ai_review_confidence' => $author->ai_review_confidence,
+            'ai_reviewed_at'       => $author->ai_reviewed_at,
+            'kyc_info'             => [
+                'first_name'           => $author->kycInfo?->first_name,
+                'last_name'            => $author->kycInfo?->last_name,
+                'dob'                  => $author->kycInfo?->dob,
+                'phone'                => $author->kycInfo?->phone,
+                'gender'               => $author->kycInfo?->gender,
+                'address'              => $author->kycInfo?->address_line1,
+                'city'                 => $author->kycInfo?->city,
+                'state'                => $author->kycInfo?->state,
+                'country'              => $author->kycInfo?->country,
+                'document_type'        => $author->kycInfo?->document_type,
+                'document_url'         => $author->kycInfo?->document_url,
+                'document_uploaded_at' => $author->kycInfo?->document_uploaded_at,
+            ],
+        ];
     }
 }

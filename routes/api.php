@@ -316,7 +316,8 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
 
     // Admin KYC Management (manual verification for Nigerian and other non-Stripe authors)
     Route::prefix('kyc')->group(function () {
-        Route::get('pending', [AdminKYCController::class, 'pendingManual'])->name('admin.kyc.pending');
+        Route::get('pending',  [AdminKYCController::class, 'pendingManual'])->name('admin.kyc.pending');
+        Route::get('approved', [AdminKYCController::class, 'approved'])->name('admin.kyc.approved');
         Route::post('{user}/approve', [AdminKYCController::class, 'approve'])->name('admin.kyc.approve');
         Route::post('{user}/reject', [AdminKYCController::class, 'reject'])->name('admin.kyc.reject');
     });
