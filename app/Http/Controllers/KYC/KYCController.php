@@ -139,9 +139,14 @@ class KYCController extends Controller
 
             // ── Manual KYC path: Nigeria + other non-Stripe countries ─────────────
             if (! $useStripe) {
+                $firstName = $request->input('first_name');
+                $lastName  = $request->input('last_name');
                 $user->update([
                     'kyc_status'       => 'pending_manual',
-                    'ai_review_status' => null, // reset so job knows to re-evaluate
+                    'ai_review_status' => null,
+                    'first_name'       => $firstName,
+                    'last_name'        => $lastName,
+                    'name'             => trim("{$firstName} {$lastName}"),
                 ]);
 
                 // Dispatch AI verification — it will auto-approve or flag for manual review
@@ -283,14 +288,14 @@ class KYCController extends Controller
                 return $this->error('Please complete your KYC details first before uploading a document.', 400);
             }
 
-            $file     = $request->file('document');
-            $uploaded = Cloudinary::uploadFile($file->getRealPath(), [
+            $file          = $request->file('document');
+            $cloudinaryResult = Cloudinary::uploadFile($file->getRealPath(), [
                 'folder'        => 'kyc_documents',
                 'resource_type' => 'auto',
                 'public_id'     => 'kyc_' . $user->id . '_' . now()->timestamp,
-            ])->getSecurePath();
-
-            $publicId = Cloudinary::getPublicId();
+            ]);
+            $uploaded = $cloudinaryResult->getSecurePath();
+            $publicId = $cloudinaryResult->getPublicId();
 
             $kycInfo->update([
                 'document_type'        => $request->input('document_type'),
@@ -314,8 +319,17 @@ class KYCController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            Log::error('KYC manual document upload failed: ' . $th->getMessage(), ['user_id' => Auth::id()]);
-            return $this->error('Failed to upload document. Please try again.', 500);
+            Log::error('KYC manual document upload failed', [
+                'user_id' => Auth::id(),
+                'error'   => $th->getMessage(),
+                'file'    => $th->getFile(),
+                'line'    => $th->getLine(),
+            ]);
+            return $this->error(
+                'Failed to upload document. Please try again.',
+                500,
+                config('app.debug') ? $th->getMessage() : null
+            );
         }
     }
 

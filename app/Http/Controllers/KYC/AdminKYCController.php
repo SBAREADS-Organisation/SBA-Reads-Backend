@@ -54,10 +54,13 @@ class AdminKYCController extends Controller
             return $this->error("Cannot approve: current KYC status is '{$user->kyc_status}'.", 422);
         }
 
+        $firstName = $user->kycInfo?->first_name ?? $user->first_name;
+        $lastName  = $user->kycInfo?->last_name  ?? $user->last_name;
         $user->update([
             'kyc_status' => 'verified',
-            'first_name' => $user->kycInfo?->first_name ?? $user->first_name,
-            'last_name'  => $user->kycInfo?->last_name  ?? $user->last_name,
+            'first_name' => $firstName,
+            'last_name'  => $lastName,
+            'name'       => trim("{$firstName} {$lastName}"),
         ]);
 
         // Notify the author

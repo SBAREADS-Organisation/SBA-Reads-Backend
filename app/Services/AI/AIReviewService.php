@@ -124,7 +124,14 @@ SYSTEM;
             default           => 'None uploaded',
         };
 
-        $dob      = $kyc?->dob      ?? 'Not provided';
+        $dobRaw   = $kyc?->dob ?? null;
+        $dob      = $dobRaw ?? 'Not provided';
+        if ($dobRaw) {
+            try {
+                $age = \Carbon\Carbon::parse($dobRaw)->age;
+                $dob = "{$dobRaw} (Age: {$age})";
+            } catch (\Throwable) {}
+        }
         $phone    = $kyc?->phone    ?? 'Not provided';
         $address  = trim(implode(', ', array_filter([
             $kyc?->address_line1,
