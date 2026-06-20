@@ -9,7 +9,8 @@ use App\Models\UserKycInfo;
 use App\Services\Slack\SlackWebhookService;
 use App\Services\Stripe\StripeConnectService;
 use Carbon\Carbon;
-use CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary;
+use Cloudinary\Api\Upload\UploadApi;
+use Cloudinary\Configuration\Configuration;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -288,14 +289,24 @@ class KYCController extends Controller
                 return $this->error('Please complete your KYC details first before uploading a document.', 400);
             }
 
-            $file          = $request->file('document');
-            $cloudinaryResult = Cloudinary::uploadFile($file->getRealPath(), [
+            $file = $request->file('document');
+
+            Configuration::instance([
+                'cloud' => [
+                    'cloud_name' => config('services.cloud.cloud_name'),
+                    'api_key'    => config('services.cloud.api_key'),
+                    'api_secret' => config('services.cloud.api_secret'),
+                ],
+                'url' => ['secure' => true],
+            ]);
+
+            $result   = (new UploadApi)->upload($file->getRealPath(), [
                 'folder'        => 'kyc_documents',
                 'resource_type' => 'auto',
                 'public_id'     => 'kyc_' . $user->id . '_' . now()->timestamp,
             ]);
-            $uploaded = $cloudinaryResult->getSecurePath();
-            $publicId = $cloudinaryResult->getPublicId();
+            $uploaded = $result['secure_url'];
+            $publicId = $result['public_id'];
 
             $kycInfo->update([
                 'document_type'        => $request->input('document_type'),
