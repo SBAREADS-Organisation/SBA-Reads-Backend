@@ -265,8 +265,8 @@ class KYCController extends Controller
         try {
             $user = Auth::user();
 
-            if (! in_array($user->kyc_status, ['pending_manual', 'in-review', null, ''])) {
-                return $this->error('Document upload is only available for authors pending manual review.', 400);
+            if (in_array($user->kyc_status, ['verified', 'rejected'])) {
+                return $this->error('Document upload is not available for your current account status.', 400);
             }
 
             $validator = Validator::make($request->all(), [
