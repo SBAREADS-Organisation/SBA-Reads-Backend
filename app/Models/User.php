@@ -98,6 +98,7 @@ class User extends Authenticatable
             'profile_picture' => 'array',
             'kyc_metadata' => 'array',
             'mfa_recovery_codes' => 'array',
+            'ai_reviewed_at' => 'datetime',
         ];
     }
 
