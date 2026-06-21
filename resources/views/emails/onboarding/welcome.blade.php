@@ -11,7 +11,7 @@
     @endif
   </p>
   <h1 style="margin:0 0 16px;font-size:26px;font-weight:700;color:#160c08;line-height:1.3;">
-    Great to have you, {{ (strtolower($name) !== 'no name' && $name !== '') ? $name : 'there' }}! 🎉
+    Great to have you, {{ (strtolower($name) !== 'no name' && $name !== '') ? $name : 'there' }}!
   </h1>
   <p style="margin:0 0 28px;font-size:15px;color:#4a3728;line-height:1.7;">
     @if($accountType === 'author')
@@ -32,21 +32,21 @@
         @if($accountType === 'author')
           <table width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">📋</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Complete your profile</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Add your bio, photo, and KYC documents to get verified.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">📖</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Upload your first book</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Submit your manuscript and cover for review.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🌍</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td>
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Reach your audience</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Once approved, your book goes live to thousands of readers.</p>
@@ -56,21 +56,21 @@
         @elseif(in_array($accountType, ['manager', 'superadmin']))
           <table width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🔐</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Log in to the admin dashboard</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Use your email and password to sign in at admin.sbareads.com.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">📚</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Review and manage books</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Approve author submissions, manage inventory, and track orders.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">👥</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td>
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Manage users</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">View and manage authors, readers, and their accounts.</p>
@@ -80,21 +80,21 @@
         @else
           <table width="100%" cellpadding="0" cellspacing="0" border="0">
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🔍</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Browse the library</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Discover books across genres — fiction, faith, business, and more.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🔖</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td style="padding-bottom:12px;">
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Bookmark your favourites</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Save books you love and return to them anytime.</p>
               </td>
             </tr>
             <tr>
-              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:16px;">🛒</span></td>
+              <td width="28" style="vertical-align:top;padding-top:1px;"><span style="font-size:14px;color:#D8B99C;font-weight:700;">—</span></td>
               <td>
                 <p style="margin:0;font-size:14px;font-weight:600;color:#160c08;">Order physical copies</p>
                 <p style="margin:2px 0 0;font-size:13px;color:#6b5448;">Order books to your door or pick up from our Lagos store.</p>

@@ -15,7 +15,7 @@
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td width="36" style="vertical-align:top;padding-top:2px;">
-              <span style="font-size:22px;">✅</span>
+              <span style="font-size:16px;font-weight:700;color:#1e7e34;">+</span>
             </td>
             <td>
               <p style="margin:0;font-size:14px;font-weight:600;color:#1e7e34;">Password updated</p>
@@ -32,7 +32,7 @@
     <tr>
       <td style="background:#fff5f5;border-left:3px solid #e74c3c;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#7a3030;line-height:1.6;">
-          ⚠️ If you did not make this change, contact our support team immediately — your account may be compromised.
+          If you did not make this change, contact our support team immediately — your account may be compromised.
         </p>
       </td>
     </tr>

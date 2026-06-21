@@ -34,7 +34,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>📘 Book Deleted</h1>
+        <h1>Book Deleted</h1>
         <p>Your book <strong>{{ $book->title }}</strong> has been deleted. Reason: {{ $reason }}</p>
 
         <div class="footer">

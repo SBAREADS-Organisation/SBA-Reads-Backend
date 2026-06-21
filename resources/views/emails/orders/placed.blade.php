@@ -59,7 +59,7 @@
     <tr>
       <td style="background:#f5f0eb;padding:14px 20px;border-bottom:1px solid #e8ddd6;">
         <p style="margin:0;font-size:13px;font-weight:700;color:#160c08;text-transform:uppercase;letter-spacing:1px;">
-          {{ $order->delivery_type === 'pickup' ? '🏪 Store Pickup' : '🚚 Delivery Details' }}
+          {{ $order->delivery_type === 'pickup' ? 'Store Pickup' : 'Delivery Details' }}
         </p>
       </td>
     </tr>
@@ -92,7 +92,7 @@
     <tr>
       <td style="background:#f5f0eb;border-left:3px solid #D8B99C;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#6b5448;line-height:1.6;">
-          📦 You'll receive another email when your order status updates. Use your tracking number to follow up with our team.
+          You'll receive another email when your order status updates. Use your tracking number to follow up with our team.
         </p>
       </td>
     </tr>

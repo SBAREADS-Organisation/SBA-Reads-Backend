@@ -28,7 +28,7 @@
     <tr>
       <td style="background:#fff8f0;border-left:3px solid #D8B99C;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#7a5c46;line-height:1.6;">
-          🔒 If you did not request this, please ignore this email. Your account remains secure.
+          If you did not request this, please ignore this email. Your account remains secure.
         </p>
       </td>
     </tr>

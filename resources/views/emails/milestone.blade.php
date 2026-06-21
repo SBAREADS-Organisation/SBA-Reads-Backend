@@ -1,5 +1,5 @@
 @component('mail::message')
-# 🎯 {{ $milestone }}% Completed!
+# {{ $milestone }}% Completed!
 
 Hey {{ $notifiable->name }},<br>
 
@@ -9,7 +9,7 @@ You've just reached **{{ $milestone }}%** of your reading journey in "**{{ $book
 Continue Reading
 @endcomponent
 
-Happy reading! 📚
+Happy reading!
 
 Thanks,
 {{ config('app.name') }}

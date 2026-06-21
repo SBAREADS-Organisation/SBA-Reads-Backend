@@ -31,17 +31,17 @@
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
             <td style="padding:4px 0;">
-              <span style="font-size:13px;color:#4a3728;">✅ &nbsp;Enter the code to verify your email</span>
+              <span style="font-size:13px;color:#4a3728;">— &nbsp;Enter the code to verify your email</span>
             </td>
           </tr>
           <tr>
             <td style="padding:4px 0;">
-              <span style="font-size:13px;color:#4a3728;">📝 &nbsp;Complete your author profile</span>
+              <span style="font-size:13px;color:#4a3728;">— &nbsp;Complete your author profile</span>
             </td>
           </tr>
           <tr>
             <td style="padding:4px 0;">
-              <span style="font-size:13px;color:#4a3728;">📚 &nbsp;Start uploading your books</span>
+              <span style="font-size:13px;color:#4a3728;">— &nbsp;Start uploading your books</span>
             </td>
           </tr>
         </table>
@@ -54,7 +54,7 @@
     <tr>
       <td style="background:#fff8f0;border-left:3px solid #D8B99C;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#7a5c46;line-height:1.6;">
-          🔒 If you did not create an author account on SBA Reads, you can safely ignore this email.
+          If you did not create an author account on SBA Reads, you can safely ignore this email.
         </p>
       </td>
     </tr>

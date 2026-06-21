@@ -41,15 +41,15 @@
         <p style="margin:0 0 14px;font-size:13px;font-weight:700;color:#160c08;text-transform:uppercase;letter-spacing:1px;">What happens next</p>
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
-            <td width="28" style="vertical-align:top;"><span style="font-size:15px;">🔍</span></td>
+            <td width="28" style="vertical-align:top;font-size:14px;color:#D8B99C;font-weight:700;">—</td>
             <td style="padding-bottom:10px;font-size:13px;color:#4a3728;line-height:1.6;">Our team reviews your book for quality and content guidelines.</td>
           </tr>
           <tr>
-            <td width="28" style="vertical-align:top;"><span style="font-size:15px;">📧</span></td>
+            <td width="28" style="vertical-align:top;font-size:14px;color:#D8B99C;font-weight:700;">—</td>
             <td style="padding-bottom:10px;font-size:13px;color:#4a3728;line-height:1.6;">You'll receive an email once a decision has been made.</td>
           </tr>
           <tr>
-            <td width="28" style="vertical-align:top;"><span style="font-size:15px;">🚀</span></td>
+            <td width="28" style="vertical-align:top;font-size:14px;color:#D8B99C;font-weight:700;">—</td>
             <td style="font-size:13px;color:#4a3728;line-height:1.6;">If approved, your book goes live immediately to thousands of readers.</td>
           </tr>
         </table>

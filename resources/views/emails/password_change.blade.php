@@ -21,7 +21,7 @@
     <tr>
       <td style="background:#fff5f5;border-left:3px solid #e74c3c;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#7a3030;line-height:1.6;">
-          ⚠️ If you did not make this change, please reset your password immediately and contact our support team.
+          If you did not make this change, please reset your password immediately and contact our support team.
         </p>
       </td>
     </tr>

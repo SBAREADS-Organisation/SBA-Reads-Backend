@@ -38,7 +38,7 @@
     <tr>
       <td style="background:#f5f0eb;border-left:3px solid #D8B99C;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#6b5448;line-height:1.6;">
-          💡 Address the feedback above, update your submission, and resubmit. We look forward to publishing your work!
+          Address the feedback above, update your submission, and resubmit. We look forward to publishing your work!
         </p>
       </td>
     </tr>

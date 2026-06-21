@@ -37,7 +37,7 @@ class LoginNotification extends Mailable
             ->with([
                 'name'      => $name,
                 'provider'  => ucfirst($this->provider),
-                'time'      => now()->format('M d, Y \a\t h:i A'),
+                'time'      => now()->format('M d, Y \a\t h:i A') . ' (UTC)',
                 'ipAddress' => $this->ipAddress,
                 'location'  => $location,
             ]);
