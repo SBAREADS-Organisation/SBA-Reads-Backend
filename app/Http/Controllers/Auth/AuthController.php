@@ -252,7 +252,7 @@ class AuthController extends Controller
             ? $user->name
             : ($user->username ?? 'there');
 
-        Mail::send('emails.otp', ['name' => $displayName, 'otp' => $otp], function ($message) use ($user) {
+        Mail::send('emails.login_otp', ['name' => $displayName, 'otp' => $otp], function ($message) use ($user) {
             $message->to($user->email)->subject('Sign-in Verification Code — SBA Reads');
         });
     }

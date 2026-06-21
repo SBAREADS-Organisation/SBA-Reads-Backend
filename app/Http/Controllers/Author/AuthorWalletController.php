@@ -85,18 +85,19 @@ class AuthorWalletController extends Controller
         if ($payoutMethod === 'paystack') {
             $rate = $this->safeRate('USD', 'NGN');
 
-            // All credited earnings (NGN direct + USD converted)
+            // NGN earnings — directly withdrawable via Paystack (funds are in the platform's Paystack account)
             $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
                 ->where('direction', 'credit')->where('status', 'succeeded')
                 ->where('currency', 'NGN')->sum('amount');
 
+            // USD earnings — NOT yet withdrawable via Paystack (funds are in Stripe, pending admin processing)
             $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
                 ->where('direction', 'credit')->where('status', 'succeeded')
                 ->whereIn('currency', ['USD', 'usd'])->sum('amount');
 
-            $lifetimeTotal = $lifetimeNGN + ($lifetimeUSD * $rate);
+            $lifetimeUSDinNGN = round($lifetimeUSD * $rate, 2);
 
-            // Subtract amounts already manually withdrawn via Paystack transfer
+            // Already paid out via manual Paystack withdrawals
             $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
                 ->where('direction', 'debit')
                 ->whereIn('status', ['succeeded', 'pending'])
@@ -104,23 +105,27 @@ class AuthorWalletController extends Controller
                 ->where('purpose_type', 'paystack_payout')
                 ->sum('amount');
 
-            $available = max(0.0, $lifetimeTotal - $alreadyPaidOut);
+            // Only NGN is withdrawable — USD sits in Stripe until admin processes it
+            $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);
 
             $hasRecipient = ! empty($author->paystack_recipient_code);
-            $canWithdraw  = $available >= 100 && $hasRecipient; // min 100 NGN
+            $canWithdraw  = $available >= 100 && $hasRecipient;
 
             $withdrawNote = ! $hasRecipient
                 ? 'Add a Nigerian bank account to withdraw your earnings.'
-                : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null);
+                : ($available < 100 && $lifetimeUSDinNGN > 0
+                    ? 'Your international earnings (₦' . number_format($lifetimeUSDinNGN, 2) . ') are being processed and will be credited to your withdrawable balance soon.'
+                    : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null));
 
             return $this->success([
-                'payout_method'    => 'paystack',
-                'available'        => ['amount' => round($available, 2), 'currency' => 'NGN'],
-                'pending_iap'      => ['amount' => round($iapPending * $rate, 2), 'currency' => 'NGN'],
-                'lifetime_earned'  => ['amount' => round($lifetimeTotal, 2), 'currency' => 'NGN'],
-                'stripe_account_id'=> null,
-                'can_withdraw'     => $canWithdraw,
-                'withdraw_note'    => $withdrawNote,
+                'payout_method'        => 'paystack',
+                'available'            => ['amount' => round($available, 2), 'currency' => 'NGN'],
+                'pending_iap'          => ['amount' => round($iapPending * $rate, 2), 'currency' => 'NGN'],
+                'lifetime_earned'      => ['amount' => round($lifetimeNGN + $lifetimeUSDinNGN, 2), 'currency' => 'NGN'],
+                'pending_usd_in_ngn'   => $lifetimeUSDinNGN,
+                'stripe_account_id'    => null,
+                'can_withdraw'         => $canWithdraw,
+                'withdraw_note'        => $withdrawNote,
             ], 'Wallet balance retrieved.');
         }
 
@@ -141,13 +146,6 @@ class AuthorWalletController extends Controller
         ], 'Wallet balance retrieved.');
     }
 
-    /**
-     * Manually withdraw accumulated NGN earnings via Paystack Transfer.
-     *
-     * Works for both pre-revamp authors (who have unremitted credit history)
-     * and current Paystack authors. USD credits are converted to NGN at the
-     * live rate before computing available balance.
-     */
     public function paystackWithdraw(Request $request): JsonResponse
     {
         $author = $request->user();
@@ -161,18 +159,11 @@ class AuthorWalletController extends Controller
         ]);
 
         $amountNGN = (float) $validated['amount'];
-        $rate      = $this->safeRate('USD', 'NGN');
 
-        // Compute available balance (same logic as balance())
+        // Only NGN credits are withdrawable via Paystack (USD from Stripe is not in the Paystack account)
         $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
             ->where('direction', 'credit')->where('status', 'succeeded')
             ->where('currency', 'NGN')->sum('amount');
-
-        $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
-            ->where('direction', 'credit')->where('status', 'succeeded')
-            ->whereIn('currency', ['USD', 'usd'])->sum('amount');
-
-        $lifetimeTotal = $lifetimeNGN + ($lifetimeUSD * $rate);
 
         $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
             ->where('direction', 'debit')
@@ -181,9 +172,25 @@ class AuthorWalletController extends Controller
             ->where('purpose_type', 'paystack_payout')
             ->sum('amount');
 
-        $available = max(0.0, $lifetimeTotal - $alreadyPaidOut);
+        $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);
 
         if ($amountNGN > $available) {
+            // Check if the gap is due to USD earnings pending admin processing
+            $rate        = $this->safeRate('USD', 'NGN');
+            $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
+                ->where('direction', 'credit')->where('status', 'succeeded')
+                ->whereIn('currency', ['USD', 'usd'])->sum('amount');
+
+            if ($lifetimeUSD > 0 && $available < $amountNGN) {
+                $usdInNGN = number_format(round($lifetimeUSD * $rate, 2), 2);
+                return $this->error(
+                    "You have ₦{$usdInNGN} in international earnings that are being processed. " .
+                    'Your NGN withdrawable balance is ₦' . number_format($available, 2) . '. ' .
+                    'Contact support@sbareads.com if you need urgent access to your earnings.',
+                    422
+                );
+            }
+
             return $this->error(
                 'Amount exceeds available balance. Available: ₦' . number_format($available, 2),
                 422
@@ -222,7 +229,13 @@ class AuthorWalletController extends Controller
             ], 'Withdrawal initiated. Funds will arrive in your bank account within 1–3 business days.');
         } catch (\Throwable $e) {
             Log::error('Paystack withdrawal failed', ['user_id' => $author->id, 'error' => $e->getMessage()]);
-            return $this->error($e->getMessage(), 422);
+
+            $message = $e->getMessage();
+            if (stripos($message, 'balance') !== false && stripos($message, 'not enough') !== false) {
+                $message = 'Your withdrawal is being processed. If funds do not arrive within 24 hours, please contact support@sbareads.com.';
+            }
+
+            return $this->error($message, 422);
         }
     }
 
