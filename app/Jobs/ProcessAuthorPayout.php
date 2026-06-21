@@ -219,13 +219,11 @@ class ProcessAuthorPayout implements ShouldQueue
             try {
                 if ($payoutMethod === 'paystack') {
                     // ── Paystack Transfer ────────────────────────────────────────
-                    $transferData = $paystackSvc->initiateTransfer([
-                        'source'    => 'balance',
-                        'amount'    => $payoutAmountInTarget,
-                        'recipient' => $author->paystack_recipient_code,
-                        'reason'    => "SBAReads royalty — purchase #{$purchase->id}",
-                        'currency'  => 'NGN',
-                    ]);
+                    $transferData = $paystackSvc->initiateTransfer(
+                        $payoutAmountInTarget,
+                        $author->paystack_recipient_code,
+                        "SBAReads royalty — purchase #{$purchase->id}"
+                    );
 
                     $transaction->update([
                         'status'      => 'succeeded',

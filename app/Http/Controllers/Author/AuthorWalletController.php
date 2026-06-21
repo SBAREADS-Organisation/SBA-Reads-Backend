@@ -193,17 +193,11 @@ class AuthorWalletController extends Controller
         try {
             $amountKobo = (int) round($amountNGN * 100);
 
-            $transfer = $this->paystack->initiateTransfer([
-                'source'    => 'balance',
-                'amount'    => $amountKobo,
-                'recipient' => $author->paystack_recipient_code,
-                'reason'    => 'Author royalty withdrawal',
-                'currency'  => 'NGN',
-            ]);
-
-            if (! ($transfer['status'] ?? false)) {
-                throw new \RuntimeException($transfer['message'] ?? 'Paystack transfer failed. Please try again.');
-            }
+            $transfer = $this->paystack->initiateTransfer(
+                $amountKobo,
+                $author->paystack_recipient_code,
+                'Author royalty withdrawal'
+            );
 
             // Record the payout so future balance() calls subtract it
             Transaction::create([

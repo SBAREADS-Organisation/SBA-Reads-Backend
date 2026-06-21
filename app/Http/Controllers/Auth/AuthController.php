@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
@@ -71,8 +72,9 @@ class AuthController extends Controller
                 return $this->error('Your account is suspended. Contact support.', 403);
             }
 
-            // 2FA gate — only enforced for accounts that have it enabled
+            // 2FA gate
             if (! empty($user->mfa_secret)) {
+                // Layer 2A: Authenticator app (TOTP) — for users who have set it up
                 $totpCode     = $request->input('totp_code');
                 $recoveryCode = $request->input('recovery_code');
 
@@ -89,44 +91,180 @@ class AuthController extends Controller
                         return $this->error('Invalid recovery code. Please try again.', 401);
                     }
                 }
+            } else {
+                // Layer 2B: Email OTP — mandatory for all users without an authenticator app
+                $sessionToken = $this->generateLoginSession($user);
+                return response()->json([
+                    'email_otp_required' => true,
+                    'session_token'      => $sessionToken,
+                    'masked_email'       => $this->maskEmail($user->email),
+                ], 200);
             }
 
-            // Update Last Login Timestamp
-            $user->update([
-                'last_login_at' => Carbon::now(),
-            ]);
-
-            // Generate Authentication Token
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            // Send Login Notification Email
-            $this->sendLoginNotification($user, $request->ip()); // NOTE: Uncomment
-
-            $this->notifySlack(
-                '🔐 User Login Detected',
-                [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'ip_address' => $request->ip(),
-                    'timestamp' => now()->toDateTimeString(),
-                ],
-                'info'
-            );
-
-            return $this->success([
-                'user_id'      => $user->id,
-                'email'        => $user->email,
-                'role'         => $user->getRoleNames()->first(),
-                'token'        => $token,
-                'account_type' => $user->account_type,
-                'redirect_to'  => in_array($user->account_type, ['manager', 'superadmin']) ? 'admin' : 'app',
-            ], 'Login successful', 200);
+            // Reached only for TOTP-verified users — issue token
+            return $this->issueToken($user, $request->ip());
         } catch (\Exception $e) {
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         } catch (\Throwable $th) {
 
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         }
+    }
+
+    // ── Email OTP login endpoints ─────────────────────────────────────────────
+
+    public function verifyLoginOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'session_token' => 'required|string',
+            'otp'           => 'required|string|digits:6',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Invalid request.', 400, $validator->errors());
+        }
+
+        $sessionToken = $request->input('session_token');
+        $otpInput     = $request->input('otp');
+
+        $sessionData = Cache::get("login_session:{$sessionToken}");
+        if (! $sessionData) {
+            return $this->error('Your session has expired. Please log in again.', 401);
+        }
+
+        // Enforce attempt limit before comparing (prevents brute-force on 6 digits)
+        $attemptKey = "login_otp_attempts:{$sessionToken}";
+        $attempts   = (int) Cache::get($attemptKey, 0);
+
+        if ($attempts >= 5) {
+            Cache::forget("login_session:{$sessionToken}");
+            Cache::forget("login_otp:{$sessionToken}");
+            Cache::forget($attemptKey);
+            return $this->error('Too many failed attempts. Please log in again.', 429);
+        }
+
+        $storedOtp = Cache::get("login_otp:{$sessionToken}");
+
+        if (! $storedOtp || ! hash_equals($storedOtp, $otpInput)) {
+            $newAttempts = $attempts + 1;
+            Cache::put($attemptKey, $newAttempts, now()->addMinutes(10));
+            $remaining = max(0, 4 - $attempts);
+            return $this->error(
+                "Incorrect code. {$remaining} " . ($remaining === 1 ? 'attempt' : 'attempts') . ' remaining.',
+                401
+            );
+        }
+
+        // OTP verified — clean up all session cache keys
+        Cache::forget("login_session:{$sessionToken}");
+        Cache::forget("login_otp:{$sessionToken}");
+        Cache::forget($attemptKey);
+
+        $user = User::find($sessionData['user_id']);
+        if (! $user) {
+            return $this->error('Account not found.', 404);
+        }
+
+        return $this->issueToken($user, $request->ip());
+    }
+
+    public function resendLoginOtp(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'session_token' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->error('Invalid request.', 400);
+        }
+
+        $sessionToken = $request->input('session_token');
+        $sessionData  = Cache::get("login_session:{$sessionToken}");
+
+        if (! $sessionData) {
+            return $this->error('Your session has expired. Please log in again.', 401);
+        }
+
+        $user = User::find($sessionData['user_id']);
+        if (! $user) {
+            return $this->error('Account not found.', 404);
+        }
+
+        // Generate fresh OTP, reset attempt counter, and extend session TTL
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        Cache::put("login_session:{$sessionToken}", $sessionData, now()->addMinutes(10));
+        Cache::put("login_otp:{$sessionToken}", $otp, now()->addMinutes(10));
+        Cache::forget("login_otp_attempts:{$sessionToken}");
+
+        $this->sendLoginOtpEmail($user, $otp);
+
+        return $this->success(null, 'A new verification code has been sent to your email.');
+    }
+
+    // ── Shared token issuance ─────────────────────────────────────────────────
+
+    private function issueToken(User $user, string $ip)
+    {
+        $user->update(['last_login_at' => Carbon::now()]);
+        $token = $user->createToken('auth_token')->plainTextToken;
+
+        $this->sendLoginNotification($user, $ip);
+
+        $this->notifySlack(
+            'User Login Detected',
+            [
+                'user_id'    => $user->id,
+                'email'      => $user->email,
+                'ip_address' => $ip,
+                'timestamp'  => now()->toDateTimeString(),
+            ],
+            'info'
+        );
+
+        return $this->success([
+            'user_id'      => $user->id,
+            'email'        => $user->email,
+            'role'         => $user->getRoleNames()->first(),
+            'token'        => $token,
+            'account_type' => $user->account_type,
+            'redirect_to'  => in_array($user->account_type, ['manager', 'superadmin']) ? 'admin' : 'app',
+        ], 'Login successful', 200);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private function generateLoginSession(User $user): string
+    {
+        $sessionToken = (string) Str::uuid();
+        $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+        Cache::put("login_session:{$sessionToken}", ['user_id' => $user->id], now()->addMinutes(10));
+        Cache::put("login_otp:{$sessionToken}", $otp, now()->addMinutes(10));
+
+        $this->sendLoginOtpEmail($user, $otp);
+
+        return $sessionToken;
+    }
+
+    private function sendLoginOtpEmail(User $user, string $otp): void
+    {
+        $displayName = ($user->name && strtoupper(trim($user->name)) !== 'NO NAME')
+            ? $user->name
+            : ($user->username ?? 'there');
+
+        Mail::send('emails.otp', ['name' => $displayName, 'otp' => $otp], function ($message) use ($user) {
+            $message->to($user->email)->subject('Sign-in Verification Code — SBA Reads');
+        });
+    }
+
+    private function maskEmail(string $email): string
+    {
+        [$local, $domain] = explode('@', $email, 2);
+        $len    = strlen($local);
+        $masked = $len <= 2
+            ? str_repeat('*', $len)
+            : $local[0] . str_repeat('*', max(1, $len - 2)) . $local[$len - 1];
+        return $masked . '@' . $domain;
     }
 
     private function sendLoginNotification($user, $ipAddress)

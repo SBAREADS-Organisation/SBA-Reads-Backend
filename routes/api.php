@@ -42,6 +42,8 @@ use App\Services\Paystack\CurrencyConversionService;
 // Authentication Routes
 Route::prefix('auth')->group(function () {
     Route::post('login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login');
+    Route::post('login/verify-otp', [AuthController::class, 'verifyLoginOtp'])->middleware('throttle:10,5')->name('login.verify-otp');
+    Route::post('login/resend-otp', [AuthController::class, 'resendLoginOtp'])->middleware('throttle:3,5')->name('login.resend-otp');
     Route::post('forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:3,5')->name('forgot-password');
     Route::post('reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,5');
     Route::post('verify-reset-password-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:5,5');
