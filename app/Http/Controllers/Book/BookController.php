@@ -921,10 +921,10 @@ class BookController extends Controller
                     throw new \Exception('Failed to upload cover image: ' . ($errorData['error'] ?? 'Unknown error'));
                 }
 
-                $validated['cover_image'] = json_encode([
+                $validated['cover_image'] = [
                     'public_url' => (string) $upload['url'],
                     'public_id' => $upload['public_id'],
-                ]);
+                ];
 
                 // Attach media to book
                 \App\Models\MediaUpload::where('public_id', $upload['public_id'])->update([
