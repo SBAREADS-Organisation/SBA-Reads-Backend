@@ -84,11 +84,15 @@ class PaystackPaymentController extends Controller
                     'meta_data' => $metaData, // Store metadata
                 ]);
 
+                // Build a reference we can store before calling Paystack so that
+                // handleCallback() and the webhook can look it up by exact match.
+                $paystackReference = 'paystack_' . $transaction->id . '_' . uniqid();
+
                 // Initialize Paystack payment
                 $paystackResponse = $this->paystackService->initializePayment([
                     'amount' => $paystackAmount,
                     'currency' => $paystackCurrency,
-                    'reference' => 'paystack_' . $transaction->id . '_' . uniqid(),
+                    'reference' => $paystackReference,
                     'purpose' => $request->purpose,
                     'purpose_id' => $request->purpose_id,
                 ], $user);
@@ -97,12 +101,16 @@ class PaystackPaymentController extends Controller
                     throw new \Exception($paystackResponse['message'] ?? 'Payment initialization failed (in initializePayment try)');
                 }
 
-                // Update transaction with Paystack response data
+                // Store the reference so handleCallback() and the Paystack webhook
+                // can find this transaction. Without this the reference column stays
+                // null, the book is never added to book_user, and the library stays
+                // empty even after a successful payment.
                 $transaction->update([
+                    'reference' => $paystackResponse['data']['reference'] ?? $paystackReference,
                     'meta_data' => array_merge(
                         (array)$metaData,
                         ['paystack_response' => $paystackResponse]
-                    ), // Store as array, not JSON string
+                    ),
                 ]);
 
                 return response()->json([
