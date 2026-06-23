@@ -1937,6 +1937,9 @@ class BookController extends Controller
                     'categories:id,name',
                     'analytics:id,book_id,views,downloads,likes',
                     'readingProgress' => fn($q) => $q->where('user_id', $user->id),
+                    'reviews.user:id,name,email,profile_picture',
+                    'bookmarkedBy:id',
+                    'purchasers:id',
                 ]);
 
             $books = $query->paginate($perPage);
