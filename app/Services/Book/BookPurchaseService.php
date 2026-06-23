@@ -30,7 +30,12 @@ class BookPurchaseService
                 return true;
             });
         } catch (\Exception $e) {
-            return false;
+            Log::error('addBooksToUserLibrary failed — book_user row NOT inserted', [
+                'user_id'  => $user->id,
+                'book_ids' => $bookIds,
+                'error'    => $e->getMessage(),
+            ]);
+            throw $e;
         }
     }
 
