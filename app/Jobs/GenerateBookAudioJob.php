@@ -54,7 +54,16 @@ class GenerateBookAudioJob implements ShouldQueue
             }
 
             $tempPdfPath = tempnam(sys_get_temp_dir(), 'sbareads_pdf_').'.pdf';
-            file_put_contents($tempPdfPath, Http::timeout(120)->get($pdfUrl)->body());
+            $pdfContent  = Http::timeout(120)->get($pdfUrl)->body();
+
+            if (! str_starts_with($pdfContent, '%PDF-')) {
+                throw new \RuntimeException(
+                    "The uploaded file for this book is not a valid PDF (missing PDF header). ".
+                    "Please re-upload the book file and try again."
+                );
+            }
+
+            file_put_contents($tempPdfPath, $pdfContent);
 
             // Step 2: Extract text — try smalot/pdfparser per-page first (gives us exact
             // page numbers for chapter mapping), fall back to document-level getText() if
