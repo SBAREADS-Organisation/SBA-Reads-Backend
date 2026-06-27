@@ -91,7 +91,7 @@ class AuthController extends Controller
                         return $this->error('Invalid recovery code. Please try again.', 401);
                     }
                 }
-            } else {
+            } elseif ($user->default_login !== 'password_only') {
                 // Layer 2B: Email OTP — mandatory for all users without an authenticator app
                 $sessionToken = $this->generateLoginSession($user);
                 return response()->json([
