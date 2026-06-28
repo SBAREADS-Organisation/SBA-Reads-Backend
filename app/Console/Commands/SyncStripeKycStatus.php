@@ -2,9 +2,12 @@
 
 namespace App\Console\Commands;
 
+use App\Mail\KYC\KycRejectedMail;
+use App\Mail\KYC\KycVerifiedMail;
 use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Stripe\Account;
 use Stripe\Stripe;
 
@@ -27,9 +30,10 @@ class SyncStripeKycStatus extends Command
             return 0;
         }
 
-        $dryRun  = $this->option('dry-run');
-        $updated = 0;
-        $errors  = 0;
+        $dryRun   = $this->option('dry-run');
+        $updated  = 0;
+        $errors   = 0;
+        $emailed  = 0;
 
         $this->info("Found {$users->count()} unverified Stripe author(s). " . ($dryRun ? '[DRY RUN]' : ''));
         $this->newLine();
@@ -65,14 +69,34 @@ class SyncStripeKycStatus extends Command
                         $payload['name']       = trim("{$individual->first_name} {$individual->last_name}");
                     }
 
+                    $oldStatus = $user->kyc_status;
                     $user->update($payload);
+                    $user->refresh();
                     $updated++;
 
                     Log::info('kyc:sync-stripe updated user', [
                         'user_id'    => $user->id,
-                        'old_status' => $user->getOriginal('kyc_status'),
+                        'old_status' => $oldStatus,
                         'new_status' => $newStatus,
                     ]);
+
+                    // Send email notification
+                    try {
+                        if ($newStatus === 'verified') {
+                            Mail::to($user->email)->queue(new KycVerifiedMail($user));
+                            $this->line("    <info>→ Verified email queued</info>");
+                        } elseif ($newStatus === 'rejected') {
+                            Mail::to($user->email)->queue(new KycRejectedMail($user));
+                            $this->line("    <comment>→ Rejected email queued</comment>");
+                        }
+                        $emailed++;
+                    } catch (\Throwable $mailErr) {
+                        $this->line("    <error>→ Email failed: {$mailErr->getMessage()}</error>");
+                        Log::warning('kyc:sync-stripe email failed', [
+                            'user_id' => $user->id,
+                            'error'   => $mailErr->getMessage(),
+                        ]);
+                    }
                 } elseif ($statusChanged) {
                     $updated++;
                 }
@@ -88,7 +112,7 @@ class SyncStripeKycStatus extends Command
 
         $this->newLine();
         $label = $dryRun ? 'Would update' : 'Updated';
-        $this->info("{$label}: {$updated} | Errors: {$errors}");
+        $this->info("{$label}: {$updated} | Emails queued: {$emailed} | Errors: {$errors}");
 
         return $errors > 0 ? 1 : 0;
     }
