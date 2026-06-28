@@ -345,6 +345,11 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
     // Admin Dashboard Route
     Route::get('dashboard', DashboardController::class);
 
+    // Admin Announcements
+    Route::prefix('announcements')->group(function () {
+        Route::post('email-blast', [\App\Http\Controllers\Admin\AnnouncementController::class, 'emailBlast'])->name('admin.announcements.email-blast');
+    });
+
     // AI Auto-Review
     Route::prefix('ai-review')->group(function () {
         Route::get('settings',                  [\App\Http\Controllers\Admin\AIReviewController::class, 'getSettings']);
