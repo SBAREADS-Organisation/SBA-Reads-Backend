@@ -161,19 +161,22 @@ class StripeConnectService
                     'status' => 'pending',
                 ]);
 
-                $user->kycInfo()->create([
-                    'first_name' => $payload->first_name,
-                    'last_name' => $payload->last_name,
-                    'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
-                    'address_line1' => $payload->address->line1,
-                    'address_line2' => $payload->address->line2 ?? null,
-                    'city' => $payload->address->city,
-                    'state' => $payload->address->state,
-                    'postal_code' => $payload->address->postal_code,
-                    'country' => $payload->country,
-                    'phone' => $payload->phone,
-                    'gender' => $payload->gender,
-                ]);
+                $user->kycInfo()->updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'first_name'    => $payload->first_name,
+                        'last_name'     => $payload->last_name,
+                        'dob'           => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
+                        'address_line1' => $payload->address->line1,
+                        'address_line2' => $payload->address->line2 ?? null,
+                        'city'          => $payload->address->city,
+                        'state'         => $payload->address->state,
+                        'postal_code'   => $payload->address->postal_code,
+                        'country'       => $payload->country,
+                        'phone'         => $payload->phone,
+                        'gender'        => $payload->gender,
+                    ]
+                );
 
                 return $account;
             });
@@ -238,19 +241,19 @@ class StripeConnectService
                 ]);
 
                 $user->kycInfo()->updateOrCreate(
-                    [],
+                    ['user_id' => $user->id],
                     [
-                        'first_name' => $payload->first_name,
-                        'last_name' => $payload->last_name,
-                        'dob' => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
+                        'first_name'    => $payload->first_name,
+                        'last_name'     => $payload->last_name,
+                        'dob'           => Carbon::create($payload->dob->year, $payload->dob->month, $payload->dob->day),
                         'address_line1' => $payload->address->line1,
                         'address_line2' => $payload->address->line2 ?? null,
-                        'city' => $payload->address->city,
-                        'state' => $payload->address->state,
-                        'postal_code' => $payload->address->postal_code,
-                        'country' => $payload->country,
-                        'phone' => $payload->phone,
-                        'gender' => $payload->gender,
+                        'city'          => $payload->address->city,
+                        'state'         => $payload->address->state,
+                        'postal_code'   => $payload->address->postal_code,
+                        'country'       => $payload->country,
+                        'phone'         => $payload->phone,
+                        'gender'        => $payload->gender,
                     ]
                 );
 
@@ -261,62 +264,46 @@ class StripeConnectService
         }
     }
 
-    public function uploadIdentityDocument($user, $filePath)
+    public function uploadIdentityDocument($user, string $absolutePath)
     {
         try {
-            $file = File::create([
-                'file' => fopen($filePath, 'r'),
+            $fileHandle = fopen($absolutePath, 'r');
+            if (! $fileHandle) {
+                return $this->error('Could not read the uploaded file. Please try again.', 500);
+            }
+
+            $stripeFile = File::create([
+                'file'    => $fileHandle,
                 'purpose' => 'identity_document',
             ]);
-
-            if ($file instanceof Exception\InvalidRequestException) {
-                $error = $file->getMessage();
-
-                return response()->json([
-                    'message' => 'Error creating Stripe file',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error,
-                ], 400);
-                // return response()->json(['error' => $error], 400);
-            }
 
             $account = Account::update(
                 $user->kyc_account_id,
                 [
                     'individual' => [
                         'verification' => [
-                            'document' => [
-                                'front' => $file->id,
-                            ],
+                            'document' => ['front' => $stripeFile->id],
                         ],
                     ],
                 ]
             );
 
-            // check is the response is type of Exception froom stripe
-            if ($account instanceof Exception\InvalidRequestException) {
-                $error = $account->getMessage();
-
-                return response()->json([
-                    'message' => 'Error updating Stripe account',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error,
-                ], 400);
-                // return response()->json(['error' => $error], 400);
-            }
-
-            // delete the file after upload
-            Storage::delete($filePath);
-
-            // Update kyc status to in-review
-            $user->kyc_status = 'in-review';
-            $user->save();
+            $user->update(['kyc_status' => 'in-review']);
 
             return $account;
+        } catch (\Stripe\Exception\ApiErrorException $e) {
+            Log::error('Stripe document upload failed', [
+                'user_id'    => $user->id,
+                'account_id' => $user->kyc_account_id,
+                'error'      => $e->getMessage(),
+            ]);
+            return $this->error('Stripe rejected the document. Please upload a clear, valid ID photo.', 400, $e->getMessage());
         } catch (\Throwable $th) {
-            return $this->error('Error uploading document to Stripe', 500, $th->getMessage() . ' ' . $user->kyc_account_id, $th);
+            Log::error('uploadIdentityDocument failed', [
+                'user_id' => $user->id,
+                'error'   => $th->getMessage(),
+            ]);
+            return $this->error('Error uploading document to Stripe. Please try again.', 500, $th->getMessage(), $th);
         }
     }
 

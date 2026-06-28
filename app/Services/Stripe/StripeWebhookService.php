@@ -247,26 +247,51 @@ class StripeWebhookService
         try {
             $user = User::where('kyc_account_id', $account->id)->first();
 
-            if ($user) {
-                if ($account->individual->verification->status === 'unverified' && $account->individual->verification->document->front === null) {
-                    $user->update(['kyc_status' => 'document-required']);
-                } elseif ($account->individual->verification->status === 'unverified' && $account->individual->verification->document->front !== null) {
-                    $user->update(['kyc_status' => 'rejected']);
-                } elseif ($account->individual->verification->status === 'pending' && $account->individual->verification->document->front !== null) {
-                    $user->update(['kyc_status' => 'in-review']);
-                } elseif ($account->individual->verification->status === 'pending' && $account->individual->verification->document->front === null) {
-                    $user->update(['kyc_status' => 'document-required']);
-                } elseif ($account->individual->verification->status === 'verified') {
-                    $user->update([
-                        'kyc_status' => 'verified',
-                        'first_name' => $account->individual->first_name,
-                        'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
-                    ]);
-                }
-            } else {
+            if (! $user) {
+                return;
+            }
+
+            $individual      = $account->individual ?? null;
+            $verification    = $individual?->verification ?? null;
+            $status          = $verification?->status ?? null;
+            $docFront        = $verification?->document?->front ?? null;
+            $disabledReason  = $account->requirements?->disabled_reason ?? null;
+
+            if (! $status) {
+                return;
+            }
+
+            // Stripe has disabled the account — mark as rejected regardless of verification status
+            if ($disabledReason && $status !== 'verified') {
+                $user->update(['kyc_status' => 'rejected']);
+                Log::info('Stripe account disabled', [
+                    'user_id' => $user->id,
+                    'reason'  => $disabledReason,
+                ]);
+                return;
+            }
+
+            if ($status === 'unverified' && $docFront === null) {
+                $user->update(['kyc_status' => 'document-required']);
+            } elseif ($status === 'unverified' && $docFront !== null) {
+                $user->update(['kyc_status' => 'rejected']);
+            } elseif ($status === 'pending' && $docFront !== null) {
+                $user->update(['kyc_status' => 'in-review']);
+            } elseif ($status === 'pending' && $docFront === null) {
+                $user->update(['kyc_status' => 'document-required']);
+            } elseif ($status === 'verified') {
+                $user->update([
+                    'kyc_status' => 'verified',
+                    'first_name' => $individual->first_name,
+                    'last_name'  => $individual->last_name,
+                    'name'       => trim("{$individual->first_name} {$individual->last_name}"),
+                ]);
             }
         } catch (\Exception $e) {
+            Log::error('handleAccountUpdated failed', [
+                'account_id' => $account->id ?? null,
+                'error'      => $e->getMessage(),
+            ]);
         }
     }
 

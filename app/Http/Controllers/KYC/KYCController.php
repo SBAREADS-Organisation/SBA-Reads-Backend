@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Jobs\ProcessKYCVerificationJob;
 use App\Models\User;
 use App\Models\UserKycInfo;
-use App\Services\Slack\SlackWebhookService;
 use App\Services\Stripe\StripeConnectService;
 use Carbon\Carbon;
 use Cloudinary\Api\Upload\UploadApi;
@@ -18,8 +17,6 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Stripe\Account as StripeAccount;
-use Stripe\Webhook;
-
 // Countries where Stripe Connect identity verification works reliably.
 // Authors from other countries go through manual admin KYC review.
 const STRIPE_KYC_COUNTRIES = ['US', 'GB', 'CA', 'AU', 'FR', 'DE', 'IT', 'ES'];
@@ -207,54 +204,64 @@ class KYCController extends Controller
 
     public function uploadDocument(Request $request)
     {
+        $user     = Auth::user();
+        $filePath = null;
+
         try {
+            if ($user->kyc_provider !== 'stripe') {
+                return $this->error('Document upload via this endpoint is only for Stripe-verified accounts.', 400);
+            }
+
+            if (! in_array($user->kyc_status, ['document-required', 'rejected'])) {
+                return $this->error(
+                    'Document upload is not required at this time. Your current status is: ' . $user->kyc_status,
+                    400
+                );
+            }
+
+            if (empty($user->kyc_account_id)) {
+                return $this->error('Stripe account not found. Please complete your KYC details first.', 400);
+            }
+
             $validator = Validator::make($request->all(), [
                 'document' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
             ]);
 
-            // Only allow if status is document-required
-            $user = Auth::user();
-
             if ($validator->fails()) {
+                return $this->error('Validation failed', 400, $validator->errors());
+            }
+
+            $file         = $request->file('document');
+            $filePath     = $file->store('stripe_uploads');
+            $absolutePath = storage_path("app/private/{$filePath}");
+
+            $response = $this->stripe->uploadIdentityDocument($user, $absolutePath);
+
+            if ($response instanceof \Illuminate\Http\JsonResponse) {
+                $responseData = $response->getData(true);
                 return $this->error(
-                    'Validation failed',
-                    400,
-                    $validator->errors()
+                    $responseData['message'] ?? 'Error uploading document',
+                    $response->getStatusCode(),
+                    config('app.debug') ? $responseData : null
                 );
             }
 
-            $user = Auth::user();
-            $file = $request->file('document');
-            $filePath = $file->store('stripe_uploads');
-
-            $absolutePath = storage_path("app/private/{$filePath}");
-
-            // Hanlde file upload error
-            $response = $this->stripe->uploadIdentityDocument($user, $absolutePath);
-            if ($response instanceof \Illuminate\Http\JsonResponse) {
-                $responseData = $response->getData(true);
-
-                if (isset($responseData['error'])) {
-                    return $this->error(
-                        $responseData['message'] ?? 'Error uploading document',
-                        400,
-                        config('app.debug') ? $responseData : null
-                    );
-                }
-            }
-
             return $this->success(
-                $response,
-                'Document uploaded successfully, verification pending.',
+                null,
+                'Document uploaded successfully. Your identity is now under review.',
                 200
             );
         } catch (\Throwable $th) {
-            return $this->error(
-                'Error uploading document',
-                500,
-                $th->getMessage(),
-                $th
-            );
+            Log::error('KYC Stripe document upload failed', [
+                'user_id' => $user->id,
+                'error'   => $th->getMessage(),
+            ]);
+            return $this->error('Error uploading document. Please try again.', 500, $th->getMessage(), $th);
+        } finally {
+            // Always clean up the temp file regardless of success or failure
+            if ($filePath) {
+                \Illuminate\Support\Facades\Storage::delete($filePath);
+            }
         }
     }
 
@@ -357,88 +364,4 @@ class KYCController extends Controller
         );
     }
 
-    public function handle(Request $request)
-    {
-        $payload = $request->getContent();
-        // $sigHeader = $request->header('Stripe-Signature');
-        $sigHeader = $request->server('HTTP_STRIPE_SIGNATURE', '') ?? '';
-        $secret = trim(config('services.stripe.webhook_secret'));
-
-        SlackWebhookService::send(
-            '📦 New Webhook Event',
-            [
-                'payload' => $payload,
-                'header' => $sigHeader,
-                'secret' => $secret,
-            ],
-            'success'
-        );
-
-        try {
-            $event = Webhook::constructEvent($payload, $sigHeader, $secret);
-        } catch (\UnexpectedValueException $e) {
-            return $this->error(
-                'Invalid payload',
-                400,
-                null
-            );
-            // return response('Invalid payload', 400);
-        } catch (\Stripe\Exception\SignatureVerificationException $e) {
-            return $this->error(
-                'Invalid payload',
-                400,
-                null
-            );
-        }
-
-        if ($event->type === 'account.updated') {
-            $account = $event->data->object;
-
-            $user = User::where('kyc_account_id', $account->id)->first();
-
-            if ($user) {
-                if ($account->individual->verification->status === 'unverified' && $account->individual->verification->document->front === null) {
-                    $user->update(['kyc_status' => 'document-required']);
-                } elseif ($account->individual->verification->status === 'unverified' && $account->individual->verification->document->front !== null) {
-                    $user->update(['kyc_status' => 'rejected']);
-                } elseif ($account->individual->verification->status === 'pending' && $account->individual->verification->document->front !== null) {
-                    $user->update(['kyc_status' => 'in-review']);
-                } elseif ($account->individual->verification->status === 'pending' && $account->individual->verification->document->front === null) {
-                    $user->update(['kyc_status' => 'document-required']);
-                } elseif ($account->individual->verification->status === 'verified') {
-                    // update users information and professional_profiles
-                    $user->update([
-                        'kyc_status' => 'verified',
-                        'first_name' => $account->individual->first_name,
-                        'last_name' => $account->individual->last_name,
-                        'name' => $account->individual->first_name . ' ' . $account->individual->last_name,
-                        // 'dob' => $account->individual->dob,
-                        // 'address' => $account->individual->address,
-                    ]);
-                    // $user->professional_profile()->update([
-                    //     'company_name' => $account->individual->company_name,
-                    //     'job_title' => $account->individual->job_title,
-                    //     'bio' => $account->individual->bio,
-                    //     'website' => $account->individual->website,
-                    // ]);
-                    // $user->professional_profile()->updateOrCreate([
-                    //     'user_id' => $user->id,
-                    // ], [
-                    //     'company_name' => $account->individual->company_name,
-                    //     'job_title' => $account->individual->job_title,
-                    //     'bio' => $account->individual->bio,
-                    //     'website' => $account->individual->website,
-                    // ]);
-                    $user->update(['kyc_status' => 'verified']);
-                }
-            }
-        }
-
-        return $this->success(
-            null,
-            'Webhook handled successfully',
-            200
-        );
-        // return response()->json(['status' => 'ok'], 200);
-    }
 }

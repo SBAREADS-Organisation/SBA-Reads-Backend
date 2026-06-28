@@ -233,16 +233,28 @@ SYSTEM;
      */
     public function reviewAuthor(User $user): array
     {
-        $kyc  = $user->kyc_info ?? null;
-        $name = $kyc ? "{$kyc->first_name} {$kyc->last_name}" : ($user->name ?? 'Not provided');
+        $kyc = $user->kyc_info ?? null;
+
+        // Prefer first_name + last_name over the legacy 'name' field which defaults to "NO NAME"
+        $isPlaceholder = fn(?string $v) => ! $v || strtoupper(trim($v)) === 'NO NAME';
+
+        $accountName = ! $isPlaceholder($user->name)
+            ? $user->name
+            : (! $isPlaceholder($user->first_name)
+                ? trim("{$user->first_name} {$user->last_name}")
+                : 'Not provided');
+
+        $kycName = $kyc
+            ? trim("{$kyc->first_name} {$kyc->last_name}")
+            : ($accountName !== 'Not provided' ? $accountName : 'Not provided');
 
         $userPrompt = <<<PROMPT
 Review this author account application for the SBAReads platform:
 
-ACCOUNT NAME: {$user->name}
+ACCOUNT NAME: {$accountName}
 USERNAME: {$user->username}
 BIO: {$user->bio}
-KYC FULL NAME: {$name}
+KYC FULL NAME: {$kycName}
 KYC LOCATION: {$kyc?->city}, {$kyc?->state}, {$kyc?->country}
 ACCOUNT TYPE: {$user->account_type}
 EMAIL VERIFIED: {$user->email_verified_at}

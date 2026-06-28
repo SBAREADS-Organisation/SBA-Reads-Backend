@@ -1283,20 +1283,29 @@ class UserController extends Controller
                 'collect' => 'eventually_due',
             ]);
 
-            // Dispatch mail to the user with the account onboarding link
-            Mail::to($user->email)->send(new StripeOnboardingMail($user, $accountLink));;
+            // Send onboarding link by email — non-fatal if mail fails
+            try {
+                Mail::to($user->email)->send(new StripeOnboardingMail($user, $accountLink));
+            } catch (\Throwable $mailErr) {
+                Log::warning('Stripe onboarding email failed', [
+                    'user_id' => $user->id,
+                    'error'   => $mailErr->getMessage(),
+                ]);
+            }
 
-            // Return the URL to the mobile app
             return response()->json([
                 'status' => 'success',
-                'url' => $accountLink->url
+                'url'    => $accountLink->url,
             ]);
 
         } catch (\Stripe\Exception\ApiErrorException $e) {
-            // Handle Stripe API errors
+            Log::error('Stripe Account Link creation failed', [
+                'user_id' => $user->id,
+                'error'   => $e->getMessage(),
+            ]);
             return response()->json([
-                'status' => 'error',
-                'message' => $e->getMessage()
+                'status'  => 'error',
+                'message' => $e->getMessage(),
             ], 500);
         }
     }
