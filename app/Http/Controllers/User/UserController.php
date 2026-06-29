@@ -8,6 +8,7 @@ use App\Mail\Onboarding\AdminInviteMail;
 use App\Mail\Onboarding\StripeOnboardingMail;
 use App\Mail\Onboarding\WelcomeEmail;
 use App\Mail\Registration\AuthorVerificationToken;
+use App\Mail\Registration\ReaderVerificationToken;
 use App\Models\MediaUpload;
 use App\Models\User;
 use App\Services\Stripe\StripeConnectService;
@@ -143,75 +144,41 @@ class UserController extends Controller
                 );
             }
 
-            // For readers - create account immediately
+            // For readers - cache data and send OTP for email verification
             if ($accountType === 'reader') {
-                DB::beginTransaction();
-                $user = new User;
-                $user->fill([
-                    'email' => $request->email,
+                $cacheKey = "reader_register_{$email}";
+                $cached = Cache::get($cacheKey);
+
+                $existingUser = User::where('email', $email)->first();
+                if ($existingUser) {
+                    return $this->error('Email already exists.', 409, null);
+                }
+
+                if ($cached) {
+                    return $this->error('Action denied, you might have an active session.', 403, null);
+                }
+
+                $token = rand(1000, 9999);
+
+                Cache::put($cacheKey, json_encode([
+                    'email' => $email,
                     'password' => Hash::make($request->password),
+                    'account_type' => $accountType,
                     'default_login' => 'email',
-                    'account_type' => $request->account_type,
-                    'status' => 'active',
-                    'preferences' => [],
-                ]);
-                $user->save();
-
-                // Assign Role
-                // $defaultRole = $request->account_type === 'author' ? 'author' : 'reader';
-                $role = Role::where('name', 'user')->first();
-                if ($role) {
-                    $user->assignRole($role);
-                } else {
-                    // Delete user if already created when faced with error
-                    $user->delete();
-                    $user->refresh();
-
-                    // dd($user, $role);
-                    return $this->error(
-                        'User creation failed, please contact support.',
-                        400,
-                        null
-                    );
-                }
-
-                $customer = $this->stripe->createCustomer($user);
-
-                if ($customer instanceof JsonResponse) {
-                    $customerData = (array) $customer->getData();
-
-                    if (isset($customerData['error'])) {
-                        $user->delete();
-
-                        return $this->error(
-                            'Failed to create Stripe customer.',
-                            400,
-                            config('app.debug') ? $customerData['data'] : null
-                        );
-                    }
-                }
-                try {
-                    $welcomeName = ($user->name && strtolower($user->name) !== 'no name')
-                        ? $user->name
-                        : ucfirst(strtolower(explode('@', $user->email)[0]));
-                    Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
-                } catch (\Throwable $mailErr) {
-                    \Log::warning('Welcome email failed: ' . $mailErr->getMessage());
-                }
-
-                $user->refresh();
-
-                $token = $user->createToken('auth_token')->plainTextToken;
-
-                DB::commit();
-
-                return $this->success([
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                    'role' => $user->getRoleNames()->first(),
                     'token' => $token,
-                    'account_type' => $user->account_type,
-                ], 'User registered successfully', 201);
+                ]), now()->addMinutes(10));
+
+                try {
+                    Mail::to($email)->send(new ReaderVerificationToken($token));
+                } catch (\Throwable $mailErr) {
+                    \Log::warning('Reader verification email failed: ' . $mailErr->getMessage());
+                }
+
+                return $this->success(
+                    ['email' => $email, 'otp' => $token],
+                    'Verification token sent to your email. Please verify to continue.',
+                    202
+                );
             } else {
                 return $this->error(
                     'Invalid account type. Only reader and author are allowed.',
@@ -318,8 +285,16 @@ class UserController extends Controller
             );
         }
 
+        // Try author cache first, then reader
         $cacheKey = "author_register_{$request->email}";
         $cached = Cache::get($cacheKey);
+        $isReader = false;
+
+        if (! $cached) {
+            $cacheKey = "reader_register_{$request->email}";
+            $cached = Cache::get($cacheKey);
+            $isReader = true;
+        }
 
         if (! $cached) {
             return $this->error(
@@ -335,8 +310,12 @@ class UserController extends Controller
         // Update the token in the cache
         Cache::put($cacheKey, json_encode(array_merge($userData, ['token' => $token])), now()->addMinutes(10));
 
-        // Send email with new token
-        Mail::to($request->email)->send(new AuthorVerificationToken($token));
+        // Send reader or author email
+        if ($isReader) {
+            Mail::to($request->email)->send(new ReaderVerificationToken($token));
+        } else {
+            Mail::to($request->email)->send(new AuthorVerificationToken($token));
+        }
 
         return $this->success(
             ['email' => $request->email],
@@ -371,8 +350,16 @@ class UserController extends Controller
             );
         }
 
+        // Try author cache first, then reader
         $cacheKey = "author_register_{$request->email}";
         $cached = Cache::get($cacheKey);
+        $isReader = false;
+
+        if (! $cached) {
+            $cacheKey = "reader_register_{$request->email}";
+            $cached = Cache::get($cacheKey);
+            $isReader = true;
+        }
 
         if (! $cached) {
             return $this->error(
@@ -393,13 +380,16 @@ class UserController extends Controller
         }
 
         try {
+            DB::beginTransaction();
+
             $user = new User;
             $user->fill([
                 'email' => $userData['email'],
                 'password' => $userData['password'],
                 'default_login' => $userData['default_login'],
                 'account_type' => $userData['account_type'],
-                'status' => 'unverified',
+                'status' => $isReader ? 'active' : 'unverified',
+                'preferences' => $isReader ? [] : null,
             ]);
             $user->save();
 
@@ -408,21 +398,45 @@ class UserController extends Controller
                 $user->assignRole($role);
             }
 
-            $user->refresh();
+            // Create Stripe customer for readers (authors do this after KYC)
+            if ($isReader) {
+                $customer = $this->stripe->createCustomer($user);
+                if ($customer instanceof JsonResponse) {
+                    $customerData = (array) $customer->getData();
+                    if (isset($customerData['error'])) {
+                        DB::rollBack();
+                        $user->delete();
+                        return $this->error('Failed to create Stripe customer.', 400, config('app.debug') ? $customerData['data'] : null);
+                    }
+                }
+            }
 
             Cache::forget($cacheKey);
 
             $welcomeName = ($user->name && strtolower($user->name) !== 'no name')
                 ? $user->name
                 : ucfirst(strtolower(explode('@', $user->email)[0]));
-            Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
+            try {
+                Mail::to($user->email)->send(new WelcomeEmail($welcomeName, $user->account_type));
+            } catch (\Throwable $mailErr) {
+                \Log::warning('Welcome email failed: ' . $mailErr->getMessage());
+            }
 
-            // Queue AI review in background (runs with whatever data is available now;
-            // re-runs after KYC submission if admin triggers it)
-            \App\Jobs\ProcessAuthorAIReviewJob::dispatch($user->id)->onQueue('ai');
+            if (! $isReader) {
+                // Queue AI review in background for authors only
+                \App\Jobs\ProcessAuthorAIReviewJob::dispatch($user->id)->onQueue('ai');
+            }
+
+            $user->refresh();
 
             // Generate Authentication Token
             $token = $user->createToken('auth_token')->plainTextToken;
+
+            DB::commit();
+
+            $message = $isReader
+                ? 'Email verified. Welcome to SBA Reads!'
+                : 'Author account created successfully, kindly proceed to verification.';
 
             return $this->success([
                 'user_id' => $user->id,
@@ -430,12 +444,13 @@ class UserController extends Controller
                 'role' => $user->getRoleNames()->first(),
                 'token' => $token,
                 'account_type' => $user->account_type,
-            ], 'Author account created successfully, kindly proceed to verification.', 201);
+            ], $message, 201);
         } catch (\Exception $e) {
+            DB::rollBack();
             return $this->error(
-                'An error occurred while creating the author account.',
+                'An error occurred while creating the account.',
                 500,
-                config('app.debug') ? $e->getMessage() : 'Error creating author account.',
+                config('app.debug') ? $e->getMessage() : 'Error creating account.',
                 $e
             );
         }
