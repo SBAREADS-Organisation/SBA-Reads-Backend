@@ -200,6 +200,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     //get my purchased books
     Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
+    Route::get('books/recommended', [BookController::class, 'recommended']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show')->where('id', '[0-9]+');

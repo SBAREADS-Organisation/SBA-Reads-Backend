@@ -222,6 +222,54 @@ class BookController extends Controller
         ], 'Books retrieved successfully');
     }
 
+    public function recommended(Request $request)
+    {
+        $user = $request->user();
+        $preferences = is_array($user->preferences) ? $user->preferences : [];
+        $interests = $preferences['interests'] ?? [];
+
+        if (empty($interests)) {
+            return $this->success([
+                'data' => [],
+                'current_page' => 1,
+                'last_page' => 1,
+                'per_page' => 10,
+                'total' => 0,
+                'from' => null,
+                'to' => null,
+            ], 'No preferences set');
+        }
+
+        $query = Book::query()
+            ->where('visibility', 'public')
+            ->where('archived', false)
+            ->whereIn('status', ['pending', 'approved', 'published'])
+            ->where(function ($q) use ($interests) {
+                foreach ($interests as $interest) {
+                    $q->orWhereRaw("genres @> ?::jsonb", [json_encode([$interest])]);
+                }
+            })
+            ->orderBy('books.created_at', 'desc');
+
+        $books = $query->with([
+            'categories:id,name',
+            'authors:id,name',
+            'reviews:id,book_id,rating',
+        ])->paginate($request->get('items_per_page', 10));
+
+        $resourceCollection = BookResource::collection($books->getCollection());
+
+        return $this->success([
+            'data' => $resourceCollection->toArray(request()),
+            'current_page' => $books->currentPage(),
+            'last_page' => $books->lastPage(),
+            'per_page' => $books->perPage(),
+            'total' => $books->total(),
+            'from' => $books->firstItem(),
+            'to' => $books->lastItem(),
+        ], 'Recommended books retrieved successfully');
+    }
+
     private function applyClassification($query, $classification)
     {
         switch ($classification) {
