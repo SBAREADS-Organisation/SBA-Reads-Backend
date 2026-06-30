@@ -435,6 +435,10 @@ class BookController extends Controller
             ) {
                 Cache::put("audio_chapter_backfill_{$book->id}", true, now()->addHours(24));
                 BackfillAudioChapterPagesJob::dispatch($book)->onQueue('audio');
+                // When QUEUE_CONNECTION=sync the job runs inline above and writes
+                // updated page numbers to the DB — refresh so BookResource serves
+                // the new data in this same response rather than stale in-memory values.
+                $book->refresh();
             }
 
             // Fetch similar books (by shared categories)
