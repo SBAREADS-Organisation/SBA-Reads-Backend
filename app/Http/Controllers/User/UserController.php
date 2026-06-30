@@ -531,8 +531,10 @@ class UserController extends Controller
 
             // Update user fields
             // $user->profile_info = $request->input('profile_info', $user->profile_info);
-            $user->name = $request->input('name', $user->name);
             $user->username = $request->input('profile_info.username', $user->username);
+            // Keep name in sync with username so display names stay consistent.
+            // Falls back to an explicit 'name' field, then the existing value.
+            $user->name = $request->input('name', $user->username ?? $user->name);
             $user->bio = $request->input('profile_info.bio', $user->bio);
             $user->pronouns = $request->input('profile_info.pronouns', $user->pronouns);
             $user->profile_picture = $profilePicture;
