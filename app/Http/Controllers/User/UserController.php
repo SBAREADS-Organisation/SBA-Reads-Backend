@@ -523,7 +523,10 @@ class UserController extends Controller
                     'public_url' => (string) $upload['url'],
                 ];
             } else {
-                $profilePicture = $request->input('profile_picture', []);
+                // No new file uploaded — preserve the user's existing picture.
+                // The frontend does not re-send the current URL as a field,
+                // so falling back to $request->input() would silently clear it.
+                $profilePicture = $user->profile_picture ?? [];
             }
 
             // Update user fields
