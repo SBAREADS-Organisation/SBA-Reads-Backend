@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
-use App\Services\IAP\IAPTierService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -129,15 +128,15 @@ class AppStorePurchaseController extends Controller
                     $productId       = is_array($item) ? $item['product_id']              : $item->getProductId();
                     $originalTransId = is_array($item) ? $item['original_transaction_id'] : $item->getOriginalTransactionId();
 
-                    // Primary lookup: per-book product_id (legacy books)
+                    // Lookup by the book's own product_id (per-book SKU system).
                     $book = Book::where('product_id', $productId)
                         ->orWhere('audio_product_id', $productId)
                         ->first();
 
-                    // Tier lookup: shared price-tier SKUs (new books).
-                    // The mobile sends book_id alongside the receipt so we can
-                    // identify which specific book was purchased at that tier.
-                    if (! $book && IAPTierService::isTierSku($productId) && $bookIdFromRequest) {
+                    // Fallback: product_id not yet in DB but book_id was sent by client.
+                    // Guards against the brief window between App Store Connect publishing
+                    // and the book record being updated on the server.
+                    if (! $book && $bookIdFromRequest) {
                         $book = Book::find($bookIdFromRequest);
                     }
 

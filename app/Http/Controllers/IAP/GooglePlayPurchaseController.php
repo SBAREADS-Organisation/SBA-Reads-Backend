@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
-use App\Services\IAP\IAPTierService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -80,8 +79,8 @@ class GooglePlayPurchaseController extends Controller
                     ->orWhere('audio_product_id', $productId)
                     ->first();
 
-                // Tier lookup: shared price-tier SKUs (new books)
-                if (! $book && IAPTierService::isTierSku($productId) && $bookIdFromRequest) {
+                // Fallback: product_id not yet in DB but book_id was sent by client.
+                if (! $book && $bookIdFromRequest) {
                     $book = Book::find($bookIdFromRequest);
                 }
 

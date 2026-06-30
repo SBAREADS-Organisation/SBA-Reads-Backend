@@ -64,8 +64,6 @@ class Book extends Model
         'is_featured',
         'ranking',
         'audio_price',
-        'price_tier',
-        'audio_price_tier',
         'audio_chapters',
         'ai_review_status',
         'ai_review_notes',
