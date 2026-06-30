@@ -112,6 +112,20 @@ class AppStorePurchaseController extends Controller
             ]);
 
             if (empty($receiptInfo)) {
+                // Apple sometimes puts non-consumable purchases in latest_receipt_info
+                // instead of receipt.in_app — especially when the client sends a cached
+                // receipt that predates the purchase being committed on Apple's servers.
+                $receiptInfo = $receiptResponse->getLatestReceiptInfo() ?? [];
+
+                if (! empty($receiptInfo)) {
+                    Log::info('IAP: receipt.in_app empty, falling back to latest_receipt_info', [
+                        'user_id' => $user->id,
+                        'count'   => count($receiptInfo),
+                    ]);
+                }
+            }
+
+            if (empty($receiptInfo)) {
                 Log::warning('IAP: no in-app purchases found in receipt', ['user_id' => $user->id]);
 
                 return response()->json(['error' => 'No purchase items found in receipt'], 400);

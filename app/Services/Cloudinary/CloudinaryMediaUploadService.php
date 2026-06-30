@@ -111,11 +111,10 @@ class CloudinaryMediaUploadService
                 'message'   => $e->getMessage(),
             ]);
 
-            return $this->error(
-                'An error occurred while uploading the file to Cloudinary',
-                500,
-                config('app.debug') ? $e->getMessage() : null,
-            );
+            // Throw so callers receive an exception they can handle cleanly.
+            // Returning a JsonResponse from a service method makes $upload['id']
+            // resolve to null, silently clearing stored media (e.g. profile_picture).
+            throw new \RuntimeException('Cloudinary upload failed: ' . $e->getMessage(), 0, $e);
         }
     }
 
