@@ -330,8 +330,14 @@ class BookController extends Controller
                         'author_id' => $book->author_id,
                     ]);
                 }
-                // Queue AI review — runs in background, does not block the response
-                ProcessBookAIReviewJob::dispatch($book->id)->onQueue('ai');
+                // Queue AI review — must never block the book creation response.
+                // If QUEUE_CONNECTION=sync the job runs inline; a Claude API failure
+                // or queue driver misconfiguration must not roll back the author's upload.
+                try {
+                    ProcessBookAIReviewJob::dispatch($book->id)->onQueue('ai');
+                } catch (\Throwable $e) {
+                    Log::error('Failed to dispatch AI review job for book ' . $book->id . ': ' . $e->getMessage());
+                }
             }
 
             return $this->success(

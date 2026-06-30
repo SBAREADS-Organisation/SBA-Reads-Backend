@@ -96,40 +96,59 @@ class StripeWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($transaction->purpose_id);
 
-            if ($purchase->status !== 'paid') {
+            // Track whether this is the first time we're processing this purchase so we
+            // can guard analytics and the author payout against Stripe webhook retries.
+            $wasAlreadyPaid = $purchase->status === 'paid';
+
+            if (!$wasAlreadyPaid) {
                 $purchase->update(['status' => 'paid']);
             }
 
+            // addBooksToUserLibrary is idempotent — safe to call on every retry.
             app(\App\Services\Book\BookPurchaseService::class)
                 ->addBooksToUserLibrary($user, [$purchase->book_id]);
 
             $author = $purchase->book->author;
             if ($author) {
-                $author->increment('wallet_balance', $purchase->author_payout_amount);
+                // Guard against Stripe webhook retries double-crediting the author.
+                // We check for an existing payout transaction rather than relying solely
+                // on the purchase status because the status update and the payout write
+                // are not atomic — a crash between the two would leave the status 'paid'
+                // but the author uncredited, and we need to be able to recover cleanly.
+                $payoutAlreadyCreated = Transaction::where('user_id', $author->id)
+                    ->where('purpose_type', 'audio_book_purchase')
+                    ->where('purpose_id', $purchase->id)
+                    ->where('type', 'payout')
+                    ->exists();
 
-                Transaction::create([
-                    'id'               => \Illuminate\Support\Str::uuid(),
-                    'user_id'          => $author->id,
-                    'reference'        => uniqid('audio_pay_'),
-                    'status'           => 'succeeded',
-                    'currency'         => $purchase->currency ?? 'USD',
-                    'amount'           => $purchase->author_payout_amount,
-                    'payment_provider' => 'app',
-                    'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
-                    'type'             => 'payout',
-                    'direction'        => 'credit',
-                    'purpose_type'     => 'audio_book_purchase',
-                    'purpose_id'       => $purchase->id,
-                ]);
+                if (!$payoutAlreadyCreated) {
+                    $author->increment('wallet_balance', $purchase->author_payout_amount);
+
+                    Transaction::create([
+                        'id'               => \Illuminate\Support\Str::uuid(),
+                        'user_id'          => $author->id,
+                        'reference'        => uniqid('audio_pay_'),
+                        'status'           => 'succeeded',
+                        'currency'         => $purchase->currency ?? 'USD',
+                        'amount'           => $purchase->author_payout_amount,
+                        'payment_provider' => 'app',
+                        'description'      => "Audio book payout for AudioBookPurchase ID: {$purchase->id}",
+                        'type'             => 'payout',
+                        'direction'        => 'credit',
+                        'purpose_type'     => 'audio_book_purchase',
+                        'purpose_id'       => $purchase->id,
+                    ]);
+                }
             }
 
-            // Update analytics
-            $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
-                ['book_id' => $purchase->book_id],
-                ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-            );
-            $bookAnalytics->increment('purchases', 1);
-            $bookAnalytics->save();
+            if (!$wasAlreadyPaid) {
+                $bookAnalytics = \App\Models\BookMetaDataAnalytics::firstOrCreate(
+                    ['book_id' => $purchase->book_id],
+                    ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                );
+                $bookAnalytics->increment('purchases', 1);
+                $bookAnalytics->save();
+            }
         } catch (\Exception $e) {
             throw $e;
         }
@@ -151,45 +170,55 @@ class StripeWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
-            // Only update if payment actually succeeded
-            if ($purchase->status !== 'paid') {
+            $wasAlreadyPaid = $purchase->status === 'paid';
+
+            if (!$wasAlreadyPaid) {
                 $purchase->update(['status' => 'paid']);
             }
 
             foreach ($purchase->items as $item) {
-                // Add to user's purchased books using dedicated service
+                // addBooksToUserLibrary is idempotent — safe on every retry.
                 app(\App\Services\Book\BookPurchaseService::class)
                     ->addBooksToUserLibrary($user, [$item->book_id]);
 
-                // NOW update author wallet (only after successful payment)
                 $author = $item->book->author;
                 if ($author) {
-                    $author->increment('wallet_balance', $item->author_payout_amount);
+                    // Per-author idempotency guard: purpose_id is the purchase ID so a
+                    // multi-item purchase with the same author still produces one credit.
+                    $payoutAlreadyCreated = Transaction::where('user_id', $author->id)
+                        ->where('purpose_type', 'digital_book_purchase')
+                        ->where('purpose_id', $purchase->id)
+                        ->where('type', 'payout')
+                        ->exists();
 
-                    // Create payout transaction record
-                    Transaction::create([
-                        'id' => \Illuminate\Support\Str::uuid(),
-                        'user_id' => $author->id,
-                        'reference' => uniqid('pay_immediate_'),
-                        'status' => 'succeeded',
-                        'currency' => $purchase->currency ?? 'USD',
-                        'amount' => $item->author_payout_amount,
-                        'payment_provider' => 'app',
-                        'description' => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
-                        'type' => 'payout',
-                        'direction' => 'credit',
-                        'purpose_type' => 'digital_book_purchase',
-                        'purpose_id' => $purchase->id,
-                    ]);
+                    if (!$payoutAlreadyCreated) {
+                        $author->increment('wallet_balance', $item->author_payout_amount);
+
+                        Transaction::create([
+                            'id'           => \Illuminate\Support\Str::uuid(),
+                            'user_id'      => $author->id,
+                            'reference'    => uniqid('pay_immediate_'),
+                            'status'       => 'succeeded',
+                            'currency'     => $purchase->currency ?? 'USD',
+                            'amount'       => $item->author_payout_amount,
+                            'payment_provider' => 'app',
+                            'description'  => "Immediate author payout for DigitalBookPurchase ID: {$purchase->id}",
+                            'type'         => 'payout',
+                            'direction'    => 'credit',
+                            'purpose_type' => 'digital_book_purchase',
+                            'purpose_id'   => $purchase->id,
+                        ]);
+                    }
                 }
 
-                // Update analytics
-                $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
-                    ['book_id' => $item->book_id],
-                    ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
-                );
-                $bookAnalytics->increment('purchases', 1);
-                $bookAnalytics->save();
+                if (!$wasAlreadyPaid) {
+                    $bookAnalytics = BookMetaDataAnalytics::firstOrCreate(
+                        ['book_id' => $item->book_id],
+                        ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
+                    );
+                    $bookAnalytics->increment('purchases', 1);
+                    $bookAnalytics->save();
+                }
             }
         } catch (\Exception $e) {
             throw $e;
@@ -209,6 +238,8 @@ class StripeWebhookService
             }
             $orderId = (int)$orderId;
             $order = $user->orders()->with('items.book.author')->findOrFail($orderId);
+
+            $wasAlreadyPaid = $order->status !== 'pending';
 
             if ($order->status === 'pending') {
                 $order->update(['status' => 'paid']);
@@ -247,7 +278,11 @@ class StripeWebhookService
                 }
             }
 
-            if ($order->payout_status === 'pending') {
+            // Only dispatch the job on the first successful webhook call.
+            // $order->status was 'pending' before this method ran; if it was already
+            // 'paid' (Stripe retry), we skip to prevent queuing a duplicate job
+            // which would trigger a second Paystack/Stripe bank transfer.
+            if (!$wasAlreadyPaid && $order->payout_status === 'pending') {
                 $delayDays = 7;
                 ProcessAuthorPayout::dispatch(purpose: 'order', purposeId: $order->id)->delay(now()->addDays($delayDays));
             }

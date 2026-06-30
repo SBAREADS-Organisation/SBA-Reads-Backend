@@ -118,10 +118,14 @@ class BookService
             $uploadedFiles = [];
             foreach ($data['files'] as $file) {
                 if ($file instanceof UploadedFile) {
-                    $ext   = $file->getClientOriginalExtension() ?: 'pdf';
-                    $s3Key = 'books/content/' . date('Y/m/d') . '/' . Str::uuid() . '.' . $ext;
+                    $ext      = $file->getClientOriginalExtension() ?: 'pdf';
+                    $fileName = Str::uuid() . '.' . $ext;
+                    $s3Dir    = 'books/content/' . date('Y/m/d');
+                    $s3Key    = $s3Dir . '/' . $fileName;
 
-                    Storage::disk('s3')->put($s3Key, file_get_contents($file->getRealPath()), 'public');
+                    // Stream directly to S3 — avoids loading the entire PDF into memory
+                    // which could exhaust PHP's memory limit for files near the 50 MB cap.
+                    Storage::disk('s3')->putFileAs($s3Dir, $file, $fileName, ['visibility' => 'public']);
 
                     $s3Url = Storage::disk('s3')->url($s3Key);
 
