@@ -163,8 +163,9 @@ class CloudinaryMediaUploadService
             'book_cover' => 'books/covers/'.date('Y/m/d'),
             'book_content' => 'books/content/'.date('Y/m/d'),
             'stripe_kyc' => 'stripe/kyc/'.date('Y/m/d'),
-            'voice_samples' => 'users/voice-samples/'.date('Y/m/d'),
-            'book_audio' => 'books/audio/'.date('Y/m/d'),
+            'voice_samples'  => 'users/voice-samples/'.date('Y/m/d'),
+            'voice_preview'  => 'users/voice-previews/'.date('Y/m/d'),
+            'book_audio'     => 'books/audio/'.date('Y/m/d'),
             default => 'general/'.date('Y/m/d')
         };
     }

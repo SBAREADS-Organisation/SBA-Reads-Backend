@@ -12,6 +12,39 @@ class NGNBankAccountController extends Controller
     public function __construct(protected PaystackTransferService $paystack) {}
 
     /**
+     * Resolve the account holder's name for a given account number + bank code.
+     * Called by the app as the author types their 10-digit account number so the
+     * name is auto-filled — they can confirm it before saving.
+     * POST /author/wallet/resolve-account
+     */
+    public function resolveAccount(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'account_number' => 'required|string|size:10|regex:/^\d{10}$/',
+            'bank_code'      => 'required|string|max:10',
+        ]);
+
+        try {
+            $accountName = $this->paystack->resolveAccount(
+                $validated['account_number'],
+                $validated['bank_code'],
+            );
+
+            if (empty($accountName)) {
+                return $this->error('Account not found. Please check the account number and bank.', 422);
+            }
+
+            return $this->success([
+                'account_name'   => $accountName,
+                'account_number' => $validated['account_number'],
+                'bank_code'      => $validated['bank_code'],
+            ], 'Account resolved successfully.');
+        } catch (\RuntimeException $e) {
+            return $this->error($e->getMessage(), 422);
+        }
+    }
+
+    /**
      * Register a Nigerian bank account for NGN payouts.
      * Creates a Paystack Transfer Recipient and stores the code on the author.
      */

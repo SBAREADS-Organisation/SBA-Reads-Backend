@@ -118,9 +118,10 @@ Route::prefix('user')->group(function () {
         // Forgot Password
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
 
-        // Voice Sample (for PDF-to-audio with author's cloned voice)
-        Route::post('voice-sample', [AudioController::class, 'uploadVoiceSample'])->name('upload-voice-sample');
-        Route::get('voice-status', [AudioController::class, 'getVoiceStatus'])->name('voice-status');
+        // Voice Sample + Preview (for PDF-to-audio with author's cloned voice)
+        Route::post('voice-sample',  [AudioController::class, 'uploadVoiceSample'])->name('upload-voice-sample');
+        Route::get('voice-status',   [AudioController::class, 'getVoiceStatus'])->name('voice-status');
+        Route::post('voice-preview', [AudioController::class, 'voicePreview'])->name('voice-preview');
 
         // User KYC Routes
         Route::prefix('kyc')->group(function () {
@@ -177,8 +178,9 @@ Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
 // Author wallet — unified balance + payout setup
 Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->group(function () {
     Route::get('balance',         [\App\Http\Controllers\Author\AuthorWalletController::class, 'balance']);
-    Route::get('ngn-banks',       [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
-    Route::post('ngn-account',    [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
+    Route::get('ngn-banks',         [\App\Http\Controllers\Author\NGNBankAccountController::class, 'banks']);
+    Route::post('resolve-account',  [\App\Http\Controllers\Author\NGNBankAccountController::class, 'resolveAccount']);
+    Route::post('ngn-account',      [\App\Http\Controllers\Author\NGNBankAccountController::class, 'register']);
     Route::get('payout-info',        [\App\Http\Controllers\Author\NGNBankAccountController::class, 'payoutInfo']);
     Route::post('switch-stripe',     [\App\Http\Controllers\Author\NGNBankAccountController::class, 'switchToStripe']);
     Route::post('paystack-withdraw', [\App\Http\Controllers\Author\AuthorWalletController::class,   'paystackWithdraw']);

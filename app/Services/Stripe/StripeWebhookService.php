@@ -39,9 +39,21 @@ class StripeWebhookService
             $metadata = $paymentIntent->metadata;
 
             $transaction = Transaction::where('reference', $metadata->reference)->first();
-            $user = $transaction->user;
 
             if (!$transaction) {
+                Log::warning('StripeWebhookService: no transaction found for reference', [
+                    'reference' => $metadata->reference ?? null,
+                ]);
+                return;
+            }
+
+            $user = $transaction->user;
+
+            if (!$user) {
+                Log::warning('StripeWebhookService: transaction has no associated user', [
+                    'transaction_id' => $transaction->id,
+                ]);
+                return;
             }
 
             $transaction->update(['status' => 'succeeded']);
@@ -67,6 +79,10 @@ class StripeWebhookService
                     break;
             }
         } catch (\Exception $e) {
+            Log::error('StripeWebhookService::handlePaymentIntentSucceeded failed', [
+                'message'   => $e->getMessage(),
+                'reference' => $paymentIntent->metadata->reference ?? null,
+            ]);
         }
     }
 

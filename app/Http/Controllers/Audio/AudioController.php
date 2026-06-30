@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\GenerateBookAudioJob;
 use App\Jobs\VoiceCloningJob;
 use App\Models\Book;
+use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\ElevenLabs\ElevenLabsService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
@@ -75,6 +76,49 @@ class AudioController extends Controller
             Log::error('Voice sample upload failed for user '.$user->id.': '.$e->getMessage());
 
             return $this->error('Failed to save voice sample. Please try again.', 500);
+        }
+    }
+
+    /**
+     * Generate a short TTS preview using the author's cloned voice.
+     * The audio is uploaded to Cloudinary and the URL is returned immediately
+     * so the author can play it before committing to publishing the full book.
+     * POST /user/voice-preview
+     */
+    public function voicePreview(Request $request, ElevenLabsService $elevenLabs, CloudinaryMediaUploadService $cloudinary)
+    {
+        $validated = Validator::make($request->all(), [
+            'text' => 'required|string|min:10|max:500',
+        ])->validate();
+
+        $user = $request->user();
+
+        if ($user->voice_status !== 'ready' || empty($user->elevenlabs_voice_id)) {
+            return $this->error(
+                'Your voice is not ready yet. Please upload a voice sample and wait for cloning to complete.',
+                422
+            );
+        }
+
+        try {
+            $audioBinary = $elevenLabs->generateSpeech($user->elevenlabs_voice_id, $validated['text']);
+
+            $tempPath = tempnam(sys_get_temp_dir(), 'sbareads_preview_') . '.mp3';
+            file_put_contents($tempPath, $audioBinary);
+
+            $uploaded = $cloudinary->uploadFromPath(
+                $tempPath,
+                'voice_preview',
+                'preview_user_' . $user->id . '_' . time()
+            );
+
+            @unlink($tempPath);
+
+            return $this->success(['url' => $uploaded['url']], 'Voice preview generated successfully.');
+
+        } catch (\Throwable $e) {
+            Log::error('Voice preview failed for user ' . $user->id . ': ' . $e->getMessage());
+            return $this->error('Could not generate voice preview. Please try again.', 500);
         }
     }
 

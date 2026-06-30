@@ -100,6 +100,34 @@ class PaystackTransferService
     }
 
     /**
+     * Resolve the account name for a Nigerian bank account number.
+     * Calls Paystack's /bank/resolve endpoint — used to auto-fill the account
+     * name on the registration form so authors don't type it manually.
+     *
+     * @throws \RuntimeException when Paystack cannot resolve the account
+     */
+    public function resolveAccount(string $accountNumber, string $bankCode): string
+    {
+        $response = Http::withToken($this->secretKey)
+            ->get("{$this->baseUrl}/bank/resolve", [
+                'account_number' => $accountNumber,
+                'bank_code'      => $bankCode,
+            ]);
+
+        if (! $response->successful() || ! $response->json('status')) {
+            $message = $response->json('message') ?? 'Could not resolve account. Check the number and bank.';
+            Log::warning("PaystackTransferService::resolveAccount failed: {$message}", [
+                'account_number' => $accountNumber,
+                'bank_code'      => $bankCode,
+                'status'         => $response->status(),
+            ]);
+            throw new \RuntimeException($message);
+        }
+
+        return $response->json('data.account_name') ?? '';
+    }
+
+    /**
      * List available Nigerian banks for account registration UI.
      */
     public function listBanks(): array
