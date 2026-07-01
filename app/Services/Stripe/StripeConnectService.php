@@ -846,7 +846,8 @@ class StripeConnectService
             $balanceData       = json_decode($balanceResponse->getContent(), true);
             $availableBalances = $balanceData['data']['available'] ?? [];
             $currencyKey       = strtolower($currency);
-            $availableAmount   = $availableBalances[$currencyKey] ?? 0;
+            // available is a list of {currency, amount} objects (amounts in main units)
+            $availableAmount   = (float) (collect($availableBalances)->firstWhere('currency', $currencyKey)['amount'] ?? 0);
             if ($availableAmount < $amount) {
                 return $this->error('Insufficient balance for the requested payout', 422);
             }
@@ -886,7 +887,6 @@ class StripeConnectService
 
             return $this->success($payoutRecord, 'Payout initiated successfully', 200);
         } catch (\Throwable $th) {
-            throw $th;
             return $this->error('Error creating payout', 500, $th->getMessage(), $th);
         }
     }

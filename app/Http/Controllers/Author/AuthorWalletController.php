@@ -58,12 +58,16 @@ class AuthorWalletController extends Controller
                 $stripeResp = $this->stripe->retrieveAccountBalance($author->kyc_account_id);
                 $body       = json_decode($stripeResp->getContent(), true);
 
-                // retrieveAccountBalance returns { data: { available: {usd: n}, pending: {usd: n} } }
+                // retrieveAccountBalance returns { data: { available: [{currency,amount},...], pending: [...] } }
+                // Find the USD entry in each list (amounts already converted to main units by the service).
+                $findUSD = fn (array $list): float =>
+                    (float) (collect($list)->firstWhere('currency', 'usd')['amount'] ?? 0);
+
                 $availableMap = $body['data']['available'] ?? [];
                 $pendingMap   = $body['data']['pending']   ?? [];
 
-                $availableAmount = (float) ($availableMap['usd'] ?? 0);
-                $pendingAmount   = (float) ($pendingMap['usd']   ?? 0);
+                $availableAmount = $findUSD($availableMap);
+                $pendingAmount   = $findUSD($pendingMap);
             } catch (\Throwable $e) {
                 Log::warning('Wallet: Stripe balance fetch failed for ' . $author->id . ': ' . $e->getMessage());
                 $availableAmount = 0.0;
