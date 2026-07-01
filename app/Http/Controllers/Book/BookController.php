@@ -160,7 +160,11 @@ class BookController extends Controller
         $query = Book::query()
             ->where('visibility', 'public')
             ->where('archived', false)
-            ->whereIn('status', ['pending', 'approved', 'published']);
+            ->whereIn('status', ['pending', 'approved', 'published'])
+            ->when(
+                strtolower($request->header('x-platform', '')) === 'ios',
+                fn ($q) => $q->where('ios_available', true)
+            );
 
         if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
@@ -243,6 +247,10 @@ class BookController extends Controller
             ->where('visibility', 'public')
             ->where('archived', false)
             ->whereIn('status', ['pending', 'approved', 'published'])
+            ->when(
+                strtolower($request->header('x-platform', '')) === 'ios',
+                fn ($q) => $q->where('ios_available', true)
+            )
             ->where(function ($q) use ($interests) {
                 foreach ($interests as $interest) {
                     $q->orWhereRaw("genres @> ?::jsonb", [json_encode([$interest])]);
@@ -1491,12 +1499,16 @@ class BookController extends Controller
     /**
      * Return books ordered by their admin-assigned ranking (lower number = higher priority).
      */
-    public function topRanking(): JsonResponse
+    public function topRanking(Request $request): JsonResponse
     {
         try {
             $books = Book::where('visibility', 'public')
                 ->where('archived', false)
                 ->whereIn('status', ['pending', 'approved', 'published'])
+                ->when(
+                    strtolower($request->header('x-platform', '')) === 'ios',
+                    fn ($q) => $q->where('ios_available', true)
+                )
                 ->whereNotNull('ranking')
                 ->orderBy('ranking')
                 ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
@@ -1620,6 +1632,36 @@ class BookController extends Controller
             return $this->success(['is_featured' => $book->is_featured], 'Book featured status updated.');
         } catch (\Exception $e) {
             return $this->error('Failed to update featured status.', 500, $e->getMessage(), $e);
+        }
+    }
+
+    /**
+     * Toggle iOS availability for a book (admin only).
+     *
+     * When ios_available = false the book is hidden from requests that send
+     * x-platform: ios (i.e. App Store / IAP pending approval) but remains
+     * fully visible and purchasable on Android via Paystack / Stripe.
+     */
+    public function toggleIosAvailability(Request $request, Book $book): JsonResponse
+    {
+        try {
+            $book->update(['ios_available' => ! $book->ios_available]);
+
+            $status = $book->ios_available ? 'visible on iOS' : 'hidden from iOS (Android unaffected)';
+
+            Log::info('Admin toggled iOS availability', [
+                'book_id'       => $book->id,
+                'ios_available' => $book->ios_available,
+                'admin_id'      => $request->user()->id,
+            ]);
+
+            return $this->success([
+                'id'            => $book->id,
+                'title'         => $book->title,
+                'ios_available' => $book->ios_available,
+            ], "Book is now {$status}.");
+        } catch (\Exception $e) {
+            return $this->error('Failed to update iOS availability.', 500, $e->getMessage(), $e);
         }
     }
 

@@ -69,6 +69,7 @@ class Book extends Model
         'ai_review_notes',
         'ai_review_confidence',
         'ai_reviewed_at',
+        'ios_available',
     ];
 
     protected $hidden = [
@@ -107,6 +108,7 @@ class Book extends Model
             'audio_duration' => 'integer',
             'audio_segments' => 'array',
             'is_featured'    => 'boolean',
+            'ios_available'  => 'boolean',
             'ranking'        => 'integer',
             'audio_price'    => 'float',
             'audio_chapters' => 'array',
