@@ -311,13 +311,37 @@ class BookController extends Controller
     public function store(Request $request)
     {
         try {
+            $user = $request->user();
+
+            if ($user->kyc_status !== 'verified') {
+                return $this->error(
+                    'Your account must be KYC-verified before you can upload books. Please complete your identity verification.',
+                    403
+                );
+            }
+
             $validator = Validator::make($request->all(), $this->rules, $this->messages);
 
             if ($validator->fails()) {
                 return $this->error('Some required information is missing or incorrect. Please review your submission.', 400, $validator->errors());
             }
 
-            $created = $this->service->createMultiple($validator->validated()['books']);
+            $validatedBooks = $validator->validated()['books'];
+
+            foreach ($validatedBooks as $bookData) {
+                $titleExists = Book::where('author_id', $bookData['author_id'])
+                    ->whereRaw('LOWER(title) = ?', [strtolower($bookData['title'])])
+                    ->exists();
+
+                if ($titleExists) {
+                    return $this->error(
+                        "You have already uploaded a book titled \"{$bookData['title']}\". Please use a different title or edit the existing book.",
+                        409
+                    );
+                }
+            }
+
+            $created = $this->service->createMultiple($validatedBooks);
 
             foreach ($created as $book) {
                 try {
