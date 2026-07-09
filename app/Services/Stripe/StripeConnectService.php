@@ -54,7 +54,7 @@ class StripeConnectService
                 //     'state' => $user->address->state,
                 //     'country' => strtoupper($user->address->country),
                 // ],
-                'description' => 'Customer for ' . $user->name || '',
+                'description' => 'Customer for ' . ($user->name ?? ''),
                 'metadata' => [
                     'user_id' => $user->id,
                 ],

@@ -507,7 +507,7 @@ class UserController extends Controller
                 return response()->json([
                     'message' => 'Validation failed',
                     'errors' => $validator->errors(),
-                ]);
+                ], 422);
             }
 
             // Handle profile picture upload if present

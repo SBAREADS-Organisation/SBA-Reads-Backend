@@ -537,12 +537,24 @@ class BookController extends Controller
     {
         $user = $request->user();
 
-        // Check if user has purchased the book
+        // Check if user has purchased the book.
+        // If not in book_user, check for a successful IAP transaction and heal
+        // on-the-fly so a missed webhook never permanently blocks a paid reader.
         if (! $user->purchasedBooks()->where('book_id', $bookId)->exists()) {
-            return $this->error(
-                'You must purchase the book before reading it.',
-                403
-            );
+            $hasIap = Transaction::where('user_id', $user->id)
+                ->whereIn('payment_provider', ['apple', 'google_play'])
+                ->where('status', 'success')
+                ->whereRaw("(meta_data->>'book_id')::integer = ?", [(int) $bookId])
+                ->exists();
+
+            if ($hasIap) {
+                app(BookPurchaseService::class)->addBooksToUserLibrary($user, [(int) $bookId]);
+            } else {
+                return $this->error(
+                    'You must purchase the book before reading it.',
+                    403
+                );
+            }
         }
 
         $validator = Validator::make($request->all(), [
@@ -1579,12 +1591,23 @@ class BookController extends Controller
      * not admin-assigned ranking. Counts rows in digital_book_purchase_items
      * that belong to a paid DigitalBookPurchase for each book.
      */
-    public function bestSellers(): JsonResponse
+    public function bestSellers(Request $request): JsonResponse
     {
         try {
             $books = Book::where('books.visibility', 'public')
                 ->where('books.archived', false)
                 ->whereIn('books.status', ['approved', 'published'])
+                ->when(
+                    strtolower($request->header('x-platform', '')) === 'ios',
+                    fn ($q) => $q->where('books.ios_available', true)
+                )
+                ->whereExists(function ($q) {
+                    $q->select(DB::raw(1))
+                        ->from('digital_book_purchase_items as dbpi')
+                        ->join('digital_book_purchases as dp', 'dbpi.digital_book_purchase_id', '=', 'dp.id')
+                        ->where('dp.status', 'paid')
+                        ->whereColumn('dbpi.book_id', 'books.id');
+                })
                 ->select('books.*')
                 ->selectSub(
                     \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
@@ -1607,10 +1630,14 @@ class BookController extends Controller
     /**
      * Return books marked as featured.
      */
-    public function featured(): JsonResponse
+    public function featured(Request $request): JsonResponse
     {
         try {
             $books = Book::where('is_featured', true)
+                ->when(
+                    strtolower($request->header('x-platform', '')) === 'ios',
+                    fn ($q) => $q->where('ios_available', true)
+                )
                 ->orderBy('ranking')
                 ->orderByDesc('updated_at')
                 ->get();
