@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Transaction;
 
 use App\Http\Controllers\Controller;
+use App\Models\AudioBookPurchase;
+use App\Models\DigitalBookPurchase;
 use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
 class TransactionsController extends Controller
@@ -129,6 +132,8 @@ class TransactionsController extends Controller
 
             $transactions = $query->paginate($request->get('per_page', 50));
 
+            $this->enrichWithBookData($transactions->getCollection());
+
             return $this->success($transactions, 'Transactions retrieved successfully');
         } catch (\Throwable $th) {
             return $this->error($th->getMessage(), 500, null, $th);
@@ -148,6 +153,75 @@ class TransactionsController extends Controller
         } catch (\Throwable $th) {
             return $this->error($th->getMessage(), 500, null, $th);
         }
+    }
+
+    private function enrichWithBookData(\Illuminate\Support\Collection $collection): void
+    {
+        $digitalIds = $collection->where('purpose_type', 'digital_book_purchase')
+            ->pluck('purpose_id')->filter()->unique()->values()->toArray();
+        $audioIds   = $collection->where('purpose_type', 'audio_book_purchase')
+            ->pluck('purpose_id')->filter()->unique()->values()->toArray();
+
+        $digitalPurchases = !empty($digitalIds)
+            ? DigitalBookPurchase::with('items.book:id,title')->whereIn('id', $digitalIds)->get()->keyBy('id')
+            : collect();
+
+        $audioPurchases = !empty($audioIds)
+            ? AudioBookPurchase::with('book:id,title')->whereIn('id', $audioIds)->get()->keyBy('id')
+            : collect();
+
+        // Build (user_id => [book_ids]) map for a single library query
+        $checkPairs = [];
+        foreach ($digitalPurchases as $p) {
+            foreach ($p->items->pluck('book_id')->filter() as $bookId) {
+                $checkPairs[$p->user_id][] = $bookId;
+            }
+        }
+        foreach ($audioPurchases as $p) {
+            if ($p->book_id) {
+                $checkPairs[$p->user_id][] = $p->book_id;
+            }
+        }
+
+        $libraryMap = [];
+        if (!empty($checkPairs)) {
+            $allUserIds = array_keys($checkPairs);
+            $allBookIds = array_unique(array_merge(...array_values($checkPairs)));
+            DB::table('book_user')
+                ->whereIn('user_id', $allUserIds)
+                ->whereIn('book_id', $allBookIds)
+                ->get(['user_id', 'book_id'])
+                ->each(fn($row) => $libraryMap[$row->user_id][$row->book_id] = true);
+        }
+
+        $collection->transform(function ($txn) use ($digitalPurchases, $audioPurchases, $libraryMap) {
+            $txn->book_names = [];
+            $txn->in_library = null;
+
+            if ($txn->purpose_type === 'digital_book_purchase' && $txn->purpose_id) {
+                $p = $digitalPurchases->get($txn->purpose_id);
+                if ($p) {
+                    $bookIds         = $p->items->pluck('book_id')->filter()->toArray();
+                    $txn->book_names = $p->items->pluck('book.title')->filter()->values()->toArray();
+                    if ($p->user_id && !empty($bookIds)) {
+                        $lib             = $libraryMap[$p->user_id] ?? [];
+                        $txn->in_library = count(array_filter($bookIds, fn($id) => isset($lib[$id]))) === count($bookIds);
+                    } else {
+                        $txn->in_library = false;
+                    }
+                }
+            } elseif ($txn->purpose_type === 'audio_book_purchase' && $txn->purpose_id) {
+                $p = $audioPurchases->get($txn->purpose_id);
+                if ($p && $p->book) {
+                    $txn->book_names = [$p->book->title];
+                    $txn->in_library = $p->user_id && $p->book_id
+                        ? isset(($libraryMap[$p->user_id] ?? [])[$p->book_id])
+                        : false;
+                }
+            }
+
+            return $txn;
+        });
     }
 
     /**
