@@ -3,12 +3,15 @@
 namespace App\Services\Stripe;
 
 use App\Jobs\ProcessAuthorPayout;
+use App\Mail\Books\BookPurchaseConfirmation;
+use App\Mail\Books\BookSaleNotification;
 use App\Models\BookMetaDataAnalytics;
 use App\Models\AudioBookPurchase;
 use App\Models\DigitalBookPurchase;
 use App\Models\StripePayout;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\Notification\NotificationService;
 use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -138,6 +141,30 @@ class StripeWebhookService
                         'purpose_type'     => 'audio_book_purchase',
                         'purpose_id'       => $purchase->id,
                     ]);
+
+                    // Notify author of the sale
+                    try {
+                        $formattedPayout = $this->formatAmount($purchase->author_payout_amount, $purchase->currency ?? 'USD');
+                        app(NotificationService::class)->send(
+                            $author,
+                            'New Audio Book Sale',
+                            "Your audio book '{$purchase->book->title}' was purchased. {$formattedPayout} has been added to your wallet.",
+                            ['in-app', 'push', 'email'],
+                            $purchase,
+                            new BookSaleNotification(
+                                authorName: $author->first_name ?? $author->name ?? 'Author',
+                                bookTitle:  $purchase->book->title ?? 'your book',
+                                buyerName:  $user->name ?? 'A reader',
+                                amount:     $formattedPayout,
+                                bookType:   'audio',
+                            )
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to send author audio sale notification', [
+                            'author_id' => $author->id,
+                            'error'     => $e->getMessage(),
+                        ]);
+                    }
                 }
             }
 
@@ -148,6 +175,28 @@ class StripeWebhookService
                 );
                 $bookAnalytics->increment('purchases', 1);
                 $bookAnalytics->save();
+
+                // Notify reader of successful purchase
+                try {
+                    app(NotificationService::class)->send(
+                        $user,
+                        'Purchase Confirmed',
+                        "'{$purchase->book->title}' audio book is now in your library. Enjoy listening!",
+                        ['in-app', 'push', 'email'],
+                        $purchase,
+                        new BookPurchaseConfirmation(
+                            readerName: $user->first_name ?? $user->name ?? 'Reader',
+                            bookTitles: [$purchase->book->title ?? 'your audio book'],
+                            amount:     $this->formatAmount($purchase->price, $purchase->currency ?? 'USD'),
+                            bookType:   'audio',
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send reader audio purchase notification', [
+                        'user_id' => $user->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
             }
         } catch (\Exception $e) {
             throw $e;
@@ -208,6 +257,30 @@ class StripeWebhookService
                             'purpose_type' => 'digital_book_purchase',
                             'purpose_id'   => $purchase->id,
                         ]);
+
+                        // Notify author of the sale
+                        try {
+                            $formattedPayout = $this->formatAmount($item->author_payout_amount, $purchase->currency ?? 'USD');
+                            app(NotificationService::class)->send(
+                                $author,
+                                'New Book Sale',
+                                "Your book '{$item->book->title}' was purchased. {$formattedPayout} has been added to your wallet.",
+                                ['in-app', 'push', 'email'],
+                                $purchase,
+                                new BookSaleNotification(
+                                    authorName: $author->first_name ?? $author->name ?? 'Author',
+                                    bookTitle:  $item->book->title ?? 'your book',
+                                    buyerName:  $user->name ?? 'A reader',
+                                    amount:     $formattedPayout,
+                                    bookType:   'digital',
+                                )
+                            );
+                        } catch (\Exception $e) {
+                            Log::warning('Failed to send author digital sale notification', [
+                                'author_id' => $author->id,
+                                'error'     => $e->getMessage(),
+                            ]);
+                        }
                     }
                 }
 
@@ -218,6 +291,35 @@ class StripeWebhookService
                     );
                     $bookAnalytics->increment('purchases', 1);
                     $bookAnalytics->save();
+                }
+            }
+
+            // Notify reader once for the entire purchase (only on first processing)
+            if (!$wasAlreadyPaid) {
+                try {
+                    $bookTitles = $purchase->items->pluck('book.title')->filter()->values()->toArray();
+                    $titleCount = count($bookTitles);
+                    $message    = $titleCount === 1
+                        ? "'{$bookTitles[0]}' is now in your library. Enjoy your read!"
+                        : "{$titleCount} books are now in your library. Enjoy your reads!";
+                    app(NotificationService::class)->send(
+                        $user,
+                        'Purchase Confirmed',
+                        $message,
+                        ['in-app', 'push', 'email'],
+                        $purchase,
+                        new BookPurchaseConfirmation(
+                            readerName: $user->first_name ?? $user->name ?? 'Reader',
+                            bookTitles: $bookTitles ?: ['your book'],
+                            amount:     $this->formatAmount($purchase->total_amount, $purchase->currency ?? 'USD'),
+                            bookType:   'digital',
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send reader digital purchase notification', [
+                        'user_id' => $user->id,
+                        'error'   => $e->getMessage(),
+                    ]);
                 }
             }
         } catch (\Exception $e) {
@@ -600,6 +702,12 @@ class StripeWebhookService
                 'error' => $e->getMessage()
             ]);
         }
+    }
+
+    private function formatAmount(float $amount, string $currency): string
+    {
+        $symbol = strtoupper($currency) === 'NGN' ? '₦' : '$';
+        return $symbol . number_format($amount, 2);
     }
 
     /**

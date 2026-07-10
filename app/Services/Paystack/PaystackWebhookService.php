@@ -2,10 +2,13 @@
 
 namespace App\Services\Paystack;
 
+use App\Mail\Books\BookPurchaseConfirmation;
+use App\Mail\Books\BookSaleNotification;
 use App\Models\PaystackTransaction;
 use App\Models\Transaction;
 use App\Models\PaymentAudit;
 use App\Models\WebhookEvent;
+use App\Services\Notification\NotificationService;
 use App\Services\Payments\PaymentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -397,7 +400,9 @@ class PaystackWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($transaction->purpose_id);
 
-            if ($purchase->status !== 'paid') {
+            $wasAlreadyPaid = $purchase->status === 'paid';
+
+            if (!$wasAlreadyPaid) {
                 $purchase->update(['status' => 'paid']);
             }
 
@@ -425,12 +430,60 @@ class PaystackWebhookService
                         'purpose_id'       => $purchase->id,
                     ]);
                 });
+
+                if (!$wasAlreadyPaid) {
+                    try {
+                        $formattedPayout = $this->formatAmount($purchase->author_payout_amount, $purchase->currency ?? 'NGN');
+                        app(NotificationService::class)->send(
+                            $author,
+                            'New Audio Book Sale',
+                            "Your audio book '{$purchase->book->title}' was purchased. {$formattedPayout} has been added to your wallet.",
+                            ['in-app', 'push', 'email'],
+                            $purchase,
+                            new BookSaleNotification(
+                                authorName: $author->first_name ?? $author->name ?? 'Author',
+                                bookTitle:  $purchase->book->title ?? 'your book',
+                                buyerName:  $user->name ?? 'A reader',
+                                amount:     $formattedPayout,
+                                bookType:   'audio',
+                            )
+                        );
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to send author audio sale notification (Paystack)', [
+                            'author_id' => $author->id,
+                            'error'     => $e->getMessage(),
+                        ]);
+                    }
+                }
             }
 
             \App\Models\BookMetaDataAnalytics::firstOrCreate(
                 ['book_id' => $purchase->book_id],
                 ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
             )->increment('purchases');
+
+            if (!$wasAlreadyPaid) {
+                try {
+                    app(NotificationService::class)->send(
+                        $user,
+                        'Purchase Confirmed',
+                        "'{$purchase->book->title}' audio book is now in your library. Enjoy listening!",
+                        ['in-app', 'push', 'email'],
+                        $purchase,
+                        new BookPurchaseConfirmation(
+                            readerName: $user->first_name ?? $user->name ?? 'Reader',
+                            bookTitles: [$purchase->book->title ?? 'your audio book'],
+                            amount:     $this->formatAmount($purchase->price, $purchase->currency ?? 'NGN'),
+                            bookType:   'audio',
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send reader audio purchase notification (Paystack)', [
+                        'user_id' => $user->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
+            }
         } catch (\Exception $e) {
             Log::error('Error processing successful audio book purchase: ' . $e->getMessage(), [
                 'transaction_id' => $transaction->id,
@@ -451,7 +504,9 @@ class PaystackWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
-            if ($purchase->status !== 'paid') {
+            $wasAlreadyPaid = $purchase->status === 'paid';
+
+            if (!$wasAlreadyPaid) {
                 $purchase->update(['status' => 'paid']);
             }
 
@@ -480,12 +535,66 @@ class PaystackWebhookService
                             'purpose_id'       => $purchase->id,
                         ]);
                     });
+
+                    if (!$wasAlreadyPaid) {
+                        try {
+                            $formattedPayout = $this->formatAmount($item->author_payout_amount, $purchase->currency ?? 'NGN');
+                            app(NotificationService::class)->send(
+                                $author,
+                                'New Book Sale',
+                                "Your book '{$item->book->title}' was purchased. {$formattedPayout} has been added to your wallet.",
+                                ['in-app', 'push', 'email'],
+                                $purchase,
+                                new BookSaleNotification(
+                                    authorName: $author->first_name ?? $author->name ?? 'Author',
+                                    bookTitle:  $item->book->title ?? 'your book',
+                                    buyerName:  $user->name ?? 'A reader',
+                                    amount:     $formattedPayout,
+                                    bookType:   'digital',
+                                )
+                            );
+                        } catch (\Exception $e) {
+                            Log::warning('Failed to send author digital sale notification (Paystack)', [
+                                'author_id' => $author->id,
+                                'error'     => $e->getMessage(),
+                            ]);
+                        }
+                    }
                 }
 
                 \App\Models\BookMetaDataAnalytics::firstOrCreate(
                     ['book_id' => $item->book_id],
                     ['purchases' => 0, 'views' => 0, 'downloads' => 0, 'favourites' => 0, 'bookmarks' => 0, 'reads' => 0, 'shares' => 0, 'likes' => 0]
                 )->increment('purchases');
+            }
+
+            // Notify reader once for the entire purchase (only on first processing)
+            if (!$wasAlreadyPaid) {
+                try {
+                    $bookTitles = $purchase->items->pluck('book.title')->filter()->values()->toArray();
+                    $titleCount = count($bookTitles);
+                    $message    = $titleCount === 1
+                        ? "'{$bookTitles[0]}' is now in your library. Enjoy your read!"
+                        : "{$titleCount} books are now in your library. Enjoy your reads!";
+                    app(NotificationService::class)->send(
+                        $user,
+                        'Purchase Confirmed',
+                        $message,
+                        ['in-app', 'push', 'email'],
+                        $purchase,
+                        new BookPurchaseConfirmation(
+                            readerName: $user->first_name ?? $user->name ?? 'Reader',
+                            bookTitles: $bookTitles ?: ['your book'],
+                            amount:     $this->formatAmount($purchase->total_amount, $purchase->currency ?? 'NGN'),
+                            bookType:   'digital',
+                        )
+                    );
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send reader digital purchase notification (Paystack)', [
+                        'user_id' => $user->id,
+                        'error'   => $e->getMessage(),
+                    ]);
+                }
             }
         } catch (\Exception $e) {
             Log::error('Error processing successful digital book purchase: ' . $e->getMessage(), [
@@ -494,6 +603,12 @@ class PaystackWebhookService
             ]);
             throw $e;
         }
+    }
+
+    private function formatAmount(float $amount, string $currency): string
+    {
+        $symbol = strtoupper($currency) === 'NGN' ? '₦' : '$';
+        return $symbol . number_format($amount, 2);
     }
 
     /**

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\KYC;
 
 use App\Http\Controllers\Controller;
 use App\Mail\Generic\GenericAppNotification;
+use App\Mail\KYC\KycDelayNoticeMail;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -122,6 +123,34 @@ class AdminKYCController extends Controller
             ->through(fn ($author) => $this->formatAuthor($author));
 
         return $this->success($authors, 'Approved KYC submissions retrieved.');
+    }
+
+    /**
+     * Send a delay notice email to an author whose KYC is still pending.
+     */
+    public function notify(Request $request, User $user): JsonResponse
+    {
+        $request->validate(['message' => 'nullable|string|max:1000']);
+
+        if ($user->account_type !== 'author') {
+            return $this->error('User is not an author.', 422);
+        }
+
+        if (! in_array($user->kyc_status, ['pending_manual', 'in-review', 'pending'])) {
+            return $this->error("Cannot send notice: current KYC status is '{$user->kyc_status}'.", 422);
+        }
+
+        if (! $user->email) {
+            return $this->error('Author has no email address on file.', 422);
+        }
+
+        $firstName = $user->kycInfo?->first_name ?? $user->first_name;
+
+        Mail::to($user->email)->queue(
+            new KycDelayNoticeMail($user, (string) $firstName, $request->input('message'))
+        );
+
+        return $this->success(null, 'Delay notice sent to ' . $user->email . '.');
     }
 
     private function formatAuthor(User $author): array
