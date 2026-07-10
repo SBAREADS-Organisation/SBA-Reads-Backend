@@ -430,28 +430,34 @@ class BookController extends Controller
                 $alreadyOwned = $book->purchasers->contains('id', $viewerId);
 
                 if (! $alreadyOwned) {
-                    // Android / Stripe: paid DigitalBookPurchase that contains this book
+                    // Android / Stripe: paid DigitalBookPurchase that contains this book.
+                    // 'completed' covers legacy records predating the 'paid' standardisation.
                     $hasDigitalPurchase = DigitalBookPurchaseItem::where('book_id', $book->id)
                         ->whereHas('digitalBookPurchase', function ($q) use ($viewerId) {
-                            $q->where('user_id', $viewerId)->where('status', 'paid');
+                            $q->where('user_id', $viewerId)->whereIn('status', ['paid', 'completed']);
                         })
                         ->exists();
 
-                    // IAP: Apple or Google Play transaction recorded but book not in library
+                    // IAP: Apple or Google Play transaction recorded but book not in library.
+                    // Must use whereRaw with PostgreSQL ->> operator; Laravel's arrow syntax
+                    // generates MySQL JSON_EXTRACT which does not exist on PostgreSQL.
                     $hasIapTransaction = ! $hasDigitalPurchase && Transaction::where('user_id', $viewerId)
                         ->whereIn('payment_provider', ['apple', 'google_play'])
                         ->where('status', 'success')
-                        ->where('meta_data->book_id', $book->id)
+                        ->whereRaw("(meta_data->>'book_id')::integer = ?", [$book->id])
                         ->exists();
 
                     if ($hasDigitalPurchase || $hasIapTransaction) {
-                        app(BookPurchaseService::class)->addBooksToUserLibrary(
-                            auth()->user(),
-                            [$book->id]
-                        );
-
-                        // Reload purchasers so BookResource reflects the healed state
-                        $book->load('purchasers:id');
+                        try {
+                            app(BookPurchaseService::class)->addBooksToUserLibrary(
+                                auth()->user(),
+                                [$book->id]
+                            );
+                            // Reload purchasers so BookResource reflects the healed state
+                            $book->load('purchasers:id');
+                        } catch (\Throwable $healEx) {
+                            Log::error("show() heal failed for user {$viewerId} book {$book->id}: " . $healEx->getMessage());
+                        }
                     }
                 }
             }
@@ -1429,6 +1435,23 @@ class BookController extends Controller
             $currency = strtoupper($request->input('currency'));
             $provider = $this->getPaymentProvider($currency);
 
+            // Deduplication: block a second request for the same books within 60 seconds.
+            // Protects against double-taps and network retries creating duplicate
+            // pending purchases before the client can disable its button.
+            $recentDuplicate = DigitalBookPurchase::where('user_id', $user->id)
+                ->where('status', 'pending')
+                ->where('currency', $currency)
+                ->where('created_at', '>=', now()->subSeconds(60))
+                ->whereHas('items', fn ($q) => $q->whereIn('book_id', $bookIds))
+                ->exists();
+
+            if ($recentDuplicate) {
+                return $this->error(
+                    'A payment for this book is already in progress. Please wait a moment before trying again.',
+                    429
+                );
+            }
+
             // Reject if user already owns any of the requested books
             $ownedBooks = $user->purchasedBooks()->whereIn('book_id', $bookIds)->pluck('book_id');
             if ($ownedBooks->isNotEmpty()) {
@@ -2032,33 +2055,41 @@ class BookController extends Controller
             // Bulk auto-heal: catch any paid purchases that never reached book_user
             // (webhook failures, receipt validation races, etc.) so the library is
             // always consistent regardless of which platform the user opens first.
-            $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
+            // Wrapped in its own try/catch so a heal failure never hides books the
+            // user already owns — it logs and continues rather than returning 500.
+            try {
+                $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
 
-            $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
-                $q->where('user_id', $user->id)->where('status', 'paid')
-            )->pluck('book_id')->all();
+                // 'paid' is the current status; 'completed' covers legacy records created
+                // before the webhook services were standardised.
+                $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+                    $q->where('user_id', $user->id)->whereIn('status', ['paid', 'completed'])
+                )->pluck('book_id')->all();
 
-            // PostgreSQL JSON extraction: meta_data->>'book_id' (covers both Apple and Google Play IAP)
-            $paidIapIds = Transaction::where('user_id', $user->id)
-                ->whereIn('payment_provider', ['apple', 'google_play'])
-                ->where('status', 'success')
-                ->whereRaw("meta_data->>'book_id' IS NOT NULL")
-                ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
-                ->all();
+                // PostgreSQL JSON extraction: meta_data->>'book_id' (covers both Apple and Google Play IAP)
+                $paidIapIds = Transaction::where('user_id', $user->id)
+                    ->whereIn('payment_provider', ['apple', 'google_play'])
+                    ->where('status', 'success')
+                    ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+                    ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
+                    ->all();
 
-            $paidAudioIds = \App\Models\AudioBookPurchase::where('user_id', $user->id)
-                ->where('status', 'paid')
-                ->pluck('book_id')
-                ->all();
+                $paidAudioIds = \App\Models\AudioBookPurchase::where('user_id', $user->id)
+                    ->whereIn('status', ['paid', 'completed'])
+                    ->pluck('book_id')
+                    ->all();
 
-            $missingIds = array_values(array_diff(
-                array_unique(array_merge($paidDigitalIds, $paidIapIds, $paidAudioIds)),
-                $ownedBookIds
-            ));
+                $missingIds = array_values(array_diff(
+                    array_unique(array_merge($paidDigitalIds, $paidIapIds, $paidAudioIds)),
+                    $ownedBookIds
+                ));
 
-            if (! empty($missingIds)) {
-                app(BookPurchaseService::class)->addBooksToUserLibrary($user, $missingIds);
-                Log::info("myPurchasedBooks bulk-healed {$user->id}: " . implode(',', $missingIds));
+                if (! empty($missingIds)) {
+                    app(BookPurchaseService::class)->addBooksToUserLibrary($user, $missingIds);
+                    Log::info("myPurchasedBooks bulk-healed {$user->id}: " . implode(',', $missingIds));
+                }
+            } catch (\Throwable $healEx) {
+                Log::error("myPurchasedBooks heal failed for user {$user->id}: " . $healEx->getMessage());
             }
             $perPage = $request->input('items_per_page', 10000);
             // $search = $request->input('search');
@@ -2116,7 +2147,7 @@ class BookController extends Controller
         $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
 
         $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
-            $q->where('user_id', $user->id)->where('status', 'paid')
+            $q->where('user_id', $user->id)->whereIn('status', ['paid', 'completed'])
         )->pluck('book_id')->all();
 
         $paidIapIds = Transaction::where('user_id', $user->id)
@@ -2127,7 +2158,7 @@ class BookController extends Controller
             ->all();
 
         $paidAudioIds = AudioBookPurchase::where('user_id', $user->id)
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'completed'])
             ->pluck('book_id')
             ->all();
 
@@ -2148,5 +2179,93 @@ class BookController extends Controller
         ], empty($missingIds)
             ? 'Library is already in sync — nothing to heal.'
             : 'Library healed successfully.');
+    }
+
+    /**
+     * Admin-only: heal ALL users' libraries in one pass.
+     * Finds every user who has paid purchases not reflected in book_user
+     * and syncs them. Safe to run multiple times — addBooksToUserLibrary
+     * is idempotent.
+     * POST /admin/heal-all-libraries
+     */
+    public function adminHealAllLibraries(): JsonResponse
+    {
+        // Lift the PHP execution time limit — this endpoint may need to process
+        // many users and must not be killed mid-run, leaving partial state.
+        set_time_limit(0);
+
+        $healedUsers  = 0;
+        $healedBooks  = 0;
+        $errors       = [];
+
+        // Collect every user_id that has at least one paid purchase of any kind.
+        $userIds = collect()
+            ->merge(
+                DigitalBookPurchase::whereIn('status', ['paid', 'completed'])
+                    ->pluck('user_id')
+            )
+            ->merge(
+                Transaction::whereIn('payment_provider', ['apple', 'google_play'])
+                    ->where('status', 'success')
+                    ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+                    ->pluck('user_id')
+            )
+            ->merge(
+                AudioBookPurchase::whereIn('status', ['paid', 'completed'])
+                    ->pluck('user_id')
+            )
+            ->unique()
+            ->values();
+
+        foreach ($userIds as $uid) {
+            try {
+                $user = User::find($uid);
+                if (! $user) {
+                    continue;
+                }
+
+                $ownedIds = DB::table('book_user')->where('user_id', $uid)->pluck('book_id')->all();
+
+                $digitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+                    $q->where('user_id', $uid)->whereIn('status', ['paid', 'completed'])
+                )->pluck('book_id')->all();
+
+                $iapIds = Transaction::where('user_id', $uid)
+                    ->whereIn('payment_provider', ['apple', 'google_play'])
+                    ->where('status', 'success')
+                    ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+                    ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
+                    ->all();
+
+                $audioIds = AudioBookPurchase::where('user_id', $uid)
+                    ->whereIn('status', ['paid', 'completed'])
+                    ->pluck('book_id')
+                    ->all();
+
+                $missingIds = array_values(array_diff(
+                    array_unique(array_merge($digitalIds, $iapIds, $audioIds)),
+                    $ownedIds
+                ));
+
+                if (! empty($missingIds)) {
+                    app(BookPurchaseService::class)->addBooksToUserLibrary($user, $missingIds);
+                    Log::info("adminHealAllLibraries healed user {$uid}: books " . implode(',', $missingIds));
+                    $healedUsers++;
+                    $healedBooks += count($missingIds);
+                }
+            } catch (\Throwable $e) {
+                Log::error("adminHealAllLibraries failed for user {$uid}: " . $e->getMessage());
+                $errors[] = $uid;
+            }
+        }
+
+        return $this->success([
+            'users_checked'  => $userIds->count(),
+            'users_healed'   => $healedUsers,
+            'books_added'    => $healedBooks,
+            'failed_user_ids' => $errors,
+        ], $healedUsers > 0
+            ? "Healed {$healedBooks} missing book(s) across {$healedUsers} user(s)."
+            : 'All libraries are already in sync.');
     }
 }

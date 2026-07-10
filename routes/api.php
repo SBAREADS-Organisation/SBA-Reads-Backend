@@ -221,6 +221,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::middleware(['role:admin,superadmin'])->patch('books/{book}/audio-price', [BookController::class, 'setAudioPrice'])->name('book.set-audio-price');
     Route::middleware(['role:admin,superadmin,author'])->delete('books/{book}', [BookController::class, 'destroy']);
     Route::middleware(['role:admin,superadmin'])->post('admin/users/{userId}/heal-library', [BookController::class, 'adminHealUserLibrary'])->name('admin.user.heal-library')->where('userId', '[0-9]+');
+    Route::middleware(['role:admin,superadmin'])->post('admin/heal-all-libraries', [BookController::class, 'adminHealAllLibraries'])->name('admin.heal-all-libraries');
 
     // Reader-specific endpoints
     Route::post('books/{id}/start-reading', [BookController::class, 'startReading'])->where('id', '[0-9]+');
