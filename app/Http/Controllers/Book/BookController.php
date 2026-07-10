@@ -1452,6 +1452,9 @@ class BookController extends Controller
                 );
             }
 
+            // Note: the DB check constraint only allows 'pending', 'paid', 'failed'
+            // for digital_book_purchases.status — 'cancelled' is not valid.
+
             // Reject if user already owns any of the requested books
             $ownedBooks = $user->purchasedBooks()->whereIn('book_id', $bookIds)->pluck('book_id');
             if ($ownedBooks->isNotEmpty()) {
