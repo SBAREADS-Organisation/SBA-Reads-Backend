@@ -54,9 +54,10 @@ class NotifyBookUploadFailure extends Command
         $sent = 0;
 
         foreach ($byAuthor as $authorId => $authorBooks) {
-            $authorName  = $authorBooks->first()->author_name;
+            $rawName     = $authorBooks->first()->author_name ?? '';
+            $authorName  = ($rawName && strtoupper(trim($rawName)) !== 'NO NAME') ? $rawName : 'Author';
             $authorEmail = $authorBooks->first()->author_email;
-            $titles      = $authorBooks->pluck('title')->toArray();
+            $titles      = array_values(array_unique($authorBooks->pluck('title')->toArray()));
 
             $this->line("  Author : {$authorName} <{$authorEmail}>");
             $this->line("  Books  : " . implode(', ', $titles));
