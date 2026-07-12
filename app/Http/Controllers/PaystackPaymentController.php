@@ -230,11 +230,10 @@ class PaystackPaymentController extends Controller
                 $webhookService->handleWebhook($webhookPayload);
             }
 
-            // return response()->json([
-            //     'success' => true,
-            //     'message' => 'Payment completed successfully'
-            // ]);
-            return redirect()->route('payment.success')->with('success', 'Payment completed successfully');
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment completed successfully'
+            ]);
         } catch (\Exception $e) {
             Log::error('Paystack callback error: ' . $e->getMessage());
             return response()->json([

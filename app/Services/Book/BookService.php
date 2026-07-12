@@ -123,10 +123,17 @@ class BookService
                     $s3Dir    = 'books/content/' . date('Y/m/d');
                     $s3Key    = $s3Dir . '/' . $fileName;
 
-                    // Stream directly to S3 — avoids loading the entire PDF into memory
-                    // which could exhaust PHP's memory limit for files near the 50 MB cap.
-                    Storage::disk('s3')->putFileAs($s3Dir, $file, $fileName, ['visibility' => 'public']);
+                    // Stream directly to S3 without setting a public ACL.
+                    // Modern S3 buckets use "Bucket owner enforced" ownership which
+                    // rejects ACL headers entirely — files are served via signed URLs instead.
+                    $uploaded = Storage::disk('s3')->putFileAs($s3Dir, $file, $fileName);
 
+                    if (! $uploaded) {
+                        throw new \RuntimeException("Failed to upload book file to S3: {$fileName}");
+                    }
+
+                    // Store the canonical (non-signed) S3 key URL; signed URLs are
+                    // generated at serve time in BookResource so they never expire in the DB.
                     $s3Url = Storage::disk('s3')->url($s3Key);
 
                     $media = \App\Models\MediaUpload::create([

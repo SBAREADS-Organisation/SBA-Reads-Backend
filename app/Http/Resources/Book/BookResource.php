@@ -65,7 +65,7 @@ class BookResource extends JsonResource
             'stock_reserved' => $this->stock_reserved ?? 0,
             'stock_available' => max(0, ($this->stock_quantity ?? 0) - ($this->stock_reserved ?? 0)),
             'author_id' => $this->author_id,
-            'files' => $this->files,
+            'files' => $this->resolveFiles(),
             'is_featured'    => (bool) ($this->is_featured ?? false),
             'ios_available'  => (bool) ($this->ios_available ?? true),
             'ranking'        => $this->ranking,
@@ -153,6 +153,40 @@ class BookResource extends JsonResource
         } catch (\Throwable $e) {
             return false;
         }
+    }
+
+    /**
+     * Return book files with S3 private-bucket files replaced by 7-day signed URLs.
+     * Cloudinary and other non-S3 URLs are passed through untouched.
+     */
+    private function resolveFiles(): array
+    {
+        $files = $this->files;
+        if (empty($files) || !is_array($files)) {
+            return [];
+        }
+
+        return collect($files)
+            ->filter(fn ($file) => is_array($file))
+            ->map(function (array $file): array {
+                $url = $file['public_url'] ?? $file['url'] ?? '';
+                $key = $file['public_id'] ?? null;
+
+                // Only sign S3 URLs — Cloudinary URLs work publicly
+                if ($key && str_contains($url, 'amazonaws.com')) {
+                    try {
+                        $signed = \Illuminate\Support\Facades\Storage::disk('s3')
+                            ->temporaryUrl($key, now()->addDays(7));
+                        $file['public_url'] = $signed;
+                    } catch (\Throwable) {
+                        // Fall back to original URL if signing fails
+                    }
+                }
+
+                return $file;
+            })
+            ->values()
+            ->toArray();
     }
 
     private function formatProfilePicture($profilePicture)

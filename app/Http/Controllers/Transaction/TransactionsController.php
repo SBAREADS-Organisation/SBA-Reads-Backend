@@ -198,25 +198,26 @@ class TransactionsController extends Controller
             $txn->book_names = [];
             $txn->in_library = null;
 
+            // Payout/credit rows belong to the author, not the reader — skip library check
+            $isPurchaseRow = ($txn->direction ?? '') !== 'credit' && ($txn->type ?? '') !== 'payout';
+
             if ($txn->purpose_type === 'digital_book_purchase' && $txn->purpose_id) {
-                $p = $digitalPurchases->get($txn->purpose_id);
+                $p = $digitalPurchases->get((int) $txn->purpose_id);
                 if ($p) {
                     $bookIds         = $p->items->pluck('book_id')->filter()->toArray();
                     $txn->book_names = $p->items->pluck('book.title')->filter()->values()->toArray();
-                    if ($p->user_id && !empty($bookIds)) {
+                    if ($isPurchaseRow && $p->user_id && !empty($bookIds)) {
                         $lib             = $libraryMap[$p->user_id] ?? [];
                         $txn->in_library = count(array_filter($bookIds, fn($id) => isset($lib[$id]))) === count($bookIds);
-                    } else {
-                        $txn->in_library = false;
                     }
                 }
             } elseif ($txn->purpose_type === 'audio_book_purchase' && $txn->purpose_id) {
-                $p = $audioPurchases->get($txn->purpose_id);
+                $p = $audioPurchases->get((int) $txn->purpose_id);
                 if ($p && $p->book) {
                     $txn->book_names = [$p->book->title];
-                    $txn->in_library = $p->user_id && $p->book_id
-                        ? isset(($libraryMap[$p->user_id] ?? [])[$p->book_id])
-                        : false;
+                    if ($isPurchaseRow && $p->user_id && $p->book_id) {
+                        $txn->in_library = isset(($libraryMap[$p->user_id] ?? [])[$p->book_id]);
+                    }
                 }
             }
 

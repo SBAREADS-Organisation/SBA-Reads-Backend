@@ -622,18 +622,12 @@ class BookController extends Controller
             );
         }
 
-        // Total pages count from book
-        $totalPages = $book->meta_data['pages'] ?? 0;
+        // Total pages count from book; fall back to 0 if not set (progress will be 0)
+        $totalPages = (int) ($book->meta_data['pages'] ?? 0);
 
-        // Resolve error if book has no page count
-        if ($totalPages <= 0) {
-            return $this->error(
-                'Book has no page count',
-                400
-            );
-        }
-
-        $progress = min(round((intval($validated['page']) / intval($totalPages)) * 100), 100);
+        $progress = $totalPages > 0
+            ? min(round((intval($validated['page']) / $totalPages) * 100), 100)
+            : 0;
 
         $record = $book->readingProgress()->updateOrCreate(
             ['book_id' => $bookId, 'user_id' => $user->id],
