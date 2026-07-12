@@ -1034,6 +1034,40 @@ class BookController extends Controller
                 ]);
             }
 
+            // Handle book file (PDF) replacement
+            if ($request->hasFile('files')) {
+                $fileValidator = Validator::make($request->all(), [
+                    'files.*' => 'file|mimes:pdf,doc,docx|max:102400',
+                ]);
+                if ($fileValidator->fails()) {
+                    return $this->error('File validation failed', 400, $fileValidator->errors());
+                }
+
+                $uploadedFiles = [];
+                foreach ($request->file('files') as $file) {
+                    if ($file instanceof \Illuminate\Http\UploadedFile) {
+                        $ext      = $file->getClientOriginalExtension() ?: 'pdf';
+                        $fileName = \Illuminate\Support\Str::uuid() . '.' . $ext;
+                        $s3Dir    = 'books/content/' . now()->format('Y/m/d');
+                        $s3Key    = $s3Dir . '/' . $fileName;
+
+                        $uploaded = \Illuminate\Support\Facades\Storage::disk('s3')->putFileAs($s3Dir, $file, $fileName);
+
+                        if (! $uploaded) {
+                            throw new \RuntimeException("Failed to upload book file to S3: {$fileName}");
+                        }
+
+                        $uploadedFiles[] = [
+                            'public_url' => \Illuminate\Support\Facades\Storage::disk('s3')->url($s3Key),
+                            'public_id'  => $s3Key,
+                        ];
+                    }
+                }
+                if (! empty($uploadedFiles)) {
+                    $validated['files'] = $uploadedFiles;
+                }
+            }
+
             // Handle categories relationship separately
             $categories = null;
             if (isset($validated['categories'])) {
