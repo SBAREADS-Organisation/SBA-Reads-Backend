@@ -1131,6 +1131,91 @@ class UserController extends Controller
     }
 
     /**
+     * Permanently delete a reader account (admin only).
+     * Cannot delete admins, superadmins, or authors via this endpoint.
+     */
+    public function deleteUser(Request $request, $user_id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $user = User::find($user_id);
+
+            if (! $user) {
+                return $this->error('User not found.', 404);
+            }
+
+            // Superadmins cannot be deleted via this endpoint
+            if ($user->account_type === 'superadmin') {
+                return $this->error('Cannot delete a superadmin account.', 403);
+            }
+
+            // Prevent self-deletion
+            if ($user->id === $request->user()->id) {
+                return $this->error('You cannot delete your own account.', 403);
+            }
+
+            $email = $user->email;
+
+            DB::transaction(function () use ($user) {
+                $id = $user->id;
+
+                // Author-specific: remove their books and related data
+                if ($user->account_type === 'author') {
+                    $bookIds = DB::table('books')->where('author_id', $id)->pluck('id')->toArray();
+                    if (! empty($bookIds)) {
+                        DB::table('book_user')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('book_user_bookmarks')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('reading_progress')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('reviews')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('digital_book_purchase_items')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('media_uploads')->where('mediable_type', 'book')->whereIn('mediable_id', $bookIds)->delete();
+                        DB::table('books')->whereIn('id', $bookIds)->delete();
+                    }
+                    // Remove from co-author pivots on other books
+                    DB::table('book_authors')->where('author_id', $id)->delete();
+                    DB::table('withdrawals')->where('user_id', $id)->delete();
+                    DB::table('stripe_payouts')->where('user_id', $id)->delete();
+                }
+
+                // Auth & session
+                DB::table('personal_access_tokens')->where('tokenable_id', $id)->delete();
+                DB::table('social_accounts')->where('user_id', $id)->delete();
+                DB::table('linked_accounts')->where('user_id', $id)->delete();
+
+                // Library & reading
+                DB::table('book_user')->where('user_id', $id)->delete();
+                DB::table('book_user_bookmarks')->where('user_id', $id)->delete();
+                DB::table('reading_progress')->where('user_id', $id)->delete();
+
+                // Content
+                DB::table('reviews')->where('user_id', $id)->delete();
+                DB::table('notifications')->where('notifiable_id', $id)->delete();
+
+                // Payments & orders (kept for audit — only the user row is removed)
+                // addresses, orders, payments, transactions remain for financial records
+
+                // Spatie roles/permissions
+                DB::table('model_has_roles')->where('model_id', $id)->where('model_type', get_class($user))->delete();
+                DB::table('model_has_permissions')->where('model_id', $id)->where('model_type', get_class($user))->delete();
+
+                // Profile media
+                DB::table('media_uploads')->where('mediable_type', 'user')->where('mediable_id', $id)->delete();
+
+                // KYC
+                DB::table('k_y_c_verifications')->where('user_id', $id)->delete();
+                DB::table('user_kyc_infos')->where('user_id', $id)->delete();
+
+                // Delete the user
+                $user->delete();
+            });
+
+            return $this->success(null, "User ({$email}) has been permanently deleted.", 200);
+
+        } catch (\Throwable $th) {
+            return $this->error('Failed to delete user.', 500, null, $th);
+        }
+    }
+
+    /**
      * Bulk status update for multiple users (authors or readers).
      * Processes each user individually — partial failures do not block the rest.
      */

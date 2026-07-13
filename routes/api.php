@@ -72,6 +72,7 @@ Route::prefix('user')->group(function () {
     // Admin User Management Routes
     Route::middleware(['auth:sanctum'])->group(function () {
         Route::middleware(['role:admin,superadmin'])->get('all', [UserController::class, 'allUsers']);
+        Route::middleware(['role:admin,superadmin'])->delete('/{user_id}', [UserController::class, 'deleteUser'])->name('admin.user.delete')->where('user_id', '[0-9]+');
     });
 
     // User Management Routes

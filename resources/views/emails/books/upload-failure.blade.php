@@ -15,6 +15,20 @@
     this was entirely our fault, not yours.
   </p>
 
+  {{-- Force restart FIRST --}}
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:24px;">
+    <tr>
+      <td style="background:#fff8f0;border:1px solid #f0c090;border-radius:10px;padding:16px 20px;">
+        <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#d4651a;">Before you begin — important first step</p>
+        <p style="margin:0;font-size:13px;color:#4a3728;line-height:1.6;">
+          We have pushed an update to the SBA Reads app that enables the re-upload feature.
+          Please <strong>force close the SBA Reads app and reopen it</strong> before following the steps below.
+          Without this, the upload option may not appear.
+        </p>
+      </td>
+    </tr>
+  </table>
+
   {{-- Affected books --}}
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;border:1px solid #e8ddd6;border-radius:10px;overflow:hidden;">
     <tr>
@@ -66,7 +80,7 @@
   </table>
 
   {{-- Reassurance --}}
-  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:28px;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:20px;">
     <tr>
       <td style="background:#f0faf4;border-left:3px solid #27ae60;border-radius:0 8px 8px 0;padding:14px 18px;">
         <p style="margin:0;font-size:13px;color:#4a3728;line-height:1.6;">
