@@ -1165,7 +1165,7 @@ class UserController extends Controller
                         DB::table('book_user')->whereIn('book_id', $bookIds)->delete();
                         DB::table('book_user_bookmarks')->whereIn('book_id', $bookIds)->delete();
                         DB::table('reading_progress')->whereIn('book_id', $bookIds)->delete();
-                        DB::table('reviews')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('book_reviews')->whereIn('book_id', $bookIds)->delete();
                         DB::table('digital_book_purchase_items')->whereIn('book_id', $bookIds)->delete();
                         DB::table('media_uploads')->where('mediable_type', 'book')->whereIn('mediable_id', $bookIds)->delete();
                         DB::table('books')->whereIn('id', $bookIds)->delete();
@@ -1187,7 +1187,7 @@ class UserController extends Controller
                 DB::table('reading_progress')->where('user_id', $id)->delete();
 
                 // Content
-                DB::table('reviews')->where('user_id', $id)->delete();
+                DB::table('book_reviews')->where('user_id', $id)->delete();
                 DB::table('notifications')->where('notifiable_id', $id)->delete();
 
                 // Payments & orders (kept for audit — only the user row is removed)
