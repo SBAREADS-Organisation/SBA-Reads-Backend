@@ -4,11 +4,12 @@ namespace App\Mail\Book;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class BookUploadFailureMail extends Mailable
+class BookUploadReminderMail extends Mailable
 {
     use Queueable, SerializesModels;
 
@@ -20,15 +21,15 @@ class BookUploadFailureMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Action Required: Please Re-upload Your Book File',
-            replyTo: [new \Illuminate\Mail\Mailables\Address('admin@sbareads.com', 'SBA Reads Support')],
+            subject: 'Reminder: Your Book File Still Needs to Be Re-uploaded',
+            replyTo: [new Address('admin@sbareads.com', 'SBA Reads Support')],
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            view: 'emails.books.upload-failure',
+            view: 'emails.books.upload-reminder',
             with: [
                 'authorName' => $this->authorName,
                 'bookTitles' => $this->bookTitles,
