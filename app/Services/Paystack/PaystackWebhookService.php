@@ -443,7 +443,7 @@ class PaystackWebhookService
                             new BookSaleNotification(
                                 authorName: $author->first_name ?? $author->name ?? 'Author',
                                 bookTitle:  $purchase->book->title ?? 'your book',
-                                buyerName:  $user->name ?? 'A reader',
+                                buyerName:  $user->username ?? $user->name ?? 'A reader',
                                 amount:     $formattedPayout,
                                 bookType:   'audio',
                             )
@@ -548,7 +548,7 @@ class PaystackWebhookService
                                 new BookSaleNotification(
                                     authorName: $author->first_name ?? $author->name ?? 'Author',
                                     bookTitle:  $item->book->title ?? 'your book',
-                                    buyerName:  $user->name ?? 'A reader',
+                                    buyerName:  $user->username ?? $user->name ?? 'A reader',
                                     amount:     $formattedPayout,
                                     bookType:   'digital',
                                 )

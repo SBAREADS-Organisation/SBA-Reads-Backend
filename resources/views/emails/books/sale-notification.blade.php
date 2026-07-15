@@ -22,7 +22,7 @@
           <tr>
             <td style="width:50%;vertical-align:top;padding-bottom:12px;">
               <p style="margin:0;font-size:11px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;">Purchased By</p>
-              <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#160c08;">{{ $buyerName }}</p>
+              <p style="margin:4px 0 0;font-size:14px;font-weight:600;color:#160c08;">{{ (strtoupper(trim($buyerName)) !== 'NO NAME' && trim($buyerName) !== '') ? $buyerName : 'A reader' }}</p>
             </td>
             <td style="width:50%;vertical-align:top;padding-bottom:12px;">
               <p style="margin:0;font-size:11px;color:#9e8272;text-transform:uppercase;letter-spacing:1px;">Your Earnings</p>
