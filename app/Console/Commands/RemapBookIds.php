@@ -117,9 +117,19 @@ class RemapBookIds extends Command
         // ── Execute ────────────────────────────────────────────────────────
         DB::transaction(function () use ($map, $seqNext) {
             foreach ($map as $oldId => $newId) {
-                // 1. Clone book row at new ID
-                $book         = (array) DB::table('books')->where('id', $oldId)->first();
-                $book['id']   = $newId;
+                // 1. Clone book row at new ID, rewriting unique product IDs to match
+                $book = (array) DB::table('books')->where('id', $oldId)->first();
+                $book['id'] = $newId;
+
+                // product_id and audio_product_id embed the book ID — update them to avoid
+                // the unique constraint violation on the cloned row.
+                if (isset($book['product_id'])) {
+                    $book['product_id'] = preg_replace('/\.' . $oldId . '$/', '.' . $newId, $book['product_id']);
+                }
+                if (isset($book['audio_product_id'])) {
+                    $book['audio_product_id'] = preg_replace('/\.' . $oldId . '$/', '.' . $newId, $book['audio_product_id']);
+                }
+
                 DB::table('books')->insert($book);
 
                 // 2. Re-point every FK child table
