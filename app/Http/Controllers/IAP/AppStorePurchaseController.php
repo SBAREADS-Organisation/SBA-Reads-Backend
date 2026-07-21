@@ -177,6 +177,7 @@ class AppStorePurchaseController extends Controller
                             'payment_provider' => 'apple',
                             'description'      => "Apple IAP {$purchaseType} purchase: {$book->title}",
                             'purpose_type'     => 'Online book purchase',
+                            'purpose_id'       => $book->id,
                             'status'           => 'success',
                             'type'             => 'purchase',
                             'direction'        => 'debit',
