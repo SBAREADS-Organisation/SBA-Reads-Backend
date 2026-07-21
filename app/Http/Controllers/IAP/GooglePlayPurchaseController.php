@@ -72,24 +72,23 @@ class GooglePlayPurchaseController extends Controller
 
             $orderId = $verification->getTransactionId();
 
-            return DB::transaction(function () use ($user, $productId, $orderId, $purchaseType, $verification, $bookIdFromRequest) {
+            // ── Phase 1: Grant book (committed immediately — user gets their book no matter what) ──
+            [$book, $granted] = DB::transaction(function () use ($user, $productId, $orderId, $purchaseType, $bookIdFromRequest) {
                 $bookPurchaseService = app(BookPurchaseService::class);
 
                 $book = Book::where('product_id', $productId)
                     ->orWhere('audio_product_id', $productId)
                     ->first();
 
-                // Fallback: product_id not yet in DB but book_id was sent by client.
                 if (! $book && $bookIdFromRequest) {
                     $book = Book::find($bookIdFromRequest);
                 }
 
                 if (! $book) {
                     Log::warning("Google Play IAP: book not found for product_id: {$productId}", ['user_id' => $user->id]);
-                    return $this->error("No book found matching product ID: {$productId}", 404);
+                    return [null, false];
                 }
 
-                // Idempotency: don't create duplicate transactions
                 $existingTxn = Transaction::where('payment_intent_id', $orderId)->first();
                 if (! $existingTxn) {
                     $amount = (float) ($book->actual_price ?? $book->discounted_price ?? 0);
@@ -103,7 +102,8 @@ class GooglePlayPurchaseController extends Controller
                         'payment_provider' => 'google_play',
                         'description'      => "Google Play {$purchaseType} purchase: {$book->title}",
                         'purpose_type'     => 'Online book purchase',
-                        'status'           => 'success',
+                        'purpose_id'       => $book->id,
+                        'status'           => 'succeeded',
                         'type'             => 'purchase',
                         'direction'        => 'debit',
                         'meta_data'        => [
@@ -115,15 +115,29 @@ class GooglePlayPurchaseController extends Controller
                     ]);
                 }
 
-                // Grant book to library
                 $granted = false;
                 if (! $user->purchasedBooks()->where('books.id', $book->id)->exists()) {
                     $bookPurchaseService->addBooksToUserLibrary($user, [$book->id]);
                     $granted = true;
                 }
 
-                // Credit author(s) with pending IAP earnings
-                if ($granted) {
+                return [$book, $granted];
+            });
+
+            if (! $book) {
+                return $this->error("No book found matching product ID: {$productId}", 404);
+            }
+
+            Log::info('Google Play IAP: book granted', [
+                'user_id' => $user->id,
+                'book_id' => $book->id,
+                'granted' => $granted,
+            ]);
+
+            // ── Phase 2: Record author earnings (non-critical — runs after book grant is committed) ──
+            // A failure here never revokes book access. Logged for manual reconciliation.
+            if ($granted) {
+                try {
                     $rateAtSale = null;
                     try {
                         $rateAtSale = app(CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
@@ -173,19 +187,19 @@ class GooglePlayPurchaseController extends Controller
                             'amount_usd' => $authorEarning,
                         ]);
                     }
+                } catch (\Throwable $e) {
+                    Log::error('Google Play IAP: author earnings recording failed — book already granted, reconcile manually', [
+                        'user_id' => $user->id,
+                        'book_id' => $book->id,
+                        'error'   => $e->getMessage(),
+                    ]);
                 }
+            }
 
-                Log::info('Google Play IAP: verification complete', [
-                    'user_id'  => $user->id,
-                    'book_id'  => $book->id,
-                    'granted'  => $granted,
-                ]);
-
-                return $this->success([
-                    'book'    => ['id' => $book->id, 'title' => $book->title],
-                    'granted' => $granted,
-                ], $granted ? 'Purchase verified successfully.' : 'Book is already in your library.');
-            });
+            return $this->success([
+                'book'    => ['id' => $book->id, 'title' => $book->title],
+                'granted' => $granted,
+            ], $granted ? 'Purchase verified successfully.' : 'Book is already in your library.');
         } catch (\Throwable $e) {
             Log::error('Google Play IAP exception: ' . $e->getMessage(), [
                 'user_id'    => $user->id,
