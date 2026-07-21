@@ -131,178 +131,193 @@ class AppStorePurchaseController extends Controller
                 return response()->json(['error' => 'No purchase items found in receipt'], 400);
             }
 
-            return DB::transaction(function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
-                $grantedBooks        = [];
-                $bookPurchaseService = app(BookPurchaseService::class);
-                $bookIdsToGrant      = [];
+            // ── Phase 1: Grant books (committed immediately — user gets their book no matter what) ──
+            [$grantedBooks, $bookIdsToGrant, $purchaseItems] = DB::transaction(
+                function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
+                    $grantedBooks        = [];
+                    $bookIdsToGrant      = [];
+                    $purchaseItems       = []; // passed to Phase 2 for author earnings
+                    $bookPurchaseService = app(BookPurchaseService::class);
 
-                foreach ($receiptInfo as $item) {
-                    // $item is either an imdhemy InAppPurchase object (production path)
-                    // or a plain array (sandbox path via raw HTTP).
-                    $productId       = is_array($item) ? $item['product_id']              : $item->getProductId();
-                    $originalTransId = is_array($item) ? $item['original_transaction_id'] : $item->getOriginalTransactionId();
+                    foreach ($receiptInfo as $item) {
+                        // $item is either an imdhemy InAppPurchase object (production path)
+                        // or a plain array (sandbox path via raw HTTP).
+                        $productId       = is_array($item) ? $item['product_id']              : $item->getProductId();
+                        $originalTransId = is_array($item) ? $item['original_transaction_id'] : $item->getOriginalTransactionId();
 
-                    // Lookup by the book's own product_id (per-book SKU system).
-                    $book = Book::where('product_id', $productId)
-                        ->orWhere('audio_product_id', $productId)
-                        ->first();
+                        // Lookup by the book's own product_id (per-book SKU system).
+                        $book = Book::where('product_id', $productId)
+                            ->orWhere('audio_product_id', $productId)
+                            ->first();
 
-                    // Fallback: product_id not yet in DB but book_id was sent by client.
-                    // Guards against the brief window between App Store Connect publishing
-                    // and the book record being updated on the server.
-                    if (! $book && $bookIdFromRequest) {
-                        $book = Book::find($bookIdFromRequest);
+                        // Fallback: product_id not yet in DB but book_id was sent by client.
+                        if (! $book && $bookIdFromRequest) {
+                            $book = Book::find($bookIdFromRequest);
+                        }
+
+                        if (! $book) {
+                            Log::warning("IAP: book not found for product_id: {$productId}", [
+                                'user_id' => $user->id,
+                            ]);
+                            continue;
+                        }
+
+                        $existingTransaction = Transaction::where('payment_intent_id', $originalTransId)->first();
+
+                        if (! $existingTransaction) {
+                            $amount       = $book->actual_price ?? $book->discounted_price ?? 0;
+                            $bookCurrency = strtolower($book->currency ?? 'usd');
+
+                            Transaction::create([
+                                'id'               => Str::uuid(),
+                                'reference'        => uniqid('iap_'),
+                                'user_id'          => $user->id,
+                                'payment_intent_id'=> $originalTransId,
+                                'amount'           => $amount,
+                                'currency'         => 'usd',
+                                'payment_provider' => 'apple',
+                                'description'      => "Apple IAP {$purchaseType} purchase: {$book->title}",
+                                'purpose_type'     => 'Online book purchase',
+                                'purpose_id'       => $book->id,
+                                'status'           => 'success',
+                                'type'             => 'purchase',
+                                'direction'        => 'debit',
+                                'meta_data'        => [
+                                    'product_id'    => $productId,
+                                    'book_id'       => $book->id,
+                                    'book_currency' => $bookCurrency,
+                                    'purchase_type' => $purchaseType,
+                                    'environment'   => $environment,
+                                ],
+                            ]);
+
+                            Log::info('IAP: buyer transaction created', [
+                                'user_id'     => $user->id,
+                                'book_id'     => $book->id,
+                                'environment' => $environment,
+                            ]);
+                        } else {
+                            Log::info('IAP: transaction already exists, skipping', [
+                                'user_id' => $user->id,
+                                'book_id' => $book->id,
+                            ]);
+                        }
+
+                        $alreadyPurchased = $user->purchasedBooks()->where('books.id', $book->id)->exists();
+
+                        if (! $alreadyPurchased) {
+                            $bookIdsToGrant[] = $book->id;
+                            $grantedBooks[]   = [
+                                'id'         => $book->id,
+                                'product_id' => $productId,
+                                'title'      => $book->title,
+                            ];
+                            $purchaseItems[]  = [
+                                'book_id'    => $book->id,
+                                'book_title' => $book->title,
+                                'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
+                                'buyer_id'   => $user->id,
+                            ];
+                        } else {
+                            Log::info('IAP: book already in library', [
+                                'user_id' => $user->id,
+                                'book_id' => $book->id,
+                            ]);
+                        }
                     }
 
-                    if (! $book) {
-                        Log::warning("IAP: book not found for product_id: {$productId}", [
-                            'user_id' => $user->id,
-                        ]);
-                        continue;
+                    if (! empty($bookIdsToGrant)) {
+                        $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
                     }
 
-                    $existingTransaction = Transaction::where('payment_intent_id', $originalTransId)->first();
-
-                    if (! $existingTransaction) {
-                        $amount       = $book->actual_price ?? $book->discounted_price ?? 0;
-                        $bookCurrency = strtolower($book->currency ?? 'usd');
-
-                        Transaction::create([
-                            'id'               => Str::uuid(),
-                            'reference'        => uniqid('iap_'),
-                            'user_id'          => $user->id,
-                            'payment_intent_id'=> $originalTransId,
-                            'amount'           => $amount,
-                            'currency'         => 'usd',
-                            'payment_provider' => 'apple',
-                            'description'      => "Apple IAP {$purchaseType} purchase: {$book->title}",
-                            'purpose_type'     => 'Online book purchase',
-                            'purpose_id'       => $book->id,
-                            'status'           => 'success',
-                            'type'             => 'purchase',
-                            'direction'        => 'debit',
-                            'meta_data'        => [
-                                'product_id'    => $productId,
-                                'book_id'       => $book->id,
-                                'book_currency' => $bookCurrency,
-                                'purchase_type' => $purchaseType,
-                                'environment'   => $environment,
-                            ],
-                        ]);
-
-                        Log::info('IAP: transaction created', [
-                            'user_id'     => $user->id,
-                            'book_id'     => $book->id,
-                            'environment' => $environment,
-                        ]);
-                    } else {
-                        Log::info('IAP: transaction already exists, skipping', [
-                            'user_id' => $user->id,
-                            'book_id' => $book->id,
-                        ]);
-                    }
-
-                    $alreadyPurchased = $user->purchasedBooks()->where('books.id', $book->id)->exists();
-
-                    if (! $alreadyPurchased) {
-                        $bookIdsToGrant[] = $book->id;
-                        $grantedBooks[]   = [
-                            'id'         => $book->id,
-                            'product_id' => $productId,
-                            'title'      => $book->title,
-                        ];
-                    } else {
-                        Log::info('IAP: book already in library', [
-                            'user_id' => $user->id,
-                            'book_id' => $book->id,
-                        ]);
-                    }
+                    return [$grantedBooks, $bookIdsToGrant, $purchaseItems];
                 }
+            );
 
-                if (! empty($bookIdsToGrant)) {
-                    $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
-                }
+            Log::info('IAP: books granted', [
+                'user_id'      => $user->id,
+                'environment'  => $environment,
+                'books_granted'=> count($grantedBooks),
+            ]);
 
-                // Credit each book's authors with their pending IAP earnings.
-                // Apple remits our 70% monthly; we flag these as 'iap_pending' and
-                // process payouts in a batch after Apple has actually paid us.
-                //
-                // We lock the USD/NGN exchange rate at the time of sale so authors
-                // know exactly what they'll receive — rate is stored in meta_data.
-                $rateAtSale = null;
+            // ── Phase 2: Record author earnings (non-critical — runs after book grant is committed) ──
+            // A failure here never revokes book access. Logged for manual reconciliation.
+            if (! empty($purchaseItems)) {
                 try {
-                    $rateAtSale = app(CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
-                } catch (\Throwable) {
-                    $rateAtSale = (float) config('services.currency.ngn_usd_fallback', 1600);
-                }
-
-                foreach ($bookIdsToGrant as $bookId) {
-                    $book    = Book::find($bookId);
-                    $authors = $book?->authors ?? collect();
-                    $price   = (float) ($book->actual_price ?? $book->discounted_price ?? 0);
-
-                    $netFromApple  = $price * (1 - APPLE_COMMISSION);
-                    $authorEarning = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
-
-                    foreach ($authors as $author) {
-                        $alreadyCredited = Transaction::where('payment_intent_id', 'iap_author_' . $user->id . '_' . $bookId)
-                            ->where('user_id', $author->id)
-                            ->exists();
-
-                        if ($alreadyCredited) continue;
-
-                        Transaction::create([
-                            'id'               => Str::uuid(),
-                            'user_id'          => $author->id,
-                            'reference'        => uniqid('iap_earn_'),
-                            'payment_intent_id'=> 'iap_author_' . $user->id . '_' . $bookId,
-                            'amount'           => $authorEarning,
-                            'currency'         => 'USD',
-                            'payment_provider' => 'apple',
-                            'status'           => 'iap_pending',
-                            'type'             => 'earning',
-                            'direction'        => 'credit',
-                            'description'      => "App Store sale: {$book->title} (pending Apple remittance)",
-                            'purpose_type'     => 'iap_book_purchase',
-                            'purpose_id'       => $bookId,
-                            'meta_data'        => [
-                                'buyer_id'       => $user->id,
-                                'book_id'        => $bookId,
-                                'gross_price'    => $price,
-                                'apple_cut'      => round($price * APPLE_COMMISSION, 2),
-                                'net_from_apple' => round($netFromApple, 2),
-                                'author_earning' => $authorEarning,
-                                'environment'    => $environment,
-                                // Rate locked at time of sale so payout uses this, not a future rate
-                                'ngn_rate_at_sale' => $rateAtSale,
-                            ],
-                        ]);
-
-                        Log::info('IAP: author pending earning created', [
-                            'author_id'       => $author->id,
-                            'book_id'         => $bookId,
-                            'amount_usd'      => $authorEarning,
-                            'ngn_rate_locked' => $rateAtSale,
-                            'environment'     => $environment,
-                        ]);
+                    $rateAtSale = null;
+                    try {
+                        $rateAtSale = app(CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
+                    } catch (\Throwable) {
+                        $rateAtSale = (float) config('services.currency.ngn_usd_fallback', 1600);
                     }
+
+                    foreach ($purchaseItems as $item) {
+                        $book    = Book::find($item['book_id']);
+                        $authors = $book?->authors ?? collect();
+                        $price   = $item['price'];
+
+                        $netFromApple  = $price * (1 - APPLE_COMMISSION);
+                        $authorEarning = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+
+                        foreach ($authors as $author) {
+                            $alreadyCredited = Transaction::where('payment_intent_id', 'iap_author_' . $user->id . '_' . $item['book_id'])
+                                ->where('user_id', $author->id)
+                                ->exists();
+
+                            if ($alreadyCredited) continue;
+
+                            Transaction::create([
+                                'id'               => Str::uuid(),
+                                'user_id'          => $author->id,
+                                'reference'        => uniqid('iap_earn_'),
+                                'payment_intent_id'=> 'iap_author_' . $user->id . '_' . $item['book_id'],
+                                'amount'           => $authorEarning,
+                                'currency'         => 'USD',
+                                'payment_provider' => 'apple',
+                                'status'           => 'iap_pending',
+                                'type'             => 'earning',
+                                'direction'        => 'credit',
+                                'description'      => "App Store sale: {$item['book_title']} (pending Apple remittance)",
+                                'purpose_type'     => 'iap_book_purchase',
+                                'purpose_id'       => $item['book_id'],
+                                'meta_data'        => [
+                                    'buyer_id'         => $item['buyer_id'],
+                                    'book_id'          => $item['book_id'],
+                                    'gross_price'      => $price,
+                                    'apple_cut'        => round($price * APPLE_COMMISSION, 2),
+                                    'net_from_apple'   => round($netFromApple, 2),
+                                    'author_earning'   => $authorEarning,
+                                    'environment'      => $environment,
+                                    'ngn_rate_at_sale' => $rateAtSale,
+                                ],
+                            ]);
+
+                            Log::info('IAP: author pending earning created', [
+                                'author_id'       => $author->id,
+                                'book_id'         => $item['book_id'],
+                                'amount_usd'      => $authorEarning,
+                                'ngn_rate_locked' => $rateAtSale,
+                                'environment'     => $environment,
+                            ]);
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('IAP: author earnings recording failed — book already granted, reconcile manually', [
+                        'user_id'  => $user->id,
+                        'book_ids' => $bookIdsToGrant,
+                        'error'    => $e->getMessage(),
+                    ]);
                 }
+            }
 
-                Log::info('IAP: verification complete', [
-                    'user_id'      => $user->id,
-                    'environment'  => $environment,
-                    'books_granted'=> count($grantedBooks),
-                ]);
-
-                return response()->json([
-                    'status'      => 'success',
-                    'environment' => $environment,
-                    'books'       => $grantedBooks,
-                    'message'     => count($grantedBooks) > 0
-                        ? 'Purchase verified successfully'
-                        : 'All books in receipt are already in your library',
-                ]);
-            });
+            return response()->json([
+                'status'      => 'success',
+                'environment' => $environment,
+                'books'       => $grantedBooks,
+                'message'     => count($grantedBooks) > 0
+                    ? 'Purchase verified successfully'
+                    : 'All books in receipt are already in your library',
+            ]);
 
         } catch (\Exception $e) {
             Log::error('IAP verification exception: '.$e->getMessage(), [
