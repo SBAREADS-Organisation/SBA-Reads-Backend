@@ -264,26 +264,31 @@ class StripeConnectService
         }
     }
 
-    public function uploadIdentityDocument($user, string $absolutePath)
+    public function uploadIdentityDocument($user, string $frontPath, ?string $backPath = null)
     {
         try {
-            $fileHandle = fopen($absolutePath, 'r');
-            if (! $fileHandle) {
+            $frontHandle = fopen($frontPath, 'r');
+            if (! $frontHandle) {
                 return $this->error('Could not read the uploaded file. Please try again.', 500);
             }
 
-            $stripeFile = File::create([
-                'file'    => $fileHandle,
-                'purpose' => 'identity_document',
-            ]);
+            $frontFile = File::create(['file' => $frontHandle, 'purpose' => 'identity_document']);
+
+            $docPayload = ['front' => $frontFile->id];
+
+            if ($backPath) {
+                $backHandle = fopen($backPath, 'r');
+                if ($backHandle) {
+                    $backFile          = File::create(['file' => $backHandle, 'purpose' => 'identity_document']);
+                    $docPayload['back'] = $backFile->id;
+                }
+            }
 
             $account = Account::update(
                 $user->kyc_account_id,
                 [
                     'individual' => [
-                        'verification' => [
-                            'document' => ['front' => $stripeFile->id],
-                        ],
+                        'verification' => ['document' => $docPayload],
                     ],
                 ]
             );
@@ -529,89 +534,60 @@ class StripeConnectService
     }
 
     /**
-     * Create a new payment method for the author user add bank account.
+     * Add a bank account (external account) to the author's Stripe Connect account.
+     *
+     * Supports all Stripe-KYC countries. routing_number is required for US, CA, AU;
+     * sort_code is the routing number equivalent for GB.
      */
-    public function addBankAccount($payload, $user)
+    public function addBankAccount(array $payload, $user)
     {
         try {
-            $bankAccountData = [
-                'account_number' => $payload['account_number'],
-                'country' => $payload['country'],
-            ];
+            $country  = strtoupper($payload['country'] ?? 'US');
+            $currency = strtolower($payload['currency'] ?? 'usd');
 
-            // For Nigeria (NG), we need to use the correct bank format
-            if ($payload['country'] === 'NG') {
-                $bankAccountData['sort_code'] = $payload['sort_code'];  // Nigeria uses sort code (Bank Code)
-                // $bankAccountData['account_holder_name'] = $user->name;
-                $bankAccountData['currency'] = 'NGN'; // USD or the local currency for Stripe payout
-            }
-
-            // For Canada (CA), we need to include the correct routing number
-            if ($payload['country'] === 'CA') {
-                $bankAccountData['routing_number'] = $payload['routing_number'];  // Canada uses routing number
-                // $bankAccountData['account_holder_name'] = $user->name;
-                $bankAccountData['currency'] = 'cad'; // Canadian dollars
-            }
+            $externalAccount = array_filter([
+                'object'               => 'bank_account',
+                'country'              => $country,
+                'currency'             => $currency,
+                'account_number'       => $payload['account_number'],
+                'routing_number'       => $payload['routing_number'] ?? null,
+                'account_holder_name'  => $payload['account_holder_name'] ?? $user->name,
+                'account_holder_type'  => $payload['account_holder_type'] ?? 'individual',
+            ], fn ($v) => $v !== null && $v !== '');
 
             $bankAccount = Account::createExternalAccount(
                 $user->kyc_account_id,
-                [
-                    'external_account' => [
-                        'object' => 'bank_account',
-                        'country' => strtoupper($payload['country'] ?? 'US'),
-                        'currency' => $payload['currency'],
-                        'account_number' => $payload['account_number'],
-                        'routing_number' => $payload['routing_number'],
-                    ],
-                ]
+                ['external_account' => $externalAccount]
             );
 
-            // check is the response is type of Exception froom stripe
             if ($bankAccount instanceof Exception\InvalidRequestException) {
-                $error = $bankAccount->getMessage();
-
-                return response()->json([
-                    'message' => 'Error creating Stripe bank account',
-                    'code' => 400,
-                    'data' => null,
-                    'error' => $error,
-                ], 400);
+                return $this->error('Error creating Stripe bank account', 400, $bankAccount->getMessage());
             }
 
             $paymentMethod = PaymentMethodModel::create([
-                'user_id' => $user->id,
-                'type' => 'bank_account',
+                'user_id'                    => $user->id,
+                'type'                       => 'bank_account',
                 'provider_payment_method_id' => $bankAccount->id,
-                'provider' => 'stripe',
-                'purpose' => 'payout',
-                'default' => true,
-                'payment_platform' => 'stripe',
-                'payment_data' => json_encode([
-                    'bank_account_last4' => $bankAccount->last4,
-                    'bank_account_brand' => $bankAccount->brand,
-                    'full_bank_account' => $payload->account_number,
-                    // 'bank_account_account_number' => $bankAccount->account_number,
-                    'bank_account_currency' => $bankAccount->currency,
-                    'bank_account_country' => $bankAccount->country,
-                    'bank_account_sort_code' => $validated['sort_code'] ?? null,
-                    'bank_account_routing_number' => $validated['routing_number'] ?? null,
-                ]),
+                'provider'                   => 'stripe',
+                'purpose'                    => 'payout',
+                'default'                    => true,
+                'payment_method_data'        => [
+                    'last4'          => $bankAccount->last4,
+                    'bank_name'      => $bankAccount->bank_name ?? null,
+                    'currency'       => $bankAccount->currency,
+                    'country'        => $bankAccount->country,
+                    'routing_number' => $payload['routing_number'] ?? null,
+                    'sort_code'      => $payload['sort_code'] ?? null,
+                ],
                 'metadata' => json_encode([
-                    'customer_id' => $user->kyc_customer_id,
+                    'customer_id'       => $user->kyc_customer_id,
                     'payment_method_id' => $bankAccount->id,
                 ]),
-                'country_code' => $payload->country_code, // Store the country code for localization
+                'country_code' => $country,
             ]);
 
-            // Check if the payment method was created successfully
-            if (!$paymentMethod) {
-                // PaymentMethod::delete($existPaymentMethod->id);
-                return response()->json([
-                    'message' => 'Error creating payment method in database',
-                    'code' => 500,
-                    'data' => null,
-                    'error' => 'Database error',
-                ], 500);
+            if (! $paymentMethod) {
+                return $this->error('Error saving bank account to database', 500);
             }
 
             return $paymentMethod;

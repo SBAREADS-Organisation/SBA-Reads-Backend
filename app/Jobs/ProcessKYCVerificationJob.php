@@ -71,14 +71,18 @@ class ProcessKYCVerificationJob implements ShouldQueue
             $autoApprove
         ) {
             // Auto-approve: mark KYC verified and notify author
+            $firstName = $user->kycInfo?->first_name ?? $user->first_name;
+            $lastName  = $user->kycInfo?->last_name  ?? $user->last_name;
             $user->update([
                 'kyc_status'           => 'verified',
+                'status'               => 'verified',
                 'ai_review_status'     => 'verified',
                 'ai_review_notes'      => $notesText,
                 'ai_review_confidence' => $confidence,
                 'ai_reviewed_at'       => now(),
-                'first_name'           => $user->kycInfo?->first_name ?? $user->first_name,
-                'last_name'            => $user->kycInfo?->last_name  ?? $user->last_name,
+                'first_name'           => $firstName,
+                'last_name'            => $lastName,
+                'name'                 => trim("{$firstName} {$lastName}"),
             ]);
 
             Log::info("ProcessKYCVerificationJob: auto-approved KYC for user {$user->id} (confidence {$confidence})");

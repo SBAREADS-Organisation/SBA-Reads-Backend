@@ -815,66 +815,37 @@ class UserController extends Controller
         try {
             $user = $request->user();
 
-            // Validate request token received from frontend for payment method id
+            if ($user->account_type !== 'author') {
+                return $this->error('Only authors can add a bank account.', 403);
+            }
+
+            if (! $user->kyc_account_id) {
+                return $this->error('Please complete KYC verification before adding a bank account.', 400);
+            }
+
+            if ($user->kyc_status !== 'verified') {
+                return $this->error('Your identity must be verified before you can add a bank account. Current status: ' . $user->kyc_status, 400);
+            }
+
             $validator = Validator::make($request->all(), [
-                'account_number' => 'required|string',
-                'routing_number' => 'nullable|string',
-                'account_holder_name' => 'required|string',
-                'account_holder_type' => 'required|string|in:individual,company',
-                'country' => 'required|string|size:2|in:NG,CA', // 2-letter ISO country code
-                'currency' => 'required|string|size:3', // 3-letter ISO currency code
-                'sort_code' => 'nullable|string', // Only required for Nigeria
-                // Add any other required fields for bank account
+                'account_number'       => 'required|string',
+                'routing_number'       => 'nullable|string',
+                'sort_code'            => 'nullable|string',
+                'account_holder_name'  => 'required|string|max:255',
+                'account_holder_type'  => 'required|string|in:individual,company',
+                'country'              => 'required|string|size:2|in:US,GB,CA,AU,FR,DE,IT,ES',
+                'currency'             => 'required|string|size:3',
             ]);
 
             if ($validator->fails()) {
-                return $this->error(
-                    'Validation failed',
-                    400,
-                    $validator->errors()
-                );
-            }
-
-            // For Nigeria (NG), we need to use the correct bank format
-            if ($request->input('country') === 'NG') {
-                $bankAccountData['sort_code'] = $request->input('sort_code');  // Nigeria uses sort code (Bank Code)
-                $bankAccountData['account_holder_name'] = $user->name;
-                $bankAccountData['currency'] = 'usd'; // USD or the local currency for Stripe payout
-            }
-
-            // For Canada (CA), we need to include the correct routing number
-            if ($request->input('country') === 'CA') {
-                $bankAccountData['routing_number'] = $request->input('routing_number');  // Canada uses routing number
-                $bankAccountData['account_holder_name'] = $user->name;
-                $bankAccountData['currency'] = 'cad'; // Canadian dollars
-            }
-
-            // Only allow bank account for author
-            if ($user->account_type !== 'author') {
-                return $this->error(
-                    'Only authors can add a bank account.',
-                    403,
-                    null
-                );
-            }
-
-            // Ensure the user has a Stripe customer ID
-            if (! $user->kyc_account_id) {
-                return $this->error(
-                    'Stripe account ID not found.',
-                    400,
-                    null
-                );
+                return $this->error('Validation failed', 400, $validator->errors());
             }
 
             $bankAccount = $this->stripe->addBankAccount($request->all(), $user);
 
-            if (isset($bankAccount->getData()->error)) {
-                return $this->error(
-                    'Failed to add bank account.',
-                    400,
-                    $bankAccount->getData()->error
-                );
+            if ($bankAccount instanceof \Illuminate\Http\JsonResponse) {
+                $data = $bankAccount->getData(true);
+                return $this->error($data['message'] ?? 'Failed to add bank account.', $bankAccount->getStatusCode());
             }
 
             return $this->success(
@@ -883,11 +854,10 @@ class UserController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            // throw $th;
             return $this->error(
                 'An error occurred while adding the bank account.',
                 500,
-                config('app.debug') ? $th->getMessage() : 'An error occurred while adding the bank account.',
+                config('app.debug') ? $th->getMessage() : null,
                 $th
             );
         }

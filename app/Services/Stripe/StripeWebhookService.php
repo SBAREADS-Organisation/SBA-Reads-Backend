@@ -414,6 +414,8 @@ class StripeWebhookService
                 return;
             }
 
+            $notificationService = app(NotificationService::class);
+
             // Stripe has disabled the account — mark as rejected regardless of verification status
             if ($disabledReason && $status !== 'verified') {
                 $user->update(['kyc_status' => 'rejected']);
@@ -421,24 +423,61 @@ class StripeWebhookService
                     'user_id' => $user->id,
                     'reason'  => $disabledReason,
                 ]);
+                $notificationService->send(
+                    $user,
+                    'KYC Verification Failed',
+                    'Your identity verification was unsuccessful. Please contact support or resubmit your details.',
+                    ['in-app', 'push', 'email']
+                );
                 return;
             }
 
             if ($status === 'unverified' && $docFront === null) {
                 $user->update(['kyc_status' => 'document-required']);
+                $notificationService->send(
+                    $user,
+                    'Document Required',
+                    'Please upload a valid government-issued ID to complete your identity verification.',
+                    ['in-app', 'push']
+                );
             } elseif ($status === 'unverified' && $docFront !== null) {
                 $user->update(['kyc_status' => 'rejected']);
+                $notificationService->send(
+                    $user,
+                    'KYC Document Rejected',
+                    'Your submitted document could not be verified. Please upload a clearer copy of your ID.',
+                    ['in-app', 'push', 'email']
+                );
             } elseif ($status === 'pending' && $docFront !== null) {
                 $user->update(['kyc_status' => 'in-review']);
+                $notificationService->send(
+                    $user,
+                    'Identity Under Review',
+                    'Your document has been received and is under review. We\'ll notify you once it\'s complete.',
+                    ['in-app', 'push']
+                );
             } elseif ($status === 'pending' && $docFront === null) {
                 $user->update(['kyc_status' => 'document-required']);
+                $notificationService->send(
+                    $user,
+                    'Document Required',
+                    'Please upload a valid government-issued ID to complete your identity verification.',
+                    ['in-app', 'push']
+                );
             } elseif ($status === 'verified') {
                 $user->update([
                     'kyc_status' => 'verified',
+                    'status'     => 'verified',
                     'first_name' => $individual->first_name,
                     'last_name'  => $individual->last_name,
                     'name'       => trim("{$individual->first_name} {$individual->last_name}"),
                 ]);
+                $notificationService->send(
+                    $user,
+                    'Identity Verified!',
+                    'Congratulations! Your identity has been verified. You can now receive payouts from your book sales.',
+                    ['in-app', 'push', 'email']
+                );
             }
         } catch (\Exception $e) {
             Log::error('handleAccountUpdated failed', [

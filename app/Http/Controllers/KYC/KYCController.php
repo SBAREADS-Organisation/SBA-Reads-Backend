@@ -194,7 +194,7 @@ class KYCController extends Controller
                 'line'    => $th->getLine(),
             ]);
             return $this->error(
-                $th->getMessage(),
+                'KYC initiation failed. Please try again.',
                 500,
                 config('app.debug') ? $th->getMessage() : null,
                 $th
@@ -204,8 +204,9 @@ class KYCController extends Controller
 
     public function uploadDocument(Request $request)
     {
-        $user     = Auth::user();
-        $filePath = null;
+        $user          = Auth::user();
+        $frontFilePath = null;
+        $backFilePath  = null;
 
         try {
             if ($user->kyc_provider !== 'stripe') {
@@ -224,18 +225,24 @@ class KYCController extends Controller
             }
 
             $validator = Validator::make($request->all(), [
-                'document' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+                'document'      => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
+                'document_back' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:5120',
             ]);
 
             if ($validator->fails()) {
                 return $this->error('Validation failed', 400, $validator->errors());
             }
 
-            $file         = $request->file('document');
-            $filePath     = $file->store('stripe_uploads');
-            $absolutePath = storage_path("app/private/{$filePath}");
+            $frontFilePath = $request->file('document')->store('stripe_uploads');
+            $frontAbsPath  = storage_path("app/private/{$frontFilePath}");
 
-            $response = $this->stripe->uploadIdentityDocument($user, $absolutePath);
+            $backAbsPath = null;
+            if ($request->hasFile('document_back')) {
+                $backFilePath = $request->file('document_back')->store('stripe_uploads');
+                $backAbsPath  = storage_path("app/private/{$backFilePath}");
+            }
+
+            $response = $this->stripe->uploadIdentityDocument($user, $frontAbsPath, $backAbsPath);
 
             if ($response instanceof \Illuminate\Http\JsonResponse) {
                 $responseData = $response->getData(true);
@@ -258,10 +265,8 @@ class KYCController extends Controller
             ]);
             return $this->error('Error uploading document. Please try again.', 500, $th->getMessage(), $th);
         } finally {
-            // Always clean up the temp file regardless of success or failure
-            if ($filePath) {
-                \Illuminate\Support\Facades\Storage::delete($filePath);
-            }
+            if ($frontFilePath) \Illuminate\Support\Facades\Storage::delete($frontFilePath);
+            if ($backFilePath)  \Illuminate\Support\Facades\Storage::delete($backFilePath);
         }
     }
 
@@ -277,6 +282,10 @@ class KYCController extends Controller
     {
         try {
             $user = Auth::user();
+
+            if ($user->kyc_provider === 'stripe') {
+                return $this->error('Stripe-verified accounts must use the /upload-document endpoint instead.', 400);
+            }
 
             if (in_array($user->kyc_status, ['verified', 'rejected'])) {
                 return $this->error('Document upload is not available for your current account status.', 400);

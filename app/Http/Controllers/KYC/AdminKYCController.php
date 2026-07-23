@@ -59,6 +59,7 @@ class AdminKYCController extends Controller
         $lastName  = $user->kycInfo?->last_name  ?? $user->last_name;
         $user->update([
             'kyc_status' => 'verified',
+            'status'     => 'verified',
             'first_name' => $firstName,
             'last_name'  => $lastName,
             'name'       => trim("{$firstName} {$lastName}"),
