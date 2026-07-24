@@ -118,6 +118,10 @@ class KYCController extends Controller
                 $request->input('dob.day')
             )->toDateString();
 
+            // Capture previous country BEFORE updating kycInfo — used below to detect
+            // country changes for Stripe accounts (Stripe doesn't allow country changes).
+            $previousKycCountry = optional($user->kycInfo)->country;
+
             // Always persist KYC data locally so admin has a record regardless of path
             UserKycInfo::updateOrCreate(
                 ['user_id' => $user->id],
@@ -163,16 +167,15 @@ class KYCController extends Controller
 
             // ── Stripe KYC path: US, UK, CA, AU, EU ──────────────────────────────
             // Stripe doesn't allow changing a connected account's country after creation.
-            // If the user previously submitted with a different country, treat this as a
-            // fresh account creation rather than an update.
-            $previousCountry   = optional($user->kycInfo)->country;
-            $countryChanged    = $previousCountry && strtoupper($previousCountry) !== $country;
-            $useUpdate         = $user->kyc_account_id && ! $countryChanged;
+            // If the user previously submitted with a different country, create a new account.
+            // $previousKycCountry was read before updateOrCreate overwrote it above.
+            $countryChanged = $previousKycCountry && strtoupper($previousKycCountry) !== $country;
+            $useUpdate      = $user->kyc_account_id && ! $countryChanged;
 
             if ($countryChanged) {
                 Log::info('KYC: country changed, creating new Stripe account', [
                     'user_id'          => $user->id,
-                    'previous_country' => $previousCountry,
+                    'previous_country' => $previousKycCountry,
                     'new_country'      => $country,
                 ]);
             }
