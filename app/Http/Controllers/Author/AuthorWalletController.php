@@ -74,14 +74,21 @@ class AuthorWalletController extends Controller
                 $pendingAmount   = 0.0;
             }
 
+            $withdrawNote = $pendingAmount > 0 && $availableAmount === 0.0
+                ? 'Your earnings of $' . number_format($pendingAmount, 2) . ' are still pending settlement by Stripe (usually 2–7 days after a sale).'
+                : ($pendingAmount > 0
+                    ? '$' . number_format($pendingAmount, 2) . ' more is pending settlement and will be available soon.'
+                    : null);
+
             return $this->success([
                 'payout_method'    => 'stripe',
-                'available'        => ['amount' => round($availableAmount + $pendingAmount, 2), 'currency' => 'USD'],
+                'available'        => ['amount' => round($availableAmount, 2), 'currency' => 'USD'],
+                'pending_stripe'   => ['amount' => round($pendingAmount, 2),   'currency' => 'USD'],
                 'pending_iap'      => ['amount' => $iapPending, 'currency' => $iapCurrency],
                 'lifetime_earned'  => $this->lifetimeEarned($author->id, 'USD'),
                 'stripe_account_id'=> $author->kyc_account_id,
                 'can_withdraw'     => $availableAmount > 0,
-                'withdraw_note'    => null,
+                'withdraw_note'    => $withdrawNote,
             ], 'Wallet balance retrieved.');
         }
 

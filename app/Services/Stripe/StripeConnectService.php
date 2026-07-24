@@ -80,6 +80,32 @@ class StripeConnectService
         }
     }
 
+    /**
+     * Stripe requires 2-letter state codes for US addresses (e.g. "AZ" not "Arizona").
+     * Accept both forms from the app and normalise before sending to Stripe.
+     */
+    private function normalizeState(string $state, string $country): string
+    {
+        if (strtoupper($country) !== 'US') {
+            return $state;
+        }
+        $map = [
+            'alabama'=>'AL','alaska'=>'AK','arizona'=>'AZ','arkansas'=>'AR','california'=>'CA',
+            'colorado'=>'CO','connecticut'=>'CT','delaware'=>'DE','florida'=>'FL','georgia'=>'GA',
+            'hawaii'=>'HI','idaho'=>'ID','illinois'=>'IL','indiana'=>'IN','iowa'=>'IA',
+            'kansas'=>'KS','kentucky'=>'KY','louisiana'=>'LA','maine'=>'ME','maryland'=>'MD',
+            'massachusetts'=>'MA','michigan'=>'MI','minnesota'=>'MN','mississippi'=>'MS',
+            'missouri'=>'MO','montana'=>'MT','nebraska'=>'NE','nevada'=>'NV','new hampshire'=>'NH',
+            'new jersey'=>'NJ','new mexico'=>'NM','new york'=>'NY','north carolina'=>'NC',
+            'north dakota'=>'ND','ohio'=>'OH','oklahoma'=>'OK','oregon'=>'OR','pennsylvania'=>'PA',
+            'rhode island'=>'RI','south carolina'=>'SC','south dakota'=>'SD','tennessee'=>'TN',
+            'texas'=>'TX','utah'=>'UT','vermont'=>'VT','virginia'=>'VA','washington'=>'WA',
+            'west virginia'=>'WV','wisconsin'=>'WI','wyoming'=>'WY','district of columbia'=>'DC',
+        ];
+        $lower = strtolower(trim($state));
+        return $map[$lower] ?? strtoupper($state); // already a code → uppercase it
+    }
+
     public function createCustomAccount($payload, $user)
     {
         try {
@@ -115,7 +141,7 @@ class StripeConnectService
                             'line1' => $payload->address->line1,
                             'city' => $payload->address->city,
                             'postal_code' => $payload->address->postal_code,
-                            'state' => $payload->address->state,
+                            'state' => $this->normalizeState($payload->address->state ?? '', $payload->country),
                             'country' => strtoupper($payload->country),
                         ],
                         'gender' => $payload->gender,
@@ -210,7 +236,7 @@ class StripeConnectService
                                 'line1' => $payload->address->line1,
                                 'city' => $payload->address->city,
                                 'postal_code' => $payload->address->postal_code,
-                                'state' => $payload->address->state,
+                                'state' => $this->normalizeState($payload->address->state ?? '', $payload->country),
                                 'country' => strtoupper($payload->country),
                             ],
                             'gender' => $payload->gender,
