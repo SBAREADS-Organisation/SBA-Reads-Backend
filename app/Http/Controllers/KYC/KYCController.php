@@ -399,12 +399,34 @@ class KYCController extends Controller
 
     public function kycStatus()
     {
-        $user = Auth::user();
+        $user   = Auth::user();
+        $status = $user->kyc_status;
+
+        // Stripe webhook can arrive after the WebView redirect, creating a race condition
+        // where the app checks status before the DB is updated. When the DB still says
+        // document-required but a Stripe account exists, do a live check to self-heal.
+        if ($status === 'document-required' && $user->kyc_provider === 'stripe' && $user->kyc_account_id) {
+            try {
+                $stripe  = new \Stripe\StripeClient(config('services.stripe.secret'));
+                $account = $stripe->accounts->retrieve($user->kyc_account_id);
+
+                if ($account->charges_enabled && $account->payouts_enabled && ! ($account->requirements?->disabled_reason)) {
+                    $updateData = ['kyc_status' => 'verified', 'status' => 'active'];
+                    if ($account->individual?->first_name) {
+                        $updateData['first_name'] = $account->individual->first_name;
+                        $updateData['last_name']  = $account->individual->last_name ?? null;
+                        $updateData['name']        = trim("{$account->individual->first_name} " . ($account->individual->last_name ?? ''));
+                    }
+                    $user->update($updateData);
+                    $status = 'verified';
+                }
+            } catch (\Throwable $e) {
+                Log::warning('KYC live status check failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
 
         return $this->success(
-            [
-                'status' => $user->kyc_status,
-            ],
+            ['status' => $status],
             'KYC status retrieved successfully',
             200
         );

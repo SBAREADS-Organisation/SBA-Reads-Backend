@@ -46,27 +46,37 @@ class SyncStripeKycStatus extends Command
                 $stripeStatus   = $verification?->status ?? null;
                 $docFront       = $verification?->document?->front ?? null;
                 $disabledReason = $account->requirements?->disabled_reason ?? null;
+                $chargesEnabled = $account->charges_enabled ?? false;
+                $payoutsEnabled = $account->payouts_enabled ?? false;
 
-                if (! $stripeStatus) {
+                // charges_enabled + payouts_enabled is the authoritative signal for Custom
+                // accounts — individual.verification.status can stay 'pending' even when
+                // the account is fully approved by Stripe.
+                if (! $disabledReason && $chargesEnabled && $payoutsEnabled) {
+                    $newStatus = 'verified';
+                } elseif (! $stripeStatus) {
                     $this->line("  <comment>[SKIP]</comment> {$user->email} — no verification status on Stripe yet");
                     continue;
+                } else {
+                    $newStatus = $this->resolveStatus($stripeStatus, $docFront, $disabledReason);
                 }
-
-                $newStatus = $this->resolveStatus($stripeStatus, $docFront, $disabledReason);
 
                 $statusChanged = $newStatus !== $user->kyc_status;
                 $indicator     = $statusChanged ? '<info>[UPDATE]</info>' : '<comment>[OK]</comment>';
 
                 $this->line("  {$indicator} {$user->email}");
-                $this->line("    DB: {$user->kyc_status} → Stripe: {$stripeStatus} (doc: " . ($docFront ? 'yes' : 'no') . ") → New: {$newStatus}");
+                $this->line("    DB: {$user->kyc_status} → charges_enabled: " . ($chargesEnabled ? 'yes' : 'no') . " → New: {$newStatus}");
 
                 if ($statusChanged && ! $dryRun) {
                     $payload = ['kyc_status' => $newStatus];
 
-                    if ($newStatus === 'verified' && $individual) {
-                        $payload['first_name'] = $individual->first_name;
-                        $payload['last_name']  = $individual->last_name;
-                        $payload['name']       = trim("{$individual->first_name} {$individual->last_name}");
+                    if ($newStatus === 'verified') {
+                        $payload['status'] = 'active';
+                        if ($individual?->first_name) {
+                            $payload['first_name'] = $individual->first_name;
+                            $payload['last_name']  = $individual->last_name;
+                            $payload['name']       = trim("{$individual->first_name} {$individual->last_name}");
+                        }
                     }
 
                     $oldStatus = $user->kyc_status;

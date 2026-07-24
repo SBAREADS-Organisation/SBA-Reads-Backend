@@ -409,6 +409,29 @@ class StripeWebhookService
             $status          = $verification?->status ?? null;
             $docFront        = $verification?->document?->front ?? null;
             $disabledReason  = $account->requirements?->disabled_reason ?? null;
+            $chargesEnabled  = $account->charges_enabled ?? false;
+            $payoutsEnabled  = $account->payouts_enabled ?? false;
+
+            // For Standard accounts charges_enabled + payouts_enabled is the
+            // authoritative signal — individual.verification.status can remain
+            // 'pending' even after the account is fully approved by Stripe.
+            if (! $disabledReason && $chargesEnabled && $payoutsEnabled) {
+                $updateData = ['kyc_status' => 'verified', 'status' => 'active'];
+                if ($individual?->first_name) {
+                    $updateData['first_name'] = $individual->first_name;
+                    $updateData['last_name']  = $individual->last_name ?? null;
+                    $updateData['name']       = trim("{$individual->first_name} " . ($individual->last_name ?? ''));
+                }
+                $user->update($updateData);
+                $notificationService = app(NotificationService::class);
+                $notificationService->send(
+                    $user,
+                    'Identity Verified!',
+                    'Congratulations! Your identity has been verified. You can now receive payouts from your book sales.',
+                    ['in-app', 'push', 'email']
+                );
+                return;
+            }
 
             if (! $status) {
                 return;
@@ -491,7 +514,7 @@ class StripeWebhookService
             } elseif ($status === 'verified') {
                 $user->update([
                     'kyc_status' => 'verified',
-                    'status'     => 'verified',
+                    'status'     => 'active',
                     'first_name' => $individual->first_name,
                     'last_name'  => $individual->last_name,
                     'name'       => trim("{$individual->first_name} {$individual->last_name}"),

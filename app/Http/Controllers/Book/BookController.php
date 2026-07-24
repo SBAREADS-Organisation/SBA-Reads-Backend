@@ -443,7 +443,7 @@ class BookController extends Controller
                     // generates MySQL JSON_EXTRACT which does not exist on PostgreSQL.
                     $hasIapTransaction = ! $hasDigitalPurchase && Transaction::where('user_id', $viewerId)
                         ->whereIn('payment_provider', ['apple', 'google_play'])
-                        ->where('status', 'success')
+                        ->whereIn('status', ['success', 'succeeded'])
                         ->whereRaw("(meta_data->>'book_id')::integer = ?", [$book->id])
                         ->exists();
 
@@ -573,7 +573,7 @@ class BookController extends Controller
         if (! $user->purchasedBooks()->where('book_id', $bookId)->exists()) {
             $hasIap = Transaction::where('user_id', $user->id)
                 ->whereIn('payment_provider', ['apple', 'google_play'])
-                ->where('status', 'success')
+                ->whereIn('status', ['success', 'succeeded'])
                 ->whereRaw("(meta_data->>'book_id')::integer = ?", [(int) $bookId])
                 ->exists();
 
@@ -2100,7 +2100,7 @@ class BookController extends Controller
                 // PostgreSQL JSON extraction: meta_data->>'book_id' (covers both Apple and Google Play IAP)
                 $paidIapIds = Transaction::where('user_id', $user->id)
                     ->whereIn('payment_provider', ['apple', 'google_play'])
-                    ->where('status', 'success')
+                    ->whereIn('status', ['success', 'succeeded'])
                     ->whereRaw("meta_data->>'book_id' IS NOT NULL")
                     ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
                     ->all();
@@ -2183,7 +2183,7 @@ class BookController extends Controller
 
         $paidIapIds = Transaction::where('user_id', $user->id)
             ->whereIn('payment_provider', ['apple', 'google_play'])
-            ->where('status', 'success')
+            ->whereIn('status', ['success', 'succeeded'])
             ->whereRaw("meta_data->>'book_id' IS NOT NULL")
             ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
             ->all();
@@ -2237,7 +2237,7 @@ class BookController extends Controller
             )
             ->merge(
                 Transaction::whereIn('payment_provider', ['apple', 'google_play'])
-                    ->where('status', 'success')
+                    ->whereIn('status', ['success', 'succeeded'])
                     ->whereRaw("meta_data->>'book_id' IS NOT NULL")
                     ->pluck('user_id')
             )
@@ -2263,7 +2263,7 @@ class BookController extends Controller
 
                 $iapIds = Transaction::where('user_id', $uid)
                     ->whereIn('payment_provider', ['apple', 'google_play'])
-                    ->where('status', 'success')
+                    ->whereIn('status', ['success', 'succeeded'])
                     ->whereRaw("meta_data->>'book_id' IS NOT NULL")
                     ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
                     ->all();
