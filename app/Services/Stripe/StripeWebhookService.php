@@ -416,8 +416,10 @@ class StripeWebhookService
 
             $notificationService = app(NotificationService::class);
 
-            // Stripe has disabled the account — mark as rejected regardless of verification status
-            if ($disabledReason && $status !== 'verified') {
+            // Stripe has disabled the account — mark as rejected regardless of verification status.
+            // The $status !== 'verified' guard is intentionally removed: a disabled account must
+            // never be marked verified even if individual.verification.status happens to be 'verified'.
+            if ($disabledReason) {
                 $user->update([
                     'kyc_status'   => 'rejected',
                     'kyc_metadata' => array_merge($user->kyc_metadata ?? [], [
@@ -787,26 +789,17 @@ class StripeWebhookService
             return $user;
         }
 
-        // Method 2: Try to find by Stripe Connect account if the destination is linked to an account
-        // This would require additional Stripe API calls to get the account from the destination
-        try {
-            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-
-            // If destination is a bank account, get the account it belongs to
-            if (str_starts_with($destination, 'ba_')) {
-                $bankAccount = $stripe->accounts->retrieveExternalAccount(
-                    'acct_connected_account_id', // You'd need to determine this
-                    $destination
-                );
-
-                // Find user by the connected account ID
-                $user = User::where('kyc_account_id', $bankAccount->account)->first();
+        // Method 2: For bank account destinations, try to find the connected account via
+        // the StripePayout record that was created when createPayout() was called in-app.
+        // This covers the case where the PaymentMethod record wasn't created.
+        if (str_starts_with($destination, 'ba_')) {
+            $payout = \App\Models\StripePayout::where('destination', $destination)->first();
+            if ($payout) {
+                $user = User::find($payout->user_id);
+                if ($user) {
+                    return $user;
+                }
             }
-        } catch (\Exception $e) {
-            Log::warning('Could not retrieve destination details from Stripe', [
-                'destination' => $destination,
-                'error' => $e->getMessage()
-            ]);
         }
 
         // Method 3: Look for users who have this destination in their kyc_metadata

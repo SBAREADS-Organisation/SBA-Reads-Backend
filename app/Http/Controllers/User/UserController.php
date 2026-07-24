@@ -1389,7 +1389,7 @@ class UserController extends Controller
             ]);
             return response()->json([
                 'status'  => 'error',
-                'message' => $e->getMessage(),
+                'message' => config('app.debug') ? $e->getMessage() : 'Unable to start onboarding. Please try again or contact support.',
             ], 500);
         }
     }

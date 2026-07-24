@@ -54,38 +54,50 @@ class AuthorWalletController extends Controller
 
         // ── Stripe authors: ask Stripe for the live connected-account balance ─
         if ($payoutMethod === 'stripe' && $author->kyc_account_id) {
+            $balanceCurrency = 'USD'; // default if Stripe API is unreachable
             try {
                 $stripeResp = $this->stripe->retrieveAccountBalance($author->kyc_account_id);
                 $body       = json_decode($stripeResp->getContent(), true);
 
                 // retrieveAccountBalance returns { data: { available: [{currency,amount},...], pending: [...] } }
-                // Find the USD entry in each list (amounts already converted to main units by the service).
-                $findUSD = fn (array $list): float =>
-                    (float) (collect($list)->firstWhere('currency', 'usd')['amount'] ?? 0);
+                // Prefer USD; fall back to the first non-zero entry for non-USD accounts (GB, AU, EU, etc.)
+                $pickBalance = function (array $list): array {
+                    $col = collect($list);
+                    $usd = $col->firstWhere('currency', 'usd');
+                    if ($usd) return ['amount' => (float) $usd['amount'], 'currency' => 'USD'];
+                    $first = $col->first();
+                    return $first
+                        ? ['amount' => (float) $first['amount'], 'currency' => strtoupper($first['currency'])]
+                        : ['amount' => 0.0, 'currency' => 'USD'];
+                };
 
                 $availableMap = $body['data']['available'] ?? [];
                 $pendingMap   = $body['data']['pending']   ?? [];
 
-                $availableAmount = $findUSD($availableMap);
-                $pendingAmount   = $findUSD($pendingMap);
+                $availableBalance = $pickBalance($availableMap);
+                $pendingBalance   = $pickBalance($pendingMap);
+                $availableAmount  = $availableBalance['amount'];
+                $balanceCurrency  = $availableBalance['currency'];
+                $pendingAmount    = $pendingBalance['amount'];
             } catch (\Throwable $e) {
                 Log::warning('Wallet: Stripe balance fetch failed for ' . $author->id . ': ' . $e->getMessage());
                 $availableAmount = 0.0;
                 $pendingAmount   = 0.0;
             }
 
+            $symbol = $balanceCurrency === 'USD' ? '$' : $balanceCurrency . ' ';
             $withdrawNote = $pendingAmount > 0 && $availableAmount === 0.0
-                ? 'Your earnings of $' . number_format($pendingAmount, 2) . ' are still pending settlement by Stripe (usually 2–7 days after a sale).'
+                ? 'Your earnings of ' . $symbol . number_format($pendingAmount, 2) . ' are still pending settlement by Stripe (usually 2–7 days after a sale).'
                 : ($pendingAmount > 0
-                    ? '$' . number_format($pendingAmount, 2) . ' more is pending settlement and will be available soon.'
+                    ? $symbol . number_format($pendingAmount, 2) . ' more is pending settlement and will be available soon.'
                     : null);
 
             return $this->success([
                 'payout_method'    => 'stripe',
-                'available'        => ['amount' => round($availableAmount, 2), 'currency' => 'USD'],
-                'pending_stripe'   => ['amount' => round($pendingAmount, 2),   'currency' => 'USD'],
+                'available'        => ['amount' => round($availableAmount, 2), 'currency' => $balanceCurrency],
+                'pending_stripe'   => ['amount' => round($pendingAmount, 2),   'currency' => $balanceCurrency],
                 'pending_iap'      => ['amount' => $iapPending, 'currency' => $iapCurrency],
-                'lifetime_earned'  => $this->lifetimeEarned($author->id, 'USD'),
+                'lifetime_earned'  => $this->lifetimeEarned($author->id, $balanceCurrency),
                 'stripe_account_id'=> $author->kyc_account_id,
                 'can_withdraw'     => $availableAmount > 0,
                 'withdraw_note'    => $withdrawNote,
@@ -108,12 +120,24 @@ class AuthorWalletController extends Controller
 
             $lifetimeUSDinNGN = round($lifetimeUSD * $rate, 2);
 
-            // Already paid out via manual Paystack withdrawals
+            // Already paid out: manual withdrawals (debit) + auto-payouts already sent by the job (credit).
+            // Both reduce what the author can still manually withdraw — without this, auto-payout credits
+            // would remain in "available" forever and allow a second manual withdrawal of the same funds.
             $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
-                ->where('direction', 'debit')
+                ->where('currency', 'NGN')
                 ->whereIn('status', ['succeeded', 'pending'])
                 ->where('payment_provider', 'paystack')
-                ->where('purpose_type', 'paystack_payout')
+                ->where(function ($q) {
+                    $q->where(function ($inner) {
+                        // Manual author-initiated withdrawals
+                        $inner->where('direction', 'debit')
+                              ->where('purpose_type', 'paystack_payout');
+                    })->orWhere(function ($inner) {
+                        // Auto-payouts already sent by ProcessAuthorPayout job
+                        $inner->where('direction', 'credit')
+                              ->whereIn('purpose_type', ['order', 'digital_book_purchase']);
+                    });
+                })
                 ->sum('amount');
 
             // Only NGN is withdrawable — USD sits in Stripe until admin processes it
@@ -177,10 +201,18 @@ class AuthorWalletController extends Controller
             ->where('currency', 'NGN')->sum('amount');
 
         $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
-            ->where('direction', 'debit')
+            ->where('currency', 'NGN')
             ->whereIn('status', ['succeeded', 'pending'])
             ->where('payment_provider', 'paystack')
-            ->where('purpose_type', 'paystack_payout')
+            ->where(function ($q) {
+                $q->where(function ($inner) {
+                    $inner->where('direction', 'debit')
+                          ->where('purpose_type', 'paystack_payout');
+                })->orWhere(function ($inner) {
+                    $inner->where('direction', 'credit')
+                          ->whereIn('purpose_type', ['order', 'digital_book_purchase']);
+                });
+            })
             ->sum('amount');
 
         $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);

@@ -56,6 +56,10 @@ class KYCController extends Controller
         try {
             $user = Auth::user();
 
+            if ($user->account_type !== 'author') {
+                return $this->error('KYC is only available for author accounts.', 403);
+            }
+
             // Prepare combined DOB for validation
             $request->merge([
                 'dob_combined' => "{$request->input('dob.year')}-{$request->input('dob.month')}-{$request->input('dob.day')}",
@@ -145,6 +149,7 @@ class KYCController extends Controller
                 $lastName  = $request->input('last_name');
                 $user->update([
                     'kyc_status'       => 'pending_manual',
+                    'kyc_provider'     => 'manual',
                     'ai_review_status' => null,
                     'first_name'       => $firstName,
                     'last_name'        => $lastName,
@@ -233,6 +238,10 @@ class KYCController extends Controller
         $backFilePath  = null;
 
         try {
+            if ($user->account_type !== 'author') {
+                return $this->error('KYC is only available for author accounts.', 403);
+            }
+
             if ($user->kyc_provider !== 'stripe') {
                 return $this->error('Document upload via this endpoint is only for Stripe-verified accounts.', 400);
             }
@@ -306,6 +315,10 @@ class KYCController extends Controller
     {
         try {
             $user = Auth::user();
+
+            if ($user->account_type !== 'author') {
+                return $this->error('KYC is only available for author accounts.', 403);
+            }
 
             if ($user->kyc_provider === 'stripe') {
                 return $this->error('Stripe-verified accounts must use the /upload-document endpoint instead.', 400);
