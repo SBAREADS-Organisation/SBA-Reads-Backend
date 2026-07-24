@@ -418,10 +418,23 @@ class StripeWebhookService
 
             // Stripe has disabled the account — mark as rejected regardless of verification status
             if ($disabledReason && $status !== 'verified') {
-                $user->update(['kyc_status' => 'rejected']);
+                $user->update([
+                    'kyc_status'   => 'rejected',
+                    'kyc_metadata' => array_merge($user->kyc_metadata ?? [], [
+                        'rejection_reason'    => $disabledReason,
+                        'requirements_due'    => $account->requirements?->currently_due ?? [],
+                        'requirements_errors' => array_map(fn ($e) => [
+                            'code'   => $e->code ?? null,
+                            'reason' => $e->reason ?? null,
+                            'requirement' => $e->requirement ?? null,
+                        ], (array) ($account->requirements?->errors ?? [])),
+                        'rejected_at'         => now()->toISOString(),
+                    ]),
+                ]);
                 Log::info('Stripe account disabled', [
                     'user_id' => $user->id,
                     'reason'  => $disabledReason,
+                    'errors'  => $account->requirements?->errors ?? [],
                 ]);
                 $notificationService->send(
                     $user,
@@ -441,7 +454,16 @@ class StripeWebhookService
                     ['in-app', 'push']
                 );
             } elseif ($status === 'unverified' && $docFront !== null) {
-                $user->update(['kyc_status' => 'rejected']);
+                $docVerification = $verification?->document ?? null;
+                $user->update([
+                    'kyc_status'   => 'rejected',
+                    'kyc_metadata' => array_merge($user->kyc_metadata ?? [], [
+                        'rejection_reason'      => 'document_verification_failed',
+                        'document_details'      => $docVerification?->details ?? null,
+                        'document_details_code' => $docVerification?->details_code ?? null,
+                        'rejected_at'           => now()->toISOString(),
+                    ]),
+                ]);
                 $notificationService->send(
                     $user,
                     'KYC Document Rejected',

@@ -535,6 +535,15 @@ class UserController extends Controller
             // Keep name in sync with username so display names stay consistent.
             // Falls back to an explicit 'name' field, then the existing value.
             $user->name = $request->input('name', $user->username ?? $user->name);
+
+            // Sync first_name / last_name so email and notification greetings
+            // never fall back to "NO NAME" after a profile update.
+            if ($request->filled('name')) {
+                $nameParts        = explode(' ', trim($request->input('name')), 2);
+                $user->first_name = $nameParts[0];
+                $user->last_name  = $nameParts[1] ?? '';
+            }
+
             $user->bio = $request->input('profile_info.bio', $user->bio);
             $user->pronouns = $request->input('profile_info.pronouns', $user->pronouns);
             $user->profile_picture = $profilePicture;
