@@ -162,7 +162,22 @@ class KYCController extends Controller
             }
 
             // ── Stripe KYC path: US, UK, CA, AU, EU ──────────────────────────────
-            $stripeAccountResponse = $user->kyc_account_id
+            // Stripe doesn't allow changing a connected account's country after creation.
+            // If the user previously submitted with a different country, treat this as a
+            // fresh account creation rather than an update.
+            $previousCountry   = optional($user->kycInfo)->country;
+            $countryChanged    = $previousCountry && strtoupper($previousCountry) !== $country;
+            $useUpdate         = $user->kyc_account_id && ! $countryChanged;
+
+            if ($countryChanged) {
+                Log::info('KYC: country changed, creating new Stripe account', [
+                    'user_id'          => $user->id,
+                    'previous_country' => $previousCountry,
+                    'new_country'      => $country,
+                ]);
+            }
+
+            $stripeAccountResponse = $useUpdate
                 ? $this->stripe->updateCustomAccount($request->all(), $user)
                 : $this->stripe->createCustomAccount($request->all(), $user);
 
@@ -172,7 +187,7 @@ class KYCController extends Controller
                     'user_id'     => $user->id,
                     'http_status' => $stripeAccountResponse->getStatusCode(),
                     'stripe_msg'  => $responseData['error'] ?? $responseData['message'] ?? null,
-                    'action'      => $user->kyc_account_id ? 'updateCustomAccount' : 'createCustomAccount',
+                    'action'      => $useUpdate ? 'updateCustomAccount' : 'createCustomAccount',
                 ]);
                 return $this->error(
                     'Stripe API Error',
