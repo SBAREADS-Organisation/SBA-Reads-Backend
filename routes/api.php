@@ -171,6 +171,11 @@ Route::prefix('subscriptions')->group(function () {
 // Stripe Webhook Route
 Route::post('/webhooks/stripe', StripeWebhookController::class)->name('handle-webhook');
 
+// Stripe onboarding return/refresh URLs — the mobile WebView intercepts these before
+// they load, but having real routes prevents 404s if the redirect lands in a browser.
+Route::get('/stripe/onboard/successful', fn () => response()->json(['status' => 'onboarding_complete']))->name('stripe-onboard-success');
+Route::get('/stripe/onboard/refresh',    fn () => response()->json(['status' => 'onboarding_refresh']))->name('stripe-onboard-refresh');
+
 Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
     Route::post('appstore/verify-purchase',   [AppStorePurchaseController::class,    'verifyPurchase'])->name('verify-appstore-purchase');
     Route::post('googleplay/verify-purchase', [\App\Http\Controllers\IAP\GooglePlayPurchaseController::class, 'verifyPurchase'])->name('verify-googleplay-purchase');
