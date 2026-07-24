@@ -68,11 +68,13 @@ class SocialAuthController extends Controller
             $user = User::where('email', $socialUser->getEmail())->first();
 
             if (! $user) {
-                // Create a new user
+                $nameParts = explode(' ', trim($socialUser->getName() ?? ''), 2);
                 $user = User::create([
-                    'name' => $socialUser->getName(),
-                    'email' => $socialUser->getEmail(),
-                    'password' => Hash::make(Str::random(12)),
+                    'name'       => $socialUser->getName(),
+                    'first_name' => $nameParts[0] ?? '',
+                    'last_name'  => $nameParts[1] ?? '',
+                    'email'      => $socialUser->getEmail(),
+                    'password'   => Hash::make(Str::random(12)),
                     'account_type' => 'reader',
                     'default_login' => $provider,
                 ]);
