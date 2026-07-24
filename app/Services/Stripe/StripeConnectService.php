@@ -207,6 +207,7 @@ class StripeConnectService
                 return $account;
             });
         } catch (\Throwable $th) {
+            Log::error('createCustomAccount failed', ['error' => $th->getMessage(), 'file' => $th->getFile(), 'line' => $th->getLine()]);
             return $this->error('Error creating Stripe account', 500, $th->getMessage(), $th);
         }
     }
@@ -286,6 +287,7 @@ class StripeConnectService
                 return $account;
             });
         } catch (\Throwable $th) {
+            Log::error('updateCustomAccount failed', ['error' => $th->getMessage(), 'file' => $th->getFile(), 'line' => $th->getLine()]);
             return $this->error('Error updating Stripe account', 500, $th->getMessage(), $th);
         }
     }

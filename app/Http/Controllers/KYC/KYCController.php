@@ -168,6 +168,12 @@ class KYCController extends Controller
 
             if ($stripeAccountResponse instanceof JsonResponse) {
                 $responseData = $stripeAccountResponse->getData(true);
+                Log::error('KYC Stripe API error', [
+                    'user_id'     => $user->id,
+                    'http_status' => $stripeAccountResponse->getStatusCode(),
+                    'stripe_msg'  => $responseData['error'] ?? $responseData['message'] ?? null,
+                    'action'      => $user->kyc_account_id ? 'updateCustomAccount' : 'createCustomAccount',
+                ]);
                 return $this->error(
                     'Stripe API Error',
                     $stripeAccountResponse->getStatusCode(),
