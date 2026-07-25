@@ -155,6 +155,17 @@ class AppStorePurchaseController extends Controller
                             $book = Book::find($bookIdFromRequest);
                         }
 
+                        // Fallback: "Restore Purchases" and auto-reconcile never send book_id.
+                        // If the original purchase already created a transaction, its meta_data
+                        // has the book_id — use it so restore works even without product_id set.
+                        $knownTx = null;
+                        if (! $book) {
+                            $knownTx = Transaction::where('payment_intent_id', $originalTransId)->first();
+                            if ($knownTx && is_array($knownTx->meta_data) && ! empty($knownTx->meta_data['book_id'])) {
+                                $book = Book::find((int) $knownTx->meta_data['book_id']);
+                            }
+                        }
+
                         if (! $book) {
                             Log::warning("IAP: book not found for product_id: {$productId}", [
                                 'user_id' => $user->id,
@@ -162,7 +173,8 @@ class AppStorePurchaseController extends Controller
                             continue;
                         }
 
-                        $existingTransaction = Transaction::where('payment_intent_id', $originalTransId)->first();
+                        // Reuse $knownTx when the fallback already fetched it to avoid a second query.
+                        $existingTransaction = $knownTx ?? Transaction::where('payment_intent_id', $originalTransId)->first();
 
                         if (! $existingTransaction) {
                             $amount       = $book->actual_price ?? $book->discounted_price ?? 0;
