@@ -2097,12 +2097,25 @@ class BookController extends Controller
                     $q->where('user_id', $user->id)->whereIn('status', ['paid', 'completed'])
                 )->pluck('book_id')->all();
 
-                // PostgreSQL JSON extraction: meta_data->>'book_id' (covers both Apple and Google Play IAP)
+                // PostgreSQL JSON extraction: prefer meta_data->>'book_id'; fall back to
+                // purpose_id so transactions created before meta_data was standardised are
+                // still healed (both fields hold the same book_id in modern records).
                 $paidIapIds = Transaction::where('user_id', $user->id)
                     ->whereIn('payment_provider', ['apple', 'google_play'])
                     ->whereIn('status', ['success', 'succeeded'])
-                    ->whereRaw("meta_data->>'book_id' IS NOT NULL")
-                    ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
+                    ->where(function ($q) {
+                        $q->whereRaw("meta_data->>'book_id' IS NOT NULL")
+                          ->orWhereNotNull('purpose_id');
+                    })
+                    ->get(['meta_data', 'purpose_id'])
+                    ->map(fn ($t) =>
+                        (is_array($t->meta_data) && ! empty($t->meta_data['book_id']))
+                            ? (int) $t->meta_data['book_id']
+                            : (int) $t->purpose_id
+                    )
+                    ->filter()
+                    ->unique()
+                    ->values()
                     ->all();
 
                 $paidAudioIds = \App\Models\AudioBookPurchase::where('user_id', $user->id)

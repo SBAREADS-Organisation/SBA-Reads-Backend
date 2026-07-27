@@ -132,12 +132,18 @@ class AppStorePurchaseController extends Controller
             }
 
             // ── Phase 1: Grant books (committed immediately — user gets their book no matter what) ──
-            [$grantedBooks, $bookIdsToGrant, $purchaseItems] = DB::transaction(
+            [$grantedBooks, $bookIdsToGrant, $purchaseItems, $confirmedBookIds] = DB::transaction(
                 function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
                     $grantedBooks        = [];
                     $bookIdsToGrant      = [];
                     $purchaseItems       = []; // passed to Phase 2 for author earnings
                     $bookPurchaseService = app(BookPurchaseService::class);
+
+                    // Tracks every book that is confirmed in the user's library after this
+                    // call — whether just granted or already owned. Returned to the caller
+                    // so the frontend knows the receipt was definitively processed and can
+                    // safely delete its local retry key.
+                    $confirmedBookIds = [];
 
                     foreach ($receiptInfo as $item) {
                         // $item is either an imdhemy InAppPurchase object (production path)
@@ -160,7 +166,9 @@ class AppStorePurchaseController extends Controller
                         // has the book_id — use it so restore works even without product_id set.
                         $knownTx = null;
                         if (! $book) {
-                            $knownTx = Transaction::where('payment_intent_id', $originalTransId)->first();
+                            $knownTx = Transaction::where('payment_intent_id', $originalTransId)
+                                ->whereIn('status', ['succeeded', 'success'])
+                                ->first();
                             if ($knownTx && is_array($knownTx->meta_data) && ! empty($knownTx->meta_data['book_id'])) {
                                 $book = Book::find((int) $knownTx->meta_data['book_id']);
                             }
@@ -218,19 +226,22 @@ class AppStorePurchaseController extends Controller
                         $alreadyPurchased = $user->purchasedBooks()->where('books.id', $book->id)->exists();
 
                         if (! $alreadyPurchased) {
-                            $bookIdsToGrant[] = $book->id;
-                            $grantedBooks[]   = [
+                            $bookIdsToGrant[]    = $book->id;
+                            $confirmedBookIds[]  = $book->id;
+                            $grantedBooks[]      = [
                                 'id'         => $book->id,
                                 'product_id' => $productId,
                                 'title'      => $book->title,
                             ];
-                            $purchaseItems[]  = [
+                            $purchaseItems[]     = [
                                 'book_id'    => $book->id,
                                 'book_title' => $book->title,
                                 'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
                                 'buyer_id'   => $user->id,
                             ];
                         } else {
+                            // Book already in library — still confirmed so the client clears its retry key.
+                            $confirmedBookIds[] = $book->id;
                             Log::info('IAP: book already in library', [
                                 'user_id' => $user->id,
                                 'book_id' => $book->id,
@@ -242,7 +253,7 @@ class AppStorePurchaseController extends Controller
                         $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
                     }
 
-                    return [$grantedBooks, $bookIdsToGrant, $purchaseItems];
+                    return [$grantedBooks, $bookIdsToGrant, $purchaseItems, $confirmedBookIds];
                 }
             );
 
@@ -326,6 +337,10 @@ class AppStorePurchaseController extends Controller
                 'status'      => 'success',
                 'environment' => $environment,
                 'books'       => $grantedBooks,
+                // confirmed = true means the purchase is definitively accounted for
+                // (either just granted or already in the user's library). The client
+                // uses this to decide whether it is safe to delete its local retry key.
+                'confirmed'   => ! empty($confirmedBookIds),
                 'message'     => count($grantedBooks) > 0
                     ? 'Purchase verified successfully'
                     : 'All books in receipt are already in your library',

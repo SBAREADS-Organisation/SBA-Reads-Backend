@@ -140,17 +140,41 @@ class AuthorWalletController extends Controller
                 })
                 ->sum('amount');
 
-            // Only NGN is withdrawable — USD sits in Stripe until admin processes it
+            // Only NGN is withdrawable via Paystack — USD sits in the Stripe connected account
             $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);
 
             $hasRecipient = ! empty($author->paystack_recipient_code);
             $canWithdraw  = $available >= 100 && $hasRecipient;
 
             $withdrawNote = ! $hasRecipient
-                ? 'Add a Nigerian bank account to withdraw your earnings.'
-                : ($available < 100 && $lifetimeUSDinNGN > 0
-                    ? 'Your international earnings (₦' . number_format($lifetimeUSDinNGN, 2) . ') are being processed and will be credited to your withdrawable balance soon.'
-                    : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null));
+                ? 'Add a Nigerian bank account to withdraw your NGN earnings.'
+                : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null);
+
+            // When the author also has a Stripe connected account, fetch its live USD balance
+            // so the frontend can show a second USD wallet card with a direct withdraw option.
+            $stripeWallet = null;
+            if (! empty($author->kyc_account_id)) {
+                try {
+                    $stripeResp  = $this->stripe->retrieveAccountBalance($author->kyc_account_id);
+                    $stripeBody  = json_decode($stripeResp->getContent(), true);
+                    $stripeAvail = collect($stripeBody['data']['available'] ?? []);
+                    $stripePend  = collect($stripeBody['data']['pending']   ?? []);
+                    $usdAvail    = (float) ($stripeAvail->firstWhere('currency', 'usd')['amount'] ?? 0);
+                    $usdPend     = (float) ($stripePend->firstWhere('currency', 'usd')['amount']  ?? 0);
+
+                    // Only surface the card when there is something to show
+                    if ($usdAvail > 0 || $usdPend > 0) {
+                        $stripeWallet = [
+                            'available'    => ['amount' => round($usdAvail, 2), 'currency' => 'USD'],
+                            'pending'      => ['amount' => round($usdPend, 2),  'currency' => 'USD'],
+                            'can_withdraw' => $usdAvail > 0,
+                            'account_id'   => $author->kyc_account_id,
+                        ];
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Wallet: Stripe dual-wallet balance fetch failed for user ' . $author->id . ': ' . $e->getMessage());
+                }
+            }
 
             return $this->success([
                 'payout_method'        => 'paystack',
@@ -159,6 +183,7 @@ class AuthorWalletController extends Controller
                 'lifetime_earned'      => ['amount' => round($lifetimeNGN + $lifetimeUSDinNGN, 2), 'currency' => 'NGN'],
                 'pending_usd_in_ngn'   => $lifetimeUSDinNGN,
                 'stripe_account_id'    => null,
+                'stripe_wallet'        => $stripeWallet,
                 'can_withdraw'         => $canWithdraw,
                 'withdraw_note'        => $withdrawNote,
             ], 'Wallet balance retrieved.');
