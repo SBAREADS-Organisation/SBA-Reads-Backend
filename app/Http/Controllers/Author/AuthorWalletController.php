@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Author;
 
 use App\Http\Controllers\Controller;
+use App\Models\PayoutRequest;
 use App\Models\Transaction;
 use App\Services\Paystack\CurrencyConversionService;
 use App\Services\Paystack\PaystackTransferService;
@@ -113,10 +114,14 @@ class AuthorWalletController extends Controller
                 ->where('direction', 'credit')->where('status', 'succeeded')
                 ->where('currency', 'NGN')->sum('amount');
 
-            // USD earnings — NOT yet withdrawable via Paystack (funds are in Stripe, pending admin processing)
+            // USD earnings from Stripe card purchases only — IAP earnings are excluded because
+            // they are processed separately via IAPPayoutController and converted to NGN via Paystack.
+            // Including them here would allow an author to request the same money twice.
             $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
                 ->where('direction', 'credit')->where('status', 'succeeded')
-                ->whereIn('currency', ['USD', 'usd'])->sum('amount');
+                ->whereIn('currency', ['USD', 'usd'])
+                ->whereNotIn('payment_provider', ['apple', 'google_play'])
+                ->sum('amount');
 
             $lifetimeUSDinNGN = round($lifetimeUSD * $rate, 2);
 
@@ -149,6 +154,16 @@ class AuthorWalletController extends Controller
             $withdrawNote = ! $hasRecipient
                 ? 'Add a Nigerian bank account to withdraw your NGN earnings.'
                 : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null);
+
+            // USD earnings available for a manual payout request (for authors with no Stripe account).
+            // Subtract amounts already covered by pending/processing/completed requests.
+            $handledUSD     = (float) PayoutRequest::where('user_id', $author->id)
+                ->whereIn('status', ['pending', 'processing', 'completed'])
+                ->sum('amount');
+            $usdAvailableForRequest = max(0.0, $lifetimeUSD - $handledUSD);
+            $pendingRequestUSD      = (float) PayoutRequest::where('user_id', $author->id)
+                ->whereIn('status', ['pending', 'processing'])
+                ->sum('amount');
 
             // When the author also has a Stripe connected account, fetch its live USD balance
             // so the frontend can show a second USD wallet card with a direct withdraw option.
@@ -186,6 +201,14 @@ class AuthorWalletController extends Controller
                 'stripe_wallet'        => $stripeWallet,
                 'can_withdraw'         => $canWithdraw,
                 'withdraw_note'        => $withdrawNote,
+                // USD earnings summary for authors without a Stripe connected account,
+                // enabling them to submit a manual payout request via the app.
+                'usd_earnings'         => $lifetimeUSD > 0 ? [
+                    'lifetime'        => round($lifetimeUSD, 2),
+                    'available'       => round($usdAvailableForRequest, 2),
+                    'pending_request' => round($pendingRequestUSD, 2),
+                    'currency'        => 'USD',
+                ] : null,
             ], 'Wallet balance retrieved.');
         }
 
@@ -244,10 +267,13 @@ class AuthorWalletController extends Controller
 
         if ($amountNGN > $available) {
             // Check if the gap is due to USD earnings pending admin processing
+            // Exclude IAP earnings — those are already handled separately.
             $rate        = $this->safeRate('USD', 'NGN');
             $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
                 ->where('direction', 'credit')->where('status', 'succeeded')
-                ->whereIn('currency', ['USD', 'usd'])->sum('amount');
+                ->whereIn('currency', ['USD', 'usd'])
+                ->whereNotIn('payment_provider', ['apple', 'google_play'])
+                ->sum('amount');
 
             if ($lifetimeUSD > 0 && $available < $amountNGN) {
                 $usdInNGN = number_format(round($lifetimeUSD * $rate, 2), 2);

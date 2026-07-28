@@ -190,6 +190,10 @@ Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->gro
     Route::get('payout-info',        [\App\Http\Controllers\Author\NGNBankAccountController::class, 'payoutInfo']);
     Route::post('switch-stripe',     [\App\Http\Controllers\Author\NGNBankAccountController::class, 'switchToStripe']);
     Route::post('paystack-withdraw', [\App\Http\Controllers\Author\AuthorWalletController::class,   'paystackWithdraw']);
+
+    // Manual USD payout requests (for Paystack-only authors with USD earnings)
+    Route::get('payout-requests',    [\App\Http\Controllers\Author\PayoutRequestController::class, 'index']);
+    Route::post('payout-requests',   [\App\Http\Controllers\Author\PayoutRequestController::class, 'store']);
 });
 
 // Paystack Routes
@@ -352,6 +356,12 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
         Route::get('pending', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'pending'])->name('admin.iap.pending');
         Route::post('process', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'process'])->name('admin.iap.process');
         Route::post('process/{author}', [\App\Http\Controllers\Admin\IAPPayoutController::class, 'process'])->name('admin.iap.process.author');
+    });
+
+    // Manual USD payout requests — admin review and processing
+    Route::prefix('usd-payout-requests')->group(function () {
+        Route::get('/',               [\App\Http\Controllers\Admin\UsdPayoutRequestController::class, 'index'])->name('admin.usd-payout.index');
+        Route::put('{payoutRequest}', [\App\Http\Controllers\Admin\UsdPayoutRequestController::class, 'process'])->name('admin.usd-payout.process');
     });
 
     // Admin Dashboard Route
