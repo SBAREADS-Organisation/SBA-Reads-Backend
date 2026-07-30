@@ -490,12 +490,11 @@ class UserController extends Controller
             if ($user->account_type === 'author') {
                 // Add author-specific required fields
                 $rules = array_merge($rules, [
-                    'socials' => 'nullable|array|min:1',
-                    'socials.*.platform' => 'nullable|string|max:50',
-                    'socials.*.url' => 'nullable|url|max:255',
-                    'preferences.genres' => 'nullable|array|min:1',
-                    'preferences.genres.*' => 'nullable|string|max:50',
-                    // 'first_name' => 'required|string|max:255',
+                    'socials'             => 'nullable|array',
+                    'socials.*.platform'  => 'nullable|string|max:50',
+                    'socials.*.url'       => 'nullable|string|max:500',
+                    'preferences.genres'  => 'nullable|array',
+                    'preferences.genres.*'=> 'nullable|string|max:50',
                 ]);
             } /*else {
                 return $this->error('Invalid account type.', 400, null);
@@ -554,8 +553,14 @@ class UserController extends Controller
             $user->preferences = array_merge($existingPreferences, $newPreferences);
 
             if ($user->account_type === 'author') {
-                // $user->socials = $request->input('socials', $user->socials ?? []); // TODO - <!-- uncomment this when ready -->
-                // Merge settings if already exists, otherwise set new
+                // Persist socials inside profile_info (no separate column needed)
+                if ($request->has('socials')) {
+                    $existingInfo = $user->profile_info ?? [];
+                    $user->profile_info = array_merge($existingInfo, [
+                        'socials' => $request->input('socials', []),
+                    ]);
+                }
+
                 $existingSettings = $user->settings ?? [];
                 $newSettings = $request->input('settings', []);
                 $user->settings = array_merge($existingSettings, $newSettings);
@@ -1191,6 +1196,88 @@ class UserController extends Controller
 
         } catch (\Throwable $th) {
             return $this->error('Failed to delete user.', 500, null, $th);
+        }
+    }
+
+    /**
+     * Self-service account deletion — authenticated user deletes their own account.
+     * Requires password confirmation to guard against accidental taps.
+     */
+    public function deleteOwnAccount(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'password' => 'required|string',
+        ]);
+
+        // Social-login-only accounts have no local password
+        if (empty($user->password)) {
+            return $this->error(
+                'Your account was created via social login and has no password. Please contact support@sbareads.com to delete your account.',
+                422
+            );
+        }
+
+        if (! Hash::check($request->password, $user->password)) {
+            return $this->error('The password you entered is incorrect.', 422);
+        }
+
+        try {
+            DB::transaction(function () use ($user) {
+                $id = $user->id;
+
+                // Author-specific cleanup
+                if ($user->account_type === 'author') {
+                    $bookIds = DB::table('books')->where('author_id', $id)->pluck('id')->toArray();
+                    if (! empty($bookIds)) {
+                        DB::table('book_user')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('book_user_bookmarks')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('reading_progress')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('book_reviews')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('digital_book_purchase_items')->whereIn('book_id', $bookIds)->delete();
+                        DB::table('media_uploads')->where('mediable_type', 'book')->whereIn('mediable_id', $bookIds)->delete();
+                        DB::table('books')->whereIn('id', $bookIds)->delete();
+                    }
+                    DB::table('book_authors')->where('author_id', $id)->delete();
+                    DB::table('withdrawals')->where('user_id', $id)->delete();
+                    DB::table('stripe_payouts')->where('user_id', $id)->delete();
+                    DB::table('payout_requests')->where('user_id', $id)->delete();
+                }
+
+                // Auth & session
+                DB::table('personal_access_tokens')->where('tokenable_id', $id)->delete();
+                DB::table('social_accounts')->where('user_id', $id)->delete();
+                DB::table('linked_accounts')->where('user_id', $id)->delete();
+
+                // Library & reading
+                DB::table('book_user')->where('user_id', $id)->delete();
+                DB::table('book_user_bookmarks')->where('user_id', $id)->delete();
+                DB::table('reading_progress')->where('user_id', $id)->delete();
+
+                // Content
+                DB::table('book_reviews')->where('user_id', $id)->delete();
+                DB::table('notifications')->where('notifiable_id', $id)->delete();
+
+                // Spatie roles/permissions
+                DB::table('model_has_roles')->where('model_id', $id)->where('model_type', get_class($user))->delete();
+                DB::table('model_has_permissions')->where('model_id', $id)->where('model_type', get_class($user))->delete();
+
+                // Profile media
+                DB::table('media_uploads')->where('mediable_type', 'user')->where('mediable_id', $id)->delete();
+
+                // KYC
+                DB::table('k_y_c_verifications')->where('user_id', $id)->delete();
+                DB::table('user_kyc_infos')->where('user_id', $id)->delete();
+
+                // user_subscriptions cascades via FK onDelete('cascade')
+                $user->delete();
+            });
+
+            return $this->success(null, 'Your account has been permanently deleted.', 200);
+
+        } catch (\Throwable $th) {
+            return $this->error('Failed to delete account. Please try again or contact support@sbareads.com.', 500, null, $th);
         }
     }
 

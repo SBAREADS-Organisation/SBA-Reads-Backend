@@ -119,6 +119,9 @@ Route::prefix('user')->group(function () {
         // Forgot Password
         Route::post('profile/change-password', [UserController::class, 'changePassword'])->name('change-password');
 
+        // Self-service account deletion (password confirmation required)
+        Route::delete('/account', [UserController::class, 'deleteOwnAccount'])->name('user.account.delete');
+
         // Voice Sample + Preview (for PDF-to-audio with author's cloned voice)
         Route::post('voice-sample',  [AudioController::class, 'uploadVoiceSample'])->name('upload-voice-sample');
         Route::get('voice-status',   [AudioController::class, 'getVoiceStatus'])->name('voice-status');
