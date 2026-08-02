@@ -503,6 +503,11 @@ class UserController extends Controller
             $validator = Validator::make($request->all(), $rules);
 
             if ($validator->fails()) {
+                \Log::warning('Profile update validation failed', [
+                    'user_id' => $user->id,
+                    'email'   => $user->email,
+                    'errors'  => $validator->errors()->toArray(),
+                ]);
                 return response()->json([
                     'message' => 'Validation failed',
                     'errors' => $validator->errors(),
