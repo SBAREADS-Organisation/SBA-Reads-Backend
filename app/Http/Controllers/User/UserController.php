@@ -479,7 +479,7 @@ class UserController extends Controller
             $rules = [
                 'name' => 'nullable|string|max:255',
                 'profile_info.username' => 'nullable|string|max:255|unique:users,username,' . $user->id,
-                'profile_info.bio' => 'nullable|string|max:1000',
+                'profile_info.bio' => 'nullable|string|max:5000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 'preferences' => 'nullable|array',
                 // 'profile_picture' => 'nullable|array',
