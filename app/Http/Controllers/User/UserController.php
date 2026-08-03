@@ -500,17 +500,20 @@ class UserController extends Controller
                 return $this->error('Invalid account type.', 400, null);
             }*/
 
-            $validator = Validator::make($request->all(), $rules);
+            $messages = [
+                'profile_info.username.unique' => 'This pen name is already taken. Please choose a different one.',
+                'profile_info.bio.max'         => 'Your bio is too long. Please keep it under 5000 characters.',
+                'profile_picture.max'          => 'Profile photo is too large. Please choose a photo under 5MB.',
+                'socials.*.url.max'            => 'One of your social links is too long.',
+            ];
+
+            $validator = Validator::make($request->all(), $rules, $messages);
 
             if ($validator->fails()) {
-                \Log::warning('Profile update validation failed', [
-                    'user_id' => $user->id,
-                    'email'   => $user->email,
-                    'errors'  => $validator->errors()->toArray(),
-                ]);
+                $firstError = collect($validator->errors()->all())->first();
                 return response()->json([
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
+                    'message' => $firstError,
+                    'errors'  => $validator->errors(),
                 ], 422);
             }
 
