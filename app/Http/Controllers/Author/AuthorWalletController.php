@@ -326,7 +326,7 @@ class AuthorWalletController extends Controller
 
             $message = $e->getMessage();
             if (stripos($message, 'balance') !== false && stripos($message, 'not enough') !== false) {
-                $message = 'Your withdrawal is being processed. If funds do not arrive within 24 hours, please contact support@sbareads.com.';
+                $message = 'Withdrawal could not be processed at this time. Please contact support@sbareads.com and we will process your payment manually.';
             }
 
             return $this->error($message, 422);

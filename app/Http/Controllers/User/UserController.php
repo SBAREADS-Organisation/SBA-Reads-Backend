@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Spatie\Permission\Models\Role;
 use Stripe\StripeClient;
 
@@ -478,7 +479,13 @@ class UserController extends Controller
             // Common validation rules
             $rules = [
                 'name' => 'nullable|string|max:255',
-                'profile_info.username' => 'nullable|string|max:255|unique:users,username,' . $user->id,
+                'profile_info.username' => [
+                    'nullable', 'string', 'max:255',
+                    // Allow same-email accounts (reader + author dual accounts) to share a username.
+                    // Only enforce uniqueness against users with a different email address.
+                    Rule::unique('users', 'username')
+                        ->where(fn ($q) => $q->where('email', '!=', $user->email)),
+                ],
                 'profile_info.bio' => 'nullable|string|max:5000',
                 'profile_info.pronouns' => 'nullable|string|max:50',
                 'preferences' => 'nullable|array',
