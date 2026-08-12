@@ -614,14 +614,6 @@ class BookController extends Controller
             );
         }
 
-        // Do not allow user to start reading their own book
-        if ($book->author_id == $user->id) {
-            return $this->error(
-                'You cannot read your own book',
-                403
-            );
-        }
-
         // Total pages count from book; fall back to 0 if not set (progress will be 0)
         $totalPages = (int) ($book->meta_data['pages'] ?? 0);
 
