@@ -242,11 +242,12 @@ class PaystackWebhookService
                         // but they need to know to retry the withdrawal.
                         $author = \App\Models\User::find($payoutTxn->user_id);
                         if ($author && $author->email) {
-                            $amount = '₦' . number_format($payoutTxn->amount, 2);
+                            $amount     = '₦' . number_format($payoutTxn->amount, 2);
+                            $authorName = $author->first_name ?? $author->name ?? 'Author';
                             try {
                                 Mail::to($author->email)->queue(new GenericAppNotification(
                                     'SBA Reads — Withdrawal Failed',
-                                    "Hi {$author->first_name ?? $author->name},\n\n"
+                                    "Hi {$authorName},\n\n"
                                     . "Your withdrawal of {$amount} could not be completed by Paystack.\n\n"
                                     . "Your balance has been automatically restored — you can try withdrawing again from the Wallet screen.\n\n"
                                     . "If the problem persists, contact support@sbareads.com.\n\n"
