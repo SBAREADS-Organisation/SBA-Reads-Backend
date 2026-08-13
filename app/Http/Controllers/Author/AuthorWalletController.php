@@ -10,6 +10,7 @@ use App\Services\Paystack\PaystackTransferService;
 use App\Services\Stripe\StripeConnectService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -243,6 +244,11 @@ class AuthorWalletController extends Controller
 
         $amountNGN = (float) $validated['amount'];
 
+        return DB::transaction(function () use ($author, $amountNGN) {
+        // Lock the author row for the duration of this transaction so concurrent
+        // withdrawal requests cannot both pass the balance check simultaneously.
+        $author = \App\Models\User::lockForUpdate()->findOrFail($author->id);
+
         // Only NGN credits are withdrawable via Paystack (USD from Stripe is not in the Paystack account)
         $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
             ->where('direction', 'credit')->where('status', 'succeeded')
@@ -276,17 +282,16 @@ class AuthorWalletController extends Controller
                 ->sum('amount');
 
             if ($lifetimeUSD > 0 && $available < $amountNGN) {
-                $usdInNGN = number_format(round($lifetimeUSD * $rate, 2), 2);
                 return $this->error(
-                    "You have ₦{$usdInNGN} in international earnings that are being processed. " .
                     'Your NGN withdrawable balance is ₦' . number_format($available, 2) . '. ' .
-                    'Contact support@sbareads.com if you need urgent access to your earnings.',
+                    'You also have international (USD) earnings that are still being converted — ' .
+                    'email support@sbareads.com to request early access.',
                     422
                 );
             }
 
             return $this->error(
-                'Amount exceeds available balance. Available: ₦' . number_format($available, 2),
+                'Amount exceeds your available balance of ₦' . number_format($available, 2) . '. Please enter a lower amount.',
                 422
             );
         }
@@ -326,11 +331,14 @@ class AuthorWalletController extends Controller
 
             $message = $e->getMessage();
             if (stripos($message, 'balance') !== false && stripos($message, 'not enough') !== false) {
-                $message = 'Withdrawal could not be processed at this time. Please contact support@sbareads.com and we will process your payment manually.';
+                $message = 'Your withdrawal of ₦' . number_format($amountNGN, 2) . ' could not be sent right now — our payment account is temporarily low on funds. Your balance is safe and unchanged. Email support@sbareads.com and we will process it manually within 1 business day.';
+            } else {
+                $message = 'Withdrawal failed due to a payment processing error. Please try again. If the issue continues, contact support@sbareads.com.';
             }
 
             return $this->error($message, 422);
         }
+        }); // end DB::transaction
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

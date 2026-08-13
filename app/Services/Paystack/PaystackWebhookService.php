@@ -4,6 +4,7 @@ namespace App\Services\Paystack;
 
 use App\Mail\Books\BookPurchaseConfirmation;
 use App\Mail\Books\BookSaleNotification;
+use App\Mail\Generic\GenericAppNotification;
 use App\Models\PaystackTransaction;
 use App\Models\Transaction;
 use App\Models\PaymentAudit;
@@ -12,6 +13,7 @@ use App\Services\Notification\NotificationService;
 use App\Services\Payments\PaymentService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class PaystackWebhookService
 {
@@ -234,6 +236,26 @@ class PaystackWebhookService
                         ->first();
                     if ($payoutTxn) {
                         $payoutTxn->update(['status' => 'failed']);
+
+                        // Notify the author — their balance self-restores via the ledger
+                        // model (failed transactions are excluded from alreadyPaidOut),
+                        // but they need to know to retry the withdrawal.
+                        $author = \App\Models\User::find($payoutTxn->user_id);
+                        if ($author && $author->email) {
+                            $amount = '₦' . number_format($payoutTxn->amount, 2);
+                            try {
+                                Mail::to($author->email)->queue(new GenericAppNotification(
+                                    'SBA Reads — Withdrawal Failed',
+                                    "Hi {$author->first_name ?? $author->name},\n\n"
+                                    . "Your withdrawal of {$amount} could not be completed by Paystack.\n\n"
+                                    . "Your balance has been automatically restored — you can try withdrawing again from the Wallet screen.\n\n"
+                                    . "If the problem persists, contact support@sbareads.com.\n\n"
+                                    . "— The SBA Reads Team"
+                                ));
+                            } catch (\Throwable $e) {
+                                Log::warning("Could not send withdrawal failure email to user {$payoutTxn->user_id}: " . $e->getMessage());
+                            }
+                        }
                     }
                 }
             }

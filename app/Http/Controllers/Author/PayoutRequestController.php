@@ -9,6 +9,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -33,45 +34,54 @@ class PayoutRequestController extends Controller
 
         $amount = (float) $validated['amount'];
 
-        $hasActive = PayoutRequest::where('user_id', $author->id)
-            ->whereIn('status', ['pending', 'processing'])
-            ->exists();
+        $errorMsg      = null;
+        $payoutRequest = null;
 
-        if ($hasActive) {
-            return $this->error(
-                'You already have a payout request in progress. Please wait for it to be processed before submitting a new one.',
-                422
-            );
+        DB::transaction(function () use ($author, $amount, &$errorMsg, &$payoutRequest) {
+            // Lock the author row so two simultaneous requests cannot both pass
+            // the active-request check before either has committed its insert.
+            \App\Models\User::lockForUpdate()->findOrFail($author->id);
+
+            $hasActive = PayoutRequest::where('user_id', $author->id)
+                ->whereIn('status', ['pending', 'processing'])
+                ->exists();
+
+            if ($hasActive) {
+                $errorMsg = 'You already have a payout request in progress. Please wait for it to be processed before submitting a new one.';
+                return;
+            }
+
+            // Exclude IAP earnings — those are handled by IAPPayoutController and already
+            // converted + paid via Paystack. Including them would allow double-payment.
+            $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
+                ->where('direction', 'credit')
+                ->where('status', 'succeeded')
+                ->whereIn('currency', ['USD', 'usd'])
+                ->whereNotIn('payment_provider', ['apple', 'google_play'])
+                ->sum('amount');
+
+            $alreadyHandled = (float) PayoutRequest::where('user_id', $author->id)
+                ->whereIn('status', ['pending', 'processing', 'completed'])
+                ->sum('amount');
+
+            $available = max(0.0, $lifetimeUSD - $alreadyHandled);
+
+            if ($amount > $available) {
+                $errorMsg = 'Amount exceeds your available USD balance of $' . number_format($available, 2) . '.';
+                return;
+            }
+
+            $payoutRequest = PayoutRequest::create([
+                'user_id'  => $author->id,
+                'amount'   => $amount,
+                'currency' => 'USD',
+                'status'   => 'pending',
+            ]);
+        });
+
+        if ($errorMsg) {
+            return $this->error($errorMsg, 422);
         }
-
-        // Exclude IAP earnings — those are handled by IAPPayoutController and already
-        // converted + paid via Paystack. Including them would allow double-payment.
-        $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
-            ->where('direction', 'credit')
-            ->where('status', 'succeeded')
-            ->whereIn('currency', ['USD', 'usd'])
-            ->whereNotIn('payment_provider', ['apple', 'google_play'])
-            ->sum('amount');
-
-        $alreadyHandled = (float) PayoutRequest::where('user_id', $author->id)
-            ->whereIn('status', ['pending', 'processing', 'completed'])
-            ->sum('amount');
-
-        $available = max(0.0, $lifetimeUSD - $alreadyHandled);
-
-        if ($amount > $available) {
-            return $this->error(
-                'Amount exceeds your available USD balance of $' . number_format($available, 2) . '.',
-                422
-            );
-        }
-
-        $payoutRequest = PayoutRequest::create([
-            'user_id'  => $author->id,
-            'amount'   => $amount,
-            'currency' => 'USD',
-            'status'   => 'pending',
-        ]);
 
         // Notify all admins by email
         try {
