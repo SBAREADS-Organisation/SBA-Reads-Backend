@@ -263,6 +263,20 @@ class AppStorePurchaseController extends Controller
                 'books_granted'=> count($grantedBooks),
             ]);
 
+            // Detect Apple receipt propagation delay: the client sent a specific book_id
+            // but that book's transaction is not yet present in the receipt. This happens
+            // when the unified receipt hasn't been updated yet on Apple's servers immediately
+            // after a purchase. Signal the client to retry with forceRefresh:true after a
+            // short backoff rather than treating this as a permanent failure.
+            $pending = false;
+            if ($bookIdFromRequest > 0 && ! in_array($bookIdFromRequest, $confirmedBookIds)) {
+                $pending = true;
+                Log::info('IAP: book_id provided but not found in receipt — possible Apple propagation delay', [
+                    'user_id' => $user->id,
+                    'book_id' => $bookIdFromRequest,
+                ]);
+            }
+
             // ── Phase 2: Record author earnings (non-critical — runs after book grant is committed) ──
             // A failure here never revokes book access. Logged for manual reconciliation.
             if (! empty($purchaseItems)) {
@@ -341,9 +355,12 @@ class AppStorePurchaseController extends Controller
                 // (either just granted or already in the user's library). The client
                 // uses this to decide whether it is safe to delete its local retry key.
                 'confirmed'   => ! empty($confirmedBookIds),
+                // pending = true means book_id was provided but its transaction is not
+                // yet in the receipt — Apple propagation delay. Client should retry.
+                'pending'     => $pending,
                 'message'     => count($grantedBooks) > 0
                     ? 'Purchase verified successfully'
-                    : 'All books in receipt are already in your library',
+                    : ($pending ? 'Purchase pending Apple receipt update' : 'All books in receipt are already in your library'),
             ]);
 
         } catch (\Exception $e) {
