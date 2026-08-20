@@ -36,28 +36,31 @@ class DashboardController extends Controller
             $pending_books_count = Book::where('status', 'pending')->count();
             $active_subscription_count = $this->subscriptionService->getActiveSubscriptionCount();
 
-            // Revenue calculations - dual currency support
+            // Revenue = author earnings (both settled and awaiting Apple remittance)
             $revenue_usd = Transaction::where('type', 'earning')
-                ->where('status', 'succeeded')
+                ->whereIn('status', ['succeeded', 'iap_pending'])
                 ->whereRaw('UPPER(currency) = ?', ['USD'])
                 ->sum('amount');
 
             $revenue_ngn = Transaction::where('type', 'earning')
-                ->where('status', 'succeeded')
+                ->whereIn('status', ['succeeded', 'iap_pending'])
                 ->whereRaw('UPPER(currency) = ?', ['NGN'])
                 ->sum('amount');
 
             $naira_revenue = Transaction::where('type', 'earning')
-                ->where('status', 'succeeded')
+                ->whereIn('status', ['succeeded', 'iap_pending'])
                 ->sum('amount_naira');
 
-            // Total sales from all sources with dual currency
-            $digital_sales_usd = DigitalBookPurchase::where('status', 'completed')
+            // Total sales = what readers paid across all payment methods
+            $digital_sales_usd = Transaction::where('type', 'purchase')
+                ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
                 ->whereRaw('UPPER(currency) = ?', ['USD'])
-                ->sum('total_amount');
-            $digital_sales_ngn = DigitalBookPurchase::where('status', 'completed')
+                ->sum('amount');
+
+            $digital_sales_ngn = Transaction::where('type', 'purchase')
+                ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
                 ->whereRaw('UPPER(currency) = ?', ['NGN'])
-                ->sum('total_amount');
+                ->sum('amount');
 
             $physical_sales_usd = Order::where('status', 'completed')
                 ->whereRaw('UPPER(currency) = ?', ['USD'])
@@ -144,7 +147,7 @@ class DashboardController extends Controller
     private function getWeeklyRevenue()
     {
         $base = Transaction::where('type', 'earning')
-            ->where('status', 'succeeded')
+            ->whereIn('status', ['succeeded', 'iap_pending'])
             ->where('created_at', '>=', now()->subDays(7));
 
         return [
