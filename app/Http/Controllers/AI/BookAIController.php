@@ -19,8 +19,8 @@ class BookAIController extends Controller
 {
     use ApiResponse;
 
-    // Max characters sent to Claude as book context (~37k tokens — well within 200k limit)
-    private const MAX_CONTEXT_CHARS = 150_000;
+    // ~20k tokens — fits within OpenAI Tier 1 TPM limits (30k/min)
+    private const MAX_CONTEXT_CHARS = 80_000;
 
     public function __construct(protected OpenAIService $claude) {}
 
@@ -65,11 +65,12 @@ class BookAIController extends Controller
 
             $answer = $this->claude->message(
                 userPrompt: "Question: {$request->message}",
-                systemPrompt: "You are a helpful reading assistant for the book \"{$book->title}\". ".
-                    "Answer questions based only on the book content provided below. ".
-                    "Be concise, accurate, and helpful. If the answer is not in the book, say so.\n\n".
+                systemPrompt: "You are a reading assistant for the book \"{$book->title}\". ".
+                    "Answer using ONLY information from the book content below. ".
+                    "Rules: plain text only — no markdown, no asterisks, no bullet symbols. ".
+                    "Keep answers to 2-4 sentences maximum. If the answer is not in the book, say so in one sentence.\n\n".
                     "BOOK CONTENT:\n{$context}",
-                maxTokens: 512
+                maxTokens: 300
             );
 
             return $this->success(['answer' => $answer], 'AI response generated.');
