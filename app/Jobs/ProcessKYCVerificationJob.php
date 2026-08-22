@@ -6,7 +6,7 @@ use App\Mail\Generic\GenericAppNotification;
 use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\AI\AIReviewService;
-use App\Services\AI\ClaudeService;
+use App\Services\AI\OpenAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -53,7 +53,7 @@ class ProcessKYCVerificationJob implements ShouldQueue
         // Mark as AI-reviewing so the admin UI can show the in-progress state
         $user->update(['ai_review_status' => 'pending', 'ai_review_notes' => null]);
 
-        $service = new AIReviewService(new ClaudeService());
+        $service = new AIReviewService(new OpenAIService());
         $result  = $service->reviewKYCApplication($user);
 
         $confidence = (float) $result['confidence'];

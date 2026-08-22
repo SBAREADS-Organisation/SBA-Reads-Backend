@@ -132,7 +132,10 @@ class DashboardController extends Controller
         $total_reading_time = ReadingProgress::whereNotNull('session_duration')
             ->get()
             ->sum(function ($progress) {
-                $sessionData = json_decode($progress->session_duration, true);
+                // session_duration is JSON-cast by the model, so it's already an array
+                $sessionData = is_array($progress->session_duration)
+                    ? $progress->session_duration
+                    : json_decode($progress->session_duration, true);
                 return is_array($sessionData) ? array_sum($sessionData) : 0;
             });
 

@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\AppSetting;
 use App\Models\User;
 use App\Services\AI\AIReviewService;
-use App\Services\AI\ClaudeService;
+use App\Services\AI\OpenAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,7 +35,7 @@ class ProcessAuthorAIReviewJob implements ShouldQueue
             return;
         }
 
-        $service = new AIReviewService(new ClaudeService());
+        $service = new AIReviewService(new OpenAIService());
         $result  = $service->reviewAuthor($user);
 
         $aiStatus = $result['decision'] === 'verify' ? 'verified' : 'needs_review';

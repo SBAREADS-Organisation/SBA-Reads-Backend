@@ -5,7 +5,7 @@ namespace App\Jobs;
 use App\Models\AppSetting;
 use App\Models\Book;
 use App\Services\AI\AIReviewService;
-use App\Services\AI\ClaudeService;
+use App\Services\AI\OpenAIService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -30,7 +30,7 @@ class ProcessBookAIReviewJob implements ShouldQueue
             return; // Already processed or deleted
         }
 
-        $service = new AIReviewService(new ClaudeService());
+        $service = new AIReviewService(new OpenAIService());
         $result  = $service->reviewBook($book);
 
         $aiStatus = match ($result['decision']) {

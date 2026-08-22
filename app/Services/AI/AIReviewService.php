@@ -5,10 +5,11 @@ namespace App\Services\AI;
 use App\Models\Book;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use App\Services\AI\OpenAIService;
 
 class AIReviewService
 {
-    public function __construct(protected ClaudeService $claude) {}
+    public function __construct(protected OpenAIService $claude) {}
 
     /**
      * Review a book submission and return a structured result.

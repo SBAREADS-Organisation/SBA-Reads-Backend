@@ -7,7 +7,7 @@ use App\Models\Book;
 use App\Models\BookChapter;
 use App\Models\ReadingProgress;
 use App\Models\Transaction;
-use App\Services\AI\ClaudeService;
+use App\Services\AI\OpenAIService;
 use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -22,7 +22,7 @@ class BookAIController extends Controller
     // Max characters sent to Claude as book context (~37k tokens — well within 200k limit)
     private const MAX_CONTEXT_CHARS = 150_000;
 
-    public function __construct(protected ClaudeService $claude) {}
+    public function __construct(protected OpenAIService $claude) {}
 
     // ─────────────────────────────────────────────
     // Feature 1 — Ask the Book
