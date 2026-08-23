@@ -226,6 +226,10 @@ class StripeWebhookService
             }
 
             foreach ($purchase->items as $item) {
+                if ($item->status !== 'paid') {
+                    $item->update(['status' => 'paid']);
+                }
+
                 // addBooksToUserLibrary is idempotent — safe on every retry.
                 app(\App\Services\Book\BookPurchaseService::class)
                     ->addBooksToUserLibrary($user, [$item->book_id]);

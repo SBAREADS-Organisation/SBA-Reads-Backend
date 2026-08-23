@@ -372,7 +372,9 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
 
     // Admin Announcements
     Route::prefix('announcements')->group(function () {
-        Route::post('email-blast', [\App\Http\Controllers\Admin\AnnouncementController::class, 'emailBlast'])->name('admin.announcements.email-blast');
+        Route::post('email-blast',      [\App\Http\Controllers\Admin\AnnouncementController::class, 'emailBlast'])->name('admin.announcements.email-blast');
+        Route::post('notify-bad-cover', [\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyBadCover'])->name('admin.announcements.notify-bad-cover');
+        Route::post('notify-missing-id',[\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyMissingId'])->name('admin.announcements.notify-missing-id');
     });
 
     // AI Auto-Review
