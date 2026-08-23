@@ -87,9 +87,12 @@ class AnnouncementController extends Controller
      */
     public function notifyBadCover(Request $request): JsonResponse
     {
-        $authorIds = Book::where('account_type_owner', 'author')
-            ->whereNull('cover_image')
-            ->orWhere('cover_image', '')
+        $authorIds = Book::whereNotNull('author_id')
+            ->where(function ($q) {
+                $q->whereNull('cover_image')
+                  ->orWhere('cover_image', '')
+                  ->orWhere('cover_image', '[]');
+            })
             ->distinct()
             ->pluck('author_id')
             ->filter()
@@ -186,5 +189,68 @@ class AnnouncementController extends Controller
         Log::info('Admin notifyMissingId sent', ['admin_id' => $request->user()->id, 'queued' => $queued]);
 
         return $this->success(['total_recipients' => count($authorIds), 'queued' => $queued], "ID reminder queued for {$queued} authors.");
+    }
+
+    /**
+     * Send a cover reminder to a single specific author.
+     */
+    public function notifyAuthorCover(Request $request, int $userId): JsonResponse
+    {
+        $author = User::where('id', $userId)->where('account_type', 'author')->whereNotNull('email')->first();
+
+        if (! $author) {
+            return $this->error('Author not found.', 404);
+        }
+
+        $name = ($author->first_name && strtoupper(trim($author->first_name)) !== 'NO NAME')
+            ? $author->first_name
+            : ($author->name ?? 'Author');
+
+        Mail::to($author->email)->queue(new GenericAppNotification(
+            'SBA Reads — Please Update Your Book Cover',
+            "Hi {$name},\n\n"
+            . "We reviewed your book listing on SBA Reads and noticed that the cover image needs to be updated.\n\n"
+            . "A clear, high-quality front cover helps readers find and trust your work. Please log in to the SBA Reads Author app and upload a proper front cover image.\n\n"
+            . "Note: Upload the front cover only — not a full spread or back cover.\n\n"
+            . "If you need help, contact us at support@sbareads.com.\n\n"
+            . "— The SBA Reads Team"
+        ));
+
+        Log::info('Admin notifyAuthorCover sent', ['admin_id' => $request->user()->id, 'author_id' => $userId]);
+
+        return $this->success([], "Cover reminder sent to {$author->email}.");
+    }
+
+    /**
+     * Send an ID/KYC reminder to a single specific author.
+     */
+    public function notifyAuthorId(Request $request, int $userId): JsonResponse
+    {
+        $author = User::where('id', $userId)->where('account_type', 'author')->whereNotNull('email')->first();
+
+        if (! $author) {
+            return $this->error('Author not found.', 404);
+        }
+
+        $name = ($author->first_name && strtoupper(trim($author->first_name)) !== 'NO NAME')
+            ? $author->first_name
+            : ($author->name ?? 'Author');
+
+        Mail::to($author->email)->queue(new GenericAppNotification(
+            'SBA Reads — ID Verification Required',
+            "Hi {$name},\n\n"
+            . "To start receiving payouts from your book sales on SBA Reads, you need to verify your identity by submitting a valid government-issued ID.\n\n"
+            . "Steps:\n"
+            . "1. Open the SBA Reads Author app\n"
+            . "2. Go to Profile → KYC Verification\n"
+            . "3. Upload a clear photo of your government-issued ID (National ID, Driver's Licence, or International Passport)\n\n"
+            . "Once submitted, our team will review and verify your identity within 24–48 hours.\n\n"
+            . "If you need help, contact us at support@sbareads.com.\n\n"
+            . "— The SBA Reads Team"
+        ));
+
+        Log::info('Admin notifyAuthorId sent', ['admin_id' => $request->user()->id, 'author_id' => $userId]);
+
+        return $this->success([], "ID reminder sent to {$author->email}.");
     }
 }

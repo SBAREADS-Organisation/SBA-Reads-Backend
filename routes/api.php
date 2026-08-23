@@ -372,9 +372,11 @@ Route::middleware(['auth:sanctum', 'role:manager,superadmin'])->prefix('admin')-
 
     // Admin Announcements
     Route::prefix('announcements')->group(function () {
-        Route::post('email-blast',      [\App\Http\Controllers\Admin\AnnouncementController::class, 'emailBlast'])->name('admin.announcements.email-blast');
-        Route::post('notify-bad-cover', [\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyBadCover'])->name('admin.announcements.notify-bad-cover');
-        Route::post('notify-missing-id',[\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyMissingId'])->name('admin.announcements.notify-missing-id');
+        Route::post('email-blast',                  [\App\Http\Controllers\Admin\AnnouncementController::class, 'emailBlast'])->name('admin.announcements.email-blast');
+        Route::post('notify-bad-cover',             [\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyBadCover'])->name('admin.announcements.notify-bad-cover');
+        Route::post('notify-missing-id',            [\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyMissingId'])->name('admin.announcements.notify-missing-id');
+        Route::post('authors/{userId}/notify-cover',[\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyAuthorCover'])->name('admin.announcements.notify-author-cover')->where('userId', '[0-9]+');
+        Route::post('authors/{userId}/notify-id',   [\App\Http\Controllers\Admin\AnnouncementController::class, 'notifyAuthorId'])->name('admin.announcements.notify-author-id')->where('userId', '[0-9]+');
     });
 
     // AI Auto-Review
