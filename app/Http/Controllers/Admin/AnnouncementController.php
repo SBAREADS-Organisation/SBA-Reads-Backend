@@ -196,6 +196,11 @@ class AnnouncementController extends Controller
      */
     public function notifyAuthorCover(Request $request, int $userId): JsonResponse
     {
+        $cacheKey = "nudge_cover_{$userId}";
+        if (\Cache::has($cacheKey)) {
+            return $this->error('A cover reminder was already sent to this author recently. Please wait before sending again.', 429);
+        }
+
         $author = User::where('id', $userId)->where('account_type', 'author')->whereNotNull('email')->first();
 
         if (! $author) {
@@ -206,17 +211,19 @@ class AnnouncementController extends Controller
             ? $author->first_name
             : ($author->name ?? 'Author');
 
+        \Cache::put($cacheKey, true, now()->addHours(24));
+
         Mail::to($author->email)->queue(new GenericAppNotification(
             'SBA Reads — Please Update Your Book Cover',
             "Hi {$name},\n\n"
             . "We reviewed your book listing on SBA Reads and noticed that the cover image needs to be updated.\n\n"
             . "A clear, high-quality front cover helps readers find and trust your work. Please log in to the SBA Reads Author app and upload a proper front cover image.\n\n"
             . "Note: Upload the front cover only — not a full spread or back cover.\n\n"
-            . "If you need help, contact us at support@sbareads.com.\n\n"
+            . "If you need help, contact us at admin@sbareads.com.\n\n"
             . "— The SBA Reads Team"
         ));
 
-        Log::info('Admin notifyAuthorCover sent', ['admin_id' => $request->user()->id, 'author_id' => $userId]);
+        Log::info('Admin notifyAuthorCover sent', ['admin_id' => $request->user()->id, 'author_id' => $userId, 'recipient' => $author->email]);
 
         return $this->success([], "Cover reminder sent to {$author->email}.");
     }
@@ -226,6 +233,11 @@ class AnnouncementController extends Controller
      */
     public function notifyAuthorId(Request $request, int $userId): JsonResponse
     {
+        $cacheKey = "nudge_id_{$userId}";
+        if (\Cache::has($cacheKey)) {
+            return $this->error('An ID reminder was already sent to this author recently. Please wait before sending again.', 429);
+        }
+
         $author = User::where('id', $userId)->where('account_type', 'author')->whereNotNull('email')->first();
 
         if (! $author) {
@@ -235,6 +247,8 @@ class AnnouncementController extends Controller
         $name = ($author->first_name && strtoupper(trim($author->first_name)) !== 'NO NAME')
             ? $author->first_name
             : ($author->name ?? 'Author');
+
+        \Cache::put($cacheKey, true, now()->addHours(24));
 
         Mail::to($author->email)->queue(new GenericAppNotification(
             'SBA Reads — ID Verification Required',
@@ -245,11 +259,11 @@ class AnnouncementController extends Controller
             . "2. Go to Profile → KYC Verification\n"
             . "3. Upload a clear photo of your government-issued ID (National ID, Driver's Licence, or International Passport)\n\n"
             . "Once submitted, our team will review and verify your identity within 24–48 hours.\n\n"
-            . "If you need help, contact us at support@sbareads.com.\n\n"
+            . "If you need help, contact us at admin@sbareads.com.\n\n"
             . "— The SBA Reads Team"
         ));
 
-        Log::info('Admin notifyAuthorId sent', ['admin_id' => $request->user()->id, 'author_id' => $userId]);
+        Log::info('Admin notifyAuthorId sent', ['admin_id' => $request->user()->id, 'author_id' => $userId, 'recipient' => $author->email]);
 
         return $this->success([], "ID reminder sent to {$author->email}.");
     }

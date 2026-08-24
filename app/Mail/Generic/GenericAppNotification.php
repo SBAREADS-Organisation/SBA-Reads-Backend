@@ -14,16 +14,15 @@ class GenericAppNotification extends Mailable
 
     public string $title;
 
-    public string $message;
+    public string $body;
 
     /**
      * Create a new message instance.
      */
     public function __construct(string $title, string $message)
     {
-        //
         $this->title = $title;
-        $this->message = $message;
+        $this->body  = $message;
     }
 
     /**
