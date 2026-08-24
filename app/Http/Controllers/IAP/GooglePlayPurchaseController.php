@@ -116,7 +116,7 @@ class GooglePlayPurchaseController extends Controller
                 }
 
                 $granted = false;
-                if (! $user->purchasedBooks()->where('books.id', $book->id)->exists()) {
+                if (! $bookPurchaseService->userOwnsBook($user, $book->id)) {
                     $bookPurchaseService->addBooksToUserLibrary($user, [$book->id]);
                     $granted = true;
                 }

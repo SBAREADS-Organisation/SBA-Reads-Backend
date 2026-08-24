@@ -567,10 +567,11 @@ class BookController extends Controller
     {
         $user = $request->user();
 
-        // Check if user has purchased the book.
-        // If not in book_user, check for a successful IAP transaction and heal
+        // Check if user has purchased the book (cross-account: also checks linked accounts).
+        // If not in any linked library, check for a successful IAP transaction and heal
         // on-the-fly so a missed webhook never permanently blocks a paid reader.
-        if (! $user->purchasedBooks()->where('book_id', $bookId)->exists()) {
+        $purchaseService = app(BookPurchaseService::class);
+        if (! $purchaseService->userOwnsBook($user, (int) $bookId)) {
             $hasIap = Transaction::where('user_id', $user->id)
                 ->whereIn('payment_provider', ['apple', 'google_play'])
                 ->whereIn('status', ['success', 'succeeded'])
@@ -578,7 +579,7 @@ class BookController extends Controller
                 ->exists();
 
             if ($hasIap) {
-                app(BookPurchaseService::class)->addBooksToUserLibrary($user, [(int) $bookId]);
+                $purchaseService->addBooksToUserLibrary($user, [(int) $bookId]);
             } else {
                 return $this->error(
                     'You must purchase the book before reading it.',
@@ -1475,10 +1476,14 @@ class BookController extends Controller
             // Note: the DB check constraint only allows 'pending', 'paid', 'failed'
             // for digital_book_purchases.status — 'cancelled' is not valid.
 
-            // Reject if user already owns any of the requested books
-            $ownedBooks = $user->purchasedBooks()->whereIn('book_id', $bookIds)->pluck('book_id');
-            if ($ownedBooks->isNotEmpty()) {
-                $alreadyOwnedIds = $ownedBooks->toArray();
+            // Reject if user already owns any of the requested books (cross-account aware).
+            $purchaseService = app(BookPurchaseService::class);
+            $alreadyOwnedIds = collect($bookIds)
+                ->filter(fn ($id) => $purchaseService->userOwnsBook($user, (int) $id))
+                ->values()
+                ->toArray();
+
+            if (! empty($alreadyOwnedIds)) {
                 if (empty(array_diff($bookIds, $alreadyOwnedIds))) {
                     return $this->error('You already own all the selected books.', 409);
                 }

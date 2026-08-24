@@ -12,7 +12,7 @@ class HealBookLibrary extends Command
                             {--dry-run : Preview missing rows without writing anything}
                             {--user= : Restrict to a single user ID}';
 
-    protected $description = 'Insert book_user rows missing for confirmed-paid purchases, including linked accounts';
+    protected $description = 'Insert missing book_user rows for confirmed-paid purchases, routing to reader accounts only';
 
     public function handle(): int
     {
@@ -70,32 +70,63 @@ class HealBookLibrary extends Command
             return self::SUCCESS;
         }
 
-        // ── 2. Expand pairs to include linked accounts ───────────────────────
-        // A book bought by either side of a reader↔author link is granted to both.
+        // ── 2. Expand pairs to reader accounts only ──────────────────────────
+        // Books belong in reader libraries. For each purchaser, resolve their
+        // linked reader account(s). If a purchaser has no linked reader account
+        // (edge case: author who never linked one), they receive the books as a
+        // safe fallback so no paid purchase is ever stranded.
         $purchaserIds = $allPaid->pluck('user_id')->unique()->values()->toArray();
 
+        // Fetch account_type for every purchaser and all their linked accounts.
         $links = DB::table('linked_accounts')
             ->whereIn('user_id', $purchaserIds)
             ->orWhereIn('linked_user_id', $purchaserIds)
             ->get(['user_id', 'linked_user_id']);
 
-        // Build map: each purchaser → all account IDs it shares a link with
+        $allRelatedIds = collect($purchaserIds)
+            ->merge($links->pluck('user_id'))
+            ->merge($links->pluck('linked_user_id'))
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $accountTypes = DB::table('users')
+            ->whereIn('id', $allRelatedIds)
+            ->pluck('account_type', 'id');
+
+        // Build map: purchaser_id → [reader_account_id, ...]
         $accountMap = array_fill_keys($purchaserIds, []);
+
+        // Include the purchaser themselves if they are a reader.
         foreach ($purchaserIds as $id) {
-            $accountMap[$id][] = $id;
+            if (($accountTypes[$id] ?? '') === 'reader') {
+                $accountMap[$id][] = $id;
+            }
         }
+
+        // Add any linked reader accounts.
         foreach ($links as $link) {
-            if (array_key_exists($link->user_id, $accountMap)) {
+            if (array_key_exists($link->user_id, $accountMap)
+                && ($accountTypes[$link->linked_user_id] ?? '') === 'reader') {
                 $accountMap[$link->user_id][] = $link->linked_user_id;
             }
-            if (array_key_exists($link->linked_user_id, $accountMap)) {
+            if (array_key_exists($link->linked_user_id, $accountMap)
+                && ($accountTypes[$link->user_id] ?? '') === 'reader') {
                 $accountMap[$link->linked_user_id][] = $link->user_id;
             }
         }
 
+        // Fallback: if no reader account was found for a purchaser, grant to them directly.
+        foreach ($purchaserIds as $id) {
+            if (empty($accountMap[$id])) {
+                $accountMap[$id][] = $id;
+            }
+            $accountMap[$id] = array_unique($accountMap[$id]);
+        }
+
         $expanded = collect();
         foreach ($allPaid as $row) {
-            foreach (array_unique($accountMap[$row->user_id] ?? [$row->user_id]) as $accountId) {
+            foreach ($accountMap[$row->user_id] ?? [$row->user_id] as $accountId) {
                 $expanded->push((object) ['user_id' => $accountId, 'book_id' => $row->book_id]);
             }
         }

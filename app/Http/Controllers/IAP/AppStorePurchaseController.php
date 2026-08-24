@@ -223,7 +223,7 @@ class AppStorePurchaseController extends Controller
                             ]);
                         }
 
-                        $alreadyPurchased = $user->purchasedBooks()->where('books.id', $book->id)->exists();
+                        $alreadyPurchased = $bookPurchaseService->userOwnsBook($user, $book->id);
 
                         if (! $alreadyPurchased) {
                             $bookIdsToGrant[]    = $book->id;
