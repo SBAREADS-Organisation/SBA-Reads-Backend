@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -524,68 +525,76 @@ class UserController extends Controller
                 ], 422);
             }
 
-            // Handle profile picture upload if present
+            // ── Profile picture upload (non-fatal) ───────────────────────────
+            // Isolated in its own try-catch so a media upload failure (S3 hiccup,
+            // timeout, wrong format) never aborts the rest of the profile save.
+            $profilePicture   = $user->profile_picture ?? [];
+            $pictureUploadId  = null;
+
             if ($request->hasFile('profile_picture')) {
-                $file = $request->file('profile_picture');
-                // Store image (e.g., in 'profile_pictures' disk), generate public_id and url
-                $upload = $this->mediaUploader()->upload($file, 'user_avatar', $user);
-
-                // dd($upload);
-
-                $profilePicture = [
-                    'public_id' => (int) $upload['id'],
-                    'public_url' => (string) $upload['url'],
-                ];
-            } else {
-                // No new file uploaded — preserve the user's existing picture.
-                // The frontend does not re-send the current URL as a field,
-                // so falling back to $request->input() would silently clear it.
-                $profilePicture = $user->profile_picture ?? [];
+                try {
+                    $upload = $this->mediaUploader()->upload(
+                        $request->file('profile_picture'), 'user_avatar', $user
+                    );
+                    $profilePicture  = [
+                        'public_id'  => (int) $upload['id'],
+                        'public_url' => (string) $upload['url'],
+                    ];
+                    $pictureUploadId = (int) $upload['id'];
+                } catch (\Throwable $uploadEx) {
+                    Log::error('updateProfile: profile picture upload failed — profile saved without new photo', [
+                        'user_id' => $user->id,
+                        'error'   => $uploadEx->getMessage(),
+                    ]);
+                }
             }
 
-            // Update user fields
-            // $user->profile_info = $request->input('profile_info', $user->profile_info);
-            $user->username = $request->input('profile_info.username', $user->username);
-            // Keep name in sync with username so display names stay consistent.
-            // Falls back to an explicit 'name' field, then the existing value.
-            $user->name = $request->input('name', $user->username ?? $user->name);
-
-            // Sync first_name / last_name so email and notification greetings
-            // never fall back to "NO NAME" after a profile update.
-            if ($request->filled('name')) {
+            // ── Core profile fields ───────────────────────────────────────────
+            $penName = $request->input('profile_info.username');
+            if ($penName) {
+                $user->username   = $penName;
+                $user->name       = $penName;
+                $nameParts        = explode(' ', trim($penName), 2);
+                $user->first_name = $nameParts[0];
+                $user->last_name  = $nameParts[1] ?? '';
+            } elseif ($request->filled('name')) {
+                $user->name       = $request->input('name');
                 $nameParts        = explode(' ', trim($request->input('name')), 2);
                 $user->first_name = $nameParts[0];
                 $user->last_name  = $nameParts[1] ?? '';
             }
 
-            $user->bio = $request->input('profile_info.bio', $user->bio);
-            $user->pronouns = $request->input('profile_info.pronouns', $user->pronouns);
+            $user->bio             = $request->input('profile_info.bio', $user->bio);
+            $user->pronouns        = $request->input('profile_info.pronouns', $user->pronouns);
             $user->profile_picture = $profilePicture;
 
-            // Handle preferences for both authors and readers
-            $existingPreferences = $user->preferences ?? [];
-            $newPreferences = $request->input('preferences', []);
-            $user->preferences = array_merge($existingPreferences, $newPreferences);
+            // ── Preferences (merge, guard against non-array) ──────────────────
+            $existingPreferences = is_array($user->preferences) ? $user->preferences : [];
+            $newPreferences      = is_array($request->input('preferences')) ? $request->input('preferences') : [];
+            $user->preferences   = array_merge($existingPreferences, $newPreferences);
 
+            // ── Author-only fields ────────────────────────────────────────────
             if ($user->account_type === 'author') {
-                // Persist socials inside profile_info (no separate column needed)
                 if ($request->has('socials')) {
-                    $existingInfo = $user->profile_info ?? [];
-                    $user->profile_info = array_merge($existingInfo, [
+                    $existingInfo        = is_array($user->profile_info) ? $user->profile_info : [];
+                    $user->profile_info  = array_merge($existingInfo, [
                         'socials' => $request->input('socials', []),
                     ]);
                 }
 
-                $existingSettings = $user->settings ?? [];
-                $newSettings = $request->input('settings', []);
-                $user->settings = array_merge($existingSettings, $newSettings);
+                $existingSettings = is_array($user->settings) ? $user->settings : [];
+                $newSettings      = is_array($request->input('settings')) ? $request->input('settings') : [];
+                $user->settings   = array_merge($existingSettings, $newSettings);
             }
 
             $user->save();
-            if ($request->hasFile('profile_picture')) {
-                MediaUpload::where('id', $upload['id'])->update([
+
+            // Link uploaded photo to this user (deferred until after save so we
+            // have a confirmed user_id even for brand-new accounts).
+            if ($pictureUploadId) {
+                MediaUpload::where('id', $pictureUploadId)->update([
                     'mediable_type' => 'user',
-                    'mediable_id' => $user->id,
+                    'mediable_id'   => $user->id,
                 ]);
             }
 
@@ -595,7 +604,11 @@ class UserController extends Controller
                 200
             );
         } catch (\Throwable $th) {
-            // dd($th);
+            Log::error('updateProfile: unexpected error', [
+                'user_id' => $request->user()?->id,
+                'error'   => $th->getMessage(),
+                'trace'   => $th->getTraceAsString(),
+            ]);
             return $this->error(
                 'An error occurred while updating your profile.',
                 500,
