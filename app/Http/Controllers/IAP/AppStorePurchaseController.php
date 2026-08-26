@@ -20,8 +20,8 @@ use Imdhemy\AppStore\ServerNotifications\V2DecodedPayload;
 use Imdhemy\Purchases\Facades\Product;
 
 // Apple's commission rate: 30% standard, 15% for small businesses.
-// We use 30% as the conservative default so author earnings are never overstated.
-const APPLE_COMMISSION = 0.30;
+// Apple Small Business Program rate (annual revenue under $1M).
+const APPLE_COMMISSION = 0.10;
 const AUTHOR_REVENUE_SHARE = 0.75;
 
 class AppStorePurchaseController extends Controller
