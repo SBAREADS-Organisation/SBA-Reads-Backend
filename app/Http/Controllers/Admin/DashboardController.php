@@ -86,8 +86,13 @@ class DashboardController extends Controller
                 ->orderBy('created_at', 'desc')->take(5)->get();
 
             // Weekly trends
-            $weekly_revenue = $this->getWeeklyRevenue();
-            $weekly_signups = $this->getWeeklySignups();
+            $weekly_revenue  = $this->getWeeklyRevenue();
+            $weekly_signups  = $this->getWeeklySignups();
+            $daily_signups   = $this->getDailySignups(30);
+            $daily_purchases = $this->getDailyPurchases(30);
+            $total_purchases = Transaction::where('type', 'purchase')
+                ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
+                ->count();
 
             $data = [
                 'reader_count' => $reader_count,
@@ -105,12 +110,15 @@ class DashboardController extends Controller
                     'ngn' => round($total_sales_ngn, 2),
                 ],
                 'total_books_sold' => $total_books_sold,
+                'total_purchases'  => $total_purchases,
                 'reader_engagement' => $reader_engagement,
                 'recent_signups' => $recent_signups,
                 'recent_transactions' => $recent_transactions,
                 'recent_book_uploads' => $recent_book_uploads,
                 'weekly_revenue' => $weekly_revenue,
                 'weekly_signups' => $weekly_signups,
+                'daily_signups'  => $daily_signups,
+                'daily_purchases' => $daily_purchases,
             ];
 
             return $this->success($data, 'Dashboard data retrieved successfully.');
@@ -162,5 +170,41 @@ class DashboardController extends Controller
     private function getWeeklySignups()
     {
         return User::where('created_at', '>=', now()->subDays(7))->count();
+    }
+
+    private function getDailySignups(int $days = 30): array
+    {
+        $rows = User::where('created_at', '>=', now()->subDays($days - 1)->startOfDay())
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupByRaw('DATE(created_at)')
+            ->orderByRaw('DATE(created_at)')
+            ->pluck('count', 'date')
+            ->toArray();
+
+        return $this->fillDateSeries($rows, $days);
+    }
+
+    private function getDailyPurchases(int $days = 30): array
+    {
+        $rows = Transaction::where('type', 'purchase')
+            ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
+            ->where('created_at', '>=', now()->subDays($days - 1)->startOfDay())
+            ->selectRaw('DATE(created_at) as date, COUNT(*) as count')
+            ->groupByRaw('DATE(created_at)')
+            ->orderByRaw('DATE(created_at)')
+            ->pluck('count', 'date')
+            ->toArray();
+
+        return $this->fillDateSeries($rows, $days);
+    }
+
+    private function fillDateSeries(array $data, int $days): array
+    {
+        $series = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $date = now()->subDays($i)->format('Y-m-d');
+            $series[] = ['date' => $date, 'count' => (int) ($data[$date] ?? 0)];
+        }
+        return $series;
     }
 }
