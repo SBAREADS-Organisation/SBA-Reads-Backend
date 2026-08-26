@@ -3,16 +3,20 @@
 namespace App\Http\Controllers\IAP;
 
 use App\Http\Controllers\Controller;
+use App\Models\AudioBookPurchase;
 use App\Models\Book;
 use App\Models\Transaction;
 use App\Services\Book\BookPurchaseService;
 use App\Services\Paystack\CurrencyConversionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Imdhemy\AppStore\Jws\Parser;
+use Imdhemy\AppStore\ServerNotifications\V2DecodedPayload;
 use Imdhemy\Purchases\Facades\Product;
 
 // Apple's commission rate: 30% standard, 15% for small businesses.
@@ -370,6 +374,297 @@ class AppStorePurchaseController extends Controller
             ]);
 
             return response()->json(['error' => 'Verification failed'], 500);
+        }
+    }
+
+    /**
+     * Create a purchase intent — stores userId + bookId against a UUID that the
+     * client passes as `appAccountToken` when calling Apple's StoreKit.
+     * Apple includes this UUID in every server notification for that purchase,
+     * allowing us to identify the buyer without relying on the client to send
+     * the receipt back to us.
+     */
+    public function createPurchaseIntent(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $request->validate([
+            'book_id'       => 'required|integer|exists:books,id',
+            'purchase_type' => 'nullable|string|in:book,audio',
+        ]);
+
+        $bookId       = (int) $request->input('book_id');
+        $purchaseType = $request->input('purchase_type', 'book');
+        $uuid         = (string) Str::uuid();
+
+        // Store for 7 days — plenty of time for Apple to send the notification.
+        Cache::put("iap_intent:{$uuid}", [
+            'user_id'       => $user->id,
+            'book_id'       => $bookId,
+            'purchase_type' => $purchaseType,
+        ], now()->addDays(7));
+
+        Log::info('IAP: purchase intent created', [
+            'user_id'  => $user->id,
+            'book_id'  => $bookId,
+            'uuid'     => $uuid,
+        ]);
+
+        return response()->json(['app_account_token' => $uuid]);
+    }
+
+    /**
+     * Handle Apple App Store Server Notifications (V2).
+     *
+     * Apple calls this endpoint directly for every purchase, refund, and
+     * renewal — completely independent of the client app. This is the safety
+     * net that ensures books are granted and transactions are recorded even
+     * when the client's receipt validation fails (e.g. Apple ID session
+     * expired, poor network, app backgrounded).
+     *
+     * Configure the notification URL in App Store Connect:
+     *   App Store Connect → Your App → App Information → App Store Server Notifications
+     *   Production URL: https://api.sbareads.com/api/iap/appstore/notifications
+     *   Sandbox URL: same (we detect environment from the payload)
+     *
+     * No auth middleware — Apple calls this without our user tokens.
+     */
+    public function handleNotification(Request $request): JsonResponse
+    {
+        $signedPayload = $request->input('signedPayload');
+
+        if (! $signedPayload) {
+            Log::warning('IAP notification: missing signedPayload');
+            return response()->json(['ok' => false], 400);
+        }
+
+        try {
+            $outerJws  = Parser::toJws($signedPayload);
+            $payload   = V2DecodedPayload::fromJws($outerJws);
+            $type      = $payload->getType();
+
+            Log::info('IAP notification received', [
+                'type'    => $type,
+                'subtype' => $payload->getSubType(),
+                'uuid'    => $payload->getNotificationUUID(),
+            ]);
+
+            // We only act on new one-time purchases. Ignore renewals, refunds, etc.
+            if ($type !== V2DecodedPayload::TYPE_ONE_TIME_CHARGE) {
+                return response()->json(['ok' => true, 'skipped' => true]);
+            }
+
+            $txInfo   = $payload->getTransactionInfo();
+            $productId = $txInfo->getProductId();
+            $origTxId  = $txInfo->getOriginalTransactionId();
+            $appToken  = $txInfo->getAppAccountToken();
+            $environment = $txInfo->getEnvironment() ?? 'Production';
+
+            Log::info('IAP notification: ONE_TIME_CHARGE', [
+                'product_id'        => $productId,
+                'original_tx_id'    => $origTxId,
+                'app_account_token' => $appToken,
+                'environment'       => $environment,
+            ]);
+
+            // Look up the user and book from the purchase intent.
+            $intent = $appToken ? Cache::get("iap_intent:{$appToken}") : null;
+
+            if (! $intent) {
+                // No intent found — either old purchase (pre-intent system) or
+                // corrupted token. Try matching by originalTransactionId.
+                $existingTx = Transaction::where('payment_intent_id', $origTxId)->first();
+                if ($existingTx) {
+                    Log::info('IAP notification: transaction already recorded', [
+                        'original_tx_id' => $origTxId,
+                    ]);
+                    return response()->json(['ok' => true, 'already_recorded' => true]);
+                }
+
+                Log::warning('IAP notification: no intent and no existing transaction — cannot identify buyer', [
+                    'product_id'     => $productId,
+                    'original_tx_id' => $origTxId,
+                    'app_account_token' => $appToken,
+                ]);
+                return response()->json(['ok' => true, 'unmatched' => true]);
+            }
+
+            $userId       = $intent['user_id'];
+            $bookId       = $intent['book_id'];
+            $purchaseType = $intent['purchase_type'] ?? 'book';
+
+            $user = \App\Models\User::find($userId);
+            $book = Book::find($bookId);
+
+            if (! $user || ! $book) {
+                Log::error('IAP notification: user or book not found from intent', compact('userId', 'bookId'));
+                // Return 200 — a missing user/book is a permanent failure; returning
+                // non-200 would cause Apple to retry indefinitely.
+                return response()->json(['ok' => true, 'error' => 'user_or_book_not_found']);
+            }
+
+            $bookPurchaseService = app(BookPurchaseService::class);
+
+            DB::transaction(function () use ($user, $book, $origTxId, $productId, $purchaseType, $environment, $bookPurchaseService) {
+                $existing = Transaction::where('payment_intent_id', $origTxId)->first();
+
+                if (! $existing) {
+                    $amount = $purchaseType === 'audio'
+                        ? ($book->audio_price ?? 10.00)
+                        : ($book->actual_price ?? $book->discounted_price ?? 0);
+
+                    Transaction::create([
+                        'id'                => Str::uuid(),
+                        'reference'         => uniqid('iap_notif_'),
+                        'user_id'           => $user->id,
+                        'payment_intent_id' => $origTxId,
+                        'amount'            => $amount,
+                        'currency'          => 'usd',
+                        'payment_provider'  => 'apple',
+                        'description'       => "Apple IAP {$purchaseType} purchase (server notification): {$book->title}",
+                        'purpose_type'      => 'Online book purchase',
+                        'purpose_id'        => $book->id,
+                        'status'            => 'succeeded',
+                        'type'              => 'purchase',
+                        'direction'         => 'debit',
+                        'meta_data'         => [
+                            'product_id'    => $productId,
+                            'book_id'       => $book->id,
+                            'purchase_type' => $purchaseType,
+                            'environment'   => $environment,
+                            'source'        => 'server_notification',
+                        ],
+                    ]);
+
+                    Log::info('IAP notification: buyer transaction created', [
+                        'user_id'       => $user->id,
+                        'book_id'       => $book->id,
+                        'purchase_type' => $purchaseType,
+                    ]);
+                }
+
+                if ($purchaseType === 'audio') {
+                    // Audio grants go to AudioBookPurchase, not book_user.
+                    $alreadyHasAudio = AudioBookPurchase::where('user_id', $user->id)
+                        ->where('book_id', $book->id)
+                        ->where('status', 'paid')
+                        ->exists();
+
+                    if (! $alreadyHasAudio) {
+                        $audioPrice   = (float) ($book->audio_price ?? 10.00);
+                        $netFromApple = $audioPrice * (1 - APPLE_COMMISSION);
+                        $authorPayout = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+                        $platformFee  = round($audioPrice - $authorPayout, 2);
+
+                        AudioBookPurchase::create([
+                            'user_id'              => $user->id,
+                            'book_id'              => $book->id,
+                            'author_id'            => $book->author_id,
+                            'price'                => $audioPrice,
+                            'author_payout_amount' => $authorPayout,
+                            'platform_fee_amount'  => $platformFee,
+                            'currency'             => 'usd',
+                            'status'               => 'paid',
+                            'payout_status'        => 'pending',
+                            'payment_provider'     => 'apple',
+                            'payment_intent_id'    => $origTxId,
+                        ]);
+                        Log::info('IAP notification: audio access granted', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                        ]);
+                    }
+                } else {
+                    if (! $bookPurchaseService->userOwnsBook($user, $book->id)) {
+                        $bookPurchaseService->addBooksToUserLibrary($user, [$book->id]);
+                        Log::info('IAP notification: book granted', [
+                            'user_id' => $user->id,
+                            'book_id' => $book->id,
+                        ]);
+                    }
+                }
+            });
+
+            // Record author earning (non-critical, outside transaction).
+            $this->recordAuthorEarning($user, $book, $origTxId, $environment, $purchaseType);
+
+            // Clear the intent so it can't be replayed.
+            if ($appToken) {
+                Cache::forget("iap_intent:{$appToken}");
+            }
+
+            return response()->json(['ok' => true, 'granted' => true]);
+
+        } catch (\Throwable $e) {
+            Log::error('IAP notification: processing failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            // Return 200 so Apple doesn't retry endlessly for a logic error.
+            return response()->json(['ok' => false, 'error' => 'processing_failed']);
+        }
+    }
+
+    private function recordAuthorEarning(\App\Models\User $buyer, Book $book, string $origTxId, string $environment, string $purchaseType = 'book'): void
+    {
+        try {
+            $rateAtSale = null;
+            try {
+                $rateAtSale = app(CurrencyConversionService::class)->getExchangeRate('USD', 'NGN');
+            } catch (\Throwable) {
+                $rateAtSale = (float) config('services.currency.ngn_usd_fallback', 1600);
+            }
+
+            $price = $purchaseType === 'audio'
+                ? (float) ($book->audio_price ?? 10.00)
+                : (float) ($book->actual_price ?? $book->discounted_price ?? 0);
+            $netFromApple  = $price * (1 - APPLE_COMMISSION);
+            $authorEarning = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+
+            foreach ($book->authors as $author) {
+                $alreadyCredited = Transaction::where('payment_intent_id', 'iap_author_' . $buyer->id . '_' . $book->id)
+                    ->where('user_id', $author->id)
+                    ->exists();
+
+                if ($alreadyCredited) continue;
+
+                Transaction::create([
+                    'id'                => Str::uuid(),
+                    'user_id'           => $author->id,
+                    'reference'         => uniqid('iap_earn_notif_'),
+                    'payment_intent_id' => 'iap_author_' . $buyer->id . '_' . $book->id,
+                    'amount'            => $authorEarning,
+                    'currency'          => 'USD',
+                    'payment_provider'  => 'apple',
+                    'status'            => 'iap_pending',
+                    'type'              => 'earning',
+                    'direction'         => 'credit',
+                    'description'       => "App Store sale (server notification): {$book->title} (pending Apple remittance)",
+                    'purpose_type'      => 'iap_book_purchase',
+                    'purpose_id'        => $book->id,
+                    'meta_data'         => [
+                        'buyer_id'         => $buyer->id,
+                        'book_id'          => $book->id,
+                        'gross_price'      => $price,
+                        'apple_cut'        => round($price * APPLE_COMMISSION, 2),
+                        'net_from_apple'   => round($netFromApple, 2),
+                        'author_earning'   => $authorEarning,
+                        'environment'      => $environment,
+                        'ngn_rate_at_sale' => $rateAtSale,
+                        'source'           => 'server_notification',
+                    ],
+                ]);
+
+                Log::info('IAP notification: author earning recorded', [
+                    'author_id' => $author->id,
+                    'book_id'   => $book->id,
+                    'amount'    => $authorEarning,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Log::error('IAP notification: author earning failed', [
+                'error'   => $e->getMessage(),
+                'book_id' => $book->id,
+            ]);
         }
     }
 

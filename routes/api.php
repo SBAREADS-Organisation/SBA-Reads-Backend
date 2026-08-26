@@ -180,9 +180,13 @@ Route::get('/stripe/onboard/successful', fn () => response()->json(['status' => 
 Route::get('/stripe/onboard/refresh',    fn () => response()->json(['status' => 'onboarding_refresh']))->name('stripe-onboard-refresh');
 
 Route::prefix('iap')->middleware(['auth:sanctum'])->group(function () {
-    Route::post('appstore/verify-purchase',   [AppStorePurchaseController::class,    'verifyPurchase'])->name('verify-appstore-purchase');
+    Route::post('appstore/verify-purchase',   [AppStorePurchaseController::class, 'verifyPurchase'])->name('verify-appstore-purchase');
+    Route::post('appstore/purchase-intent',   [AppStorePurchaseController::class, 'createPurchaseIntent'])->name('iap.appstore.intent');
     Route::post('googleplay/verify-purchase', [\App\Http\Controllers\IAP\GooglePlayPurchaseController::class, 'verifyPurchase'])->name('verify-googleplay-purchase');
 });
+
+// Apple App Store Server Notifications — no auth, Apple calls this directly.
+Route::post('iap/appstore/notifications', [AppStorePurchaseController::class, 'handleNotification'])->name('iap.appstore.notifications');
 
 // Author wallet — unified balance + payout setup
 Route::middleware(['auth:sanctum', 'role:author'])->prefix('author/wallet')->group(function () {
