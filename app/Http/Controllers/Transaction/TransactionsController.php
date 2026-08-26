@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Transaction;
 
 use App\Http\Controllers\Controller;
 use App\Models\AudioBookPurchase;
+use App\Models\Book;
 use App\Models\DigitalBookPurchase;
 use App\Services\Payments\PaymentService;
 use App\Traits\ApiResponse;
@@ -162,12 +163,20 @@ class TransactionsController extends Controller
         $audioIds   = $collection->where('purpose_type', 'audio_book_purchase')
             ->pluck('purpose_id')->filter()->unique()->values()->toArray();
 
+        // IAP transactions (Apple/Google) store the book_id directly in purpose_id
+        $iapBookIds = $collection->where('purpose_type', 'Online book purchase')
+            ->pluck('purpose_id')->filter()->unique()->values()->toArray();
+
         $digitalPurchases = !empty($digitalIds)
             ? DigitalBookPurchase::with('items.book:id,title')->whereIn('id', $digitalIds)->get()->keyBy('id')
             : collect();
 
         $audioPurchases = !empty($audioIds)
             ? AudioBookPurchase::with('book:id,title')->whereIn('id', $audioIds)->get()->keyBy('id')
+            : collect();
+
+        $iapBooks = !empty($iapBookIds)
+            ? Book::whereIn('id', $iapBookIds)->get(['id', 'title'])->keyBy('id')
             : collect();
 
         // Build (user_id => [book_ids]) map for a single library query
@@ -182,6 +191,12 @@ class TransactionsController extends Controller
                 $checkPairs[$p->user_id][] = $p->book_id;
             }
         }
+        // IAP: user_id comes from the transaction row itself
+        foreach ($collection->where('purpose_type', 'Online book purchase') as $txn) {
+            if ($txn->user_id && $txn->purpose_id) {
+                $checkPairs[$txn->user_id][] = (int) $txn->purpose_id;
+            }
+        }
 
         $libraryMap = [];
         if (!empty($checkPairs)) {
@@ -194,7 +209,7 @@ class TransactionsController extends Controller
                 ->each(fn($row) => $libraryMap[$row->user_id][$row->book_id] = true);
         }
 
-        $collection->transform(function ($txn) use ($digitalPurchases, $audioPurchases, $libraryMap) {
+        $collection->transform(function ($txn) use ($digitalPurchases, $audioPurchases, $iapBooks, $libraryMap) {
             $txn->book_names = [];
             $txn->in_library = null;
 
@@ -218,6 +233,15 @@ class TransactionsController extends Controller
                     if ($isPurchaseRow && $p->user_id && $p->book_id) {
                         $txn->in_library = isset(($libraryMap[$p->user_id] ?? [])[$p->book_id]);
                     }
+                }
+            } elseif ($txn->purpose_type === 'Online book purchase' && $txn->purpose_id) {
+                $bookId = (int) $txn->purpose_id;
+                $book   = $iapBooks->get($bookId);
+                if ($book) {
+                    $txn->book_names = [$book->title];
+                }
+                if ($isPurchaseRow && $txn->user_id) {
+                    $txn->in_library = isset(($libraryMap[$txn->user_id] ?? [])[$bookId]);
                 }
             }
 
