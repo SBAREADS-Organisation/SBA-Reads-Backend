@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use App\Http\Resources\Order\OrderResource;
 use App\Models\Order;
 use App\Mail\Order\OrderPlaced;
+use App\Mail\Order\OrderPlacedAdmin;
 use App\Mail\Order\OrderStatusUpdated;
 use Illuminate\Support\Facades\Mail;
 
@@ -179,14 +180,17 @@ class OrderController extends Controller
 
             $response = $this->service->create($request->user(), $request);
 
-            // Send order confirmation email
+            // Send order confirmation emails to buyer and admin
             try {
                 $responseData = json_decode($response->getContent(), true);
                 if (isset($responseData['data']['order'])) {
-                    $order = Order::with('items.book')->find($responseData['data']['order']['id']);
+                    $order = Order::with(['items.book', 'user'])->find($responseData['data']['order']['id']);
                     if ($order) {
                         Mail::to($request->user()->email)
                             ->send(new OrderPlaced($order, $request->user()->name ?? 'Customer'));
+
+                        Mail::to('admin@sbareads.com')
+                            ->send(new OrderPlacedAdmin($order));
                     }
                 }
             } catch (\Throwable $e) {
