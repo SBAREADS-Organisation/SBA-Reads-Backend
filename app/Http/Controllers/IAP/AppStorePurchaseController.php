@@ -119,27 +119,31 @@ class AppStorePurchaseController extends Controller
                     ], 400);
                 }
 
-                $receiptInfo = $receiptResponse->getReceipt()->getInApp();
+                // Merge receipt.in_app + latest_receipt_info — Apple may place a fresh
+                // purchase in either array. receipt.in_app can be non-empty with old
+                // purchases while the newest transaction only appears in latest_receipt_info.
+                // Deduplicating by original_transaction_id prevents double-grants.
+                $inAppItems  = $receiptResponse->getReceipt()?->getInApp() ?? [];
+                $latestItems = $receiptResponse->getLatestReceiptInfo() ?? [];
+
+                $seen        = [];
+                $receiptInfo = [];
+                foreach (array_merge($inAppItems, $latestItems) as $item) {
+                    $txId = is_array($item)
+                        ? ($item['original_transaction_id'] ?? '')
+                        : $item->getOriginalTransactionId();
+                    if ($txId && ! isset($seen[$txId])) {
+                        $seen[$txId] = true;
+                        $receiptInfo[] = $item;
+                    }
+                }
             }
 
             Log::info('IAP receipt verified', [
-                'user_id'     => $user->id,
-                'environment' => $environment,
+                'user_id'      => $user->id,
+                'environment'  => $environment,
+                'merged_count' => count($receiptInfo),
             ]);
-
-            if (empty($receiptInfo)) {
-                // Apple sometimes puts non-consumable purchases in latest_receipt_info
-                // instead of receipt.in_app — especially when the client sends a cached
-                // receipt that predates the purchase being committed on Apple's servers.
-                $receiptInfo = $receiptResponse->getLatestReceiptInfo() ?? [];
-
-                if (! empty($receiptInfo)) {
-                    Log::info('IAP: receipt.in_app empty, falling back to latest_receipt_info', [
-                        'user_id' => $user->id,
-                        'count'   => count($receiptInfo),
-                    ]);
-                }
-            }
 
             if (empty($receiptInfo)) {
                 Log::warning('IAP: no in-app purchases found in receipt', ['user_id' => $user->id]);
