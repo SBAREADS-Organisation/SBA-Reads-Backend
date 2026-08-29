@@ -70,6 +70,15 @@ class AppStorePurchaseController extends Controller
             $statusCode  = $receiptResponse->getStatus()->getValue();
             $environment = 'production';
 
+            Log::info('IAP: Apple verifyReceipt response', [
+                'user_id'         => $user->id,
+                'status_code'     => $statusCode,
+                'has_password'    => ! empty(config('liap.appstore_password')),
+                'in_app_count'    => count($receiptResponse->getReceipt()?->getInApp() ?? []),
+                'latest_count'    => count($receiptResponse->getLatestReceiptInfo() ?? []),
+                'book_id_request' => $bookIdFromRequest,
+            ]);
+
             // --- Step 2: Status 21007 = sandbox receipt sent to production ---
             // Retry directly against Apple's sandbox endpoint.
             if ($statusCode === 21007) {
