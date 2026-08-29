@@ -255,6 +255,25 @@ class AppStorePurchaseController extends Controller
 
                     if (! empty($bookIdsToGrant)) {
                         $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
+
+                        // Grant to every other account sharing the same email (reader/author dual-account).
+                        $linkedUsers = \App\Models\User::where('email', $user->email)
+                            ->where('id', '!=', $user->id)
+                            ->get();
+                        foreach ($linkedUsers as $linked) {
+                            $unowned = array_values(array_filter(
+                                $bookIdsToGrant,
+                                fn ($id) => ! $bookPurchaseService->userOwnsBook($linked, $id)
+                            ));
+                            if (! empty($unowned)) {
+                                $bookPurchaseService->addBooksToUserLibrary($linked, $unowned);
+                                Log::info('IAP: book granted to linked account', [
+                                    'primary_user_id' => $user->id,
+                                    'linked_user_id'  => $linked->id,
+                                    'book_ids'        => $unowned,
+                                ]);
+                            }
+                        }
                     }
 
                     return [$grantedBooks, $bookIdsToGrant, $purchaseItems, $confirmedBookIds];
@@ -580,6 +599,21 @@ class AppStorePurchaseController extends Controller
                             'user_id' => $user->id,
                             'book_id' => $book->id,
                         ]);
+                    }
+
+                    // Also grant to every linked account sharing the same email.
+                    $linkedUsers = \App\Models\User::where('email', $user->email)
+                        ->where('id', '!=', $user->id)
+                        ->get();
+                    foreach ($linkedUsers as $linked) {
+                        if (! $bookPurchaseService->userOwnsBook($linked, $book->id)) {
+                            $bookPurchaseService->addBooksToUserLibrary($linked, [$book->id]);
+                            Log::info('IAP notification: book granted to linked account', [
+                                'primary_user_id' => $user->id,
+                                'linked_user_id'  => $linked->id,
+                                'book_id'         => $book->id,
+                            ]);
+                        }
                     }
                 }
             });
