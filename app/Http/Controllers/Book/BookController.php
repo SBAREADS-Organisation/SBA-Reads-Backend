@@ -286,7 +286,6 @@ class BookController extends Controller
             case 'trending':
                 return $query
                     ->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
-                    ->orderByDesc('a.purchases')
                     ->orderByDesc('a.views')
                     ->select('books.*');
 
