@@ -19,9 +19,12 @@ use Imdhemy\AppStore\Jws\Parser;
 use Imdhemy\AppStore\ServerNotifications\V2DecodedPayload;
 use Imdhemy\Purchases\Facades\Product;
 
-// Apple's commission rate: 30% standard, 15% for small businesses.
-// Apple Small Business Program rate (annual revenue under $1M).
-const APPLE_COMMISSION = 0.10;
+// Apple's commission rate:
+//   30% standard (most developers)
+//   15% if enrolled in Apple Small Business Program (annual App Store revenue < $1M)
+// Verify your program enrollment in App Store Connect → Agreements, Tax, and Banking.
+// Using 0.15 (Small Business Program). Change to 0.30 if not enrolled.
+const APPLE_COMMISSION = 0.15;
 const AUTHOR_REVENUE_SHARE = 0.75;
 
 class AppStorePurchaseController extends Controller
@@ -136,10 +139,11 @@ class AppStorePurchaseController extends Controller
             }
 
             // ── Phase 1: Grant books (committed immediately — user gets their book no matter what) ──
-            [$grantedBooks, $bookIdsToGrant, $purchaseItems, $confirmedBookIds] = DB::transaction(
+            [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds] = DB::transaction(
                 function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
                     $grantedBooks        = [];
                     $bookIdsToGrant      = [];
+                    $audioBookIdsGranted = []; // book IDs for which AudioBookPurchase was created
                     $purchaseItems       = []; // passed to Phase 2 for author earnings
                     $bookPurchaseService = app(BookPurchaseService::class);
 
@@ -185,11 +189,17 @@ class AppStorePurchaseController extends Controller
                             continue;
                         }
 
+                        // Determine whether this SKU is an audio product or a book product.
+                        $isAudioProduct = $book->audio_product_id && $book->audio_product_id === $productId;
+                        $effectiveType  = $isAudioProduct ? 'audio' : $purchaseType;
+
                         // Reuse $knownTx when the fallback already fetched it to avoid a second query.
                         $existingTransaction = $knownTx ?? Transaction::where('payment_intent_id', $originalTransId)->first();
 
                         if (! $existingTransaction) {
-                            $amount       = $book->actual_price ?? $book->discounted_price ?? 0;
+                            $amount = $isAudioProduct
+                                ? (float) ($book->audio_price ?? 10.00)
+                                : (float) ($book->actual_price ?? $book->discounted_price ?? 0);
                             $bookCurrency = strtolower($book->currency ?? 'usd');
 
                             Transaction::create([
@@ -200,7 +210,7 @@ class AppStorePurchaseController extends Controller
                                 'amount'           => $amount,
                                 'currency'         => 'usd',
                                 'payment_provider' => 'apple',
-                                'description'      => "Apple IAP {$purchaseType} purchase: {$book->title}",
+                                'description'      => "Apple IAP {$effectiveType} purchase: {$book->title}",
                                 'purpose_type'     => 'Online book purchase',
                                 'purpose_id'       => $book->id,
                                 'status'           => 'succeeded',
@@ -210,15 +220,16 @@ class AppStorePurchaseController extends Controller
                                     'product_id'    => $productId,
                                     'book_id'       => $book->id,
                                     'book_currency' => $bookCurrency,
-                                    'purchase_type' => $purchaseType,
+                                    'purchase_type' => $effectiveType,
                                     'environment'   => $environment,
                                 ],
                             ]);
 
                             Log::info('IAP: buyer transaction created', [
-                                'user_id'     => $user->id,
-                                'book_id'     => $book->id,
-                                'environment' => $environment,
+                                'user_id'        => $user->id,
+                                'book_id'        => $book->id,
+                                'purchase_type'  => $effectiveType,
+                                'environment'    => $environment,
                             ]);
                         } else {
                             Log::info('IAP: transaction already exists, skipping', [
@@ -227,32 +238,92 @@ class AppStorePurchaseController extends Controller
                             ]);
                         }
 
-                        $alreadyPurchased = $bookPurchaseService->userOwnsBook($user, $book->id);
+                        if ($isAudioProduct) {
+                            // ── Audio product: grant via AudioBookPurchase table ──
+                            $alreadyHasAudio = \App\Models\AudioBookPurchase::where('user_id', $user->id)
+                                ->where('book_id', $book->id)
+                                ->where('status', 'paid')
+                                ->exists();
 
-                        if (! $alreadyPurchased) {
-                            $bookIdsToGrant[]    = $book->id;
-                            $confirmedBookIds[]  = $book->id;
-                            $grantedBooks[]      = [
-                                'id'         => $book->id,
-                                'product_id' => $productId,
-                                'title'      => $book->title,
-                            ];
-                            $purchaseItems[]     = [
-                                'book_id'    => $book->id,
-                                'book_title' => $book->title,
-                                'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
-                                'buyer_id'   => $user->id,
-                            ];
-                        } else {
-                            // Book already in library — still confirmed so the client clears its retry key.
+                            if (! $alreadyHasAudio) {
+                                $audioPrice   = (float) ($book->audio_price ?? 10.00);
+                                $netFromApple = $audioPrice * (1 - APPLE_COMMISSION);
+                                $authorPayout = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+                                $platformFee  = round($audioPrice - $authorPayout, 2);
+
+                                \App\Models\AudioBookPurchase::create([
+                                    'user_id'              => $user->id,
+                                    'book_id'              => $book->id,
+                                    'author_id'            => $book->author_id,
+                                    'price'                => $audioPrice,
+                                    'author_payout_amount' => $authorPayout,
+                                    'platform_fee_amount'  => $platformFee,
+                                    'currency'             => 'usd',
+                                    'status'               => 'paid',
+                                    'payout_status'        => 'pending',
+                                    'payment_provider'     => 'apple',
+                                    'payment_intent_id'    => $originalTransId,
+                                ]);
+
+                                $grantedBooks[]  = [
+                                    'id'           => $book->id,
+                                    'product_id'   => $productId,
+                                    'title'        => $book->title,
+                                    'is_audio'     => true,
+                                ];
+                                $purchaseItems[] = [
+                                    'book_id'    => $book->id,
+                                    'book_title' => $book->title,
+                                    'price'      => $audioPrice,
+                                    'buyer_id'   => $user->id,
+                                    'is_audio'   => true,
+                                ];
+
+                                $audioBookIdsGranted[] = $book->id;
+
+                                Log::info('IAP: audio access granted', [
+                                    'user_id' => $user->id,
+                                    'book_id' => $book->id,
+                                ]);
+                            }
+
+                            // Also grant full book read access (buying audio entitles
+                            // the reader to the text too — consistent with handleNotification).
+                            if (! $bookPurchaseService->userOwnsBook($user, $book->id)) {
+                                $bookIdsToGrant[] = $book->id;
+                            }
+
                             $confirmedBookIds[] = $book->id;
-                            Log::info('IAP: book already in library', [
-                                'user_id' => $user->id,
-                                'book_id' => $book->id,
-                            ]);
+                        } else {
+                            // ── Book product: grant via book_user table ──
+                            $alreadyPurchased = $bookPurchaseService->userOwnsBook($user, $book->id);
+
+                            if (! $alreadyPurchased) {
+                                $bookIdsToGrant[]   = $book->id;
+                                $confirmedBookIds[]  = $book->id;
+                                $grantedBooks[]      = [
+                                    'id'         => $book->id,
+                                    'product_id' => $productId,
+                                    'title'      => $book->title,
+                                ];
+                                $purchaseItems[]     = [
+                                    'book_id'    => $book->id,
+                                    'book_title' => $book->title,
+                                    'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
+                                    'buyer_id'   => $user->id,
+                                ];
+                            } else {
+                                // Book already in library — still confirmed so the client clears its retry key.
+                                $confirmedBookIds[] = $book->id;
+                                Log::info('IAP: book already in library', [
+                                    'user_id' => $user->id,
+                                    'book_id' => $book->id,
+                                ]);
+                            }
                         }
                     }
 
+                    // ── Grant books to primary user and all linked accounts ──
                     if (! empty($bookIdsToGrant)) {
                         $bookPurchaseService->addBooksToUserLibrary($user, $bookIdsToGrant);
 
@@ -276,7 +347,48 @@ class AppStorePurchaseController extends Controller
                         }
                     }
 
-                    return [$grantedBooks, $bookIdsToGrant, $purchaseItems, $confirmedBookIds];
+                    // ── Grant audio access to all linked accounts ──
+                    if (! empty($audioBookIdsGranted)) {
+                        $linkedUsers = $linkedUsers ?? \App\Models\User::where('email', $user->email)
+                            ->where('id', '!=', $user->id)
+                            ->get();
+                        foreach ($linkedUsers as $linked) {
+                            foreach ($audioBookIdsGranted as $audioBookId) {
+                                $linkedHasAudio = \App\Models\AudioBookPurchase::where('user_id', $linked->id)
+                                    ->where('book_id', $audioBookId)
+                                    ->where('status', 'paid')
+                                    ->exists();
+                                if (! $linkedHasAudio) {
+                                    $linkedBook   = Book::find($audioBookId);
+                                    $audioPrice   = (float) ($linkedBook?->audio_price ?? 10.00);
+                                    $netFromApple = $audioPrice * (1 - APPLE_COMMISSION);
+                                    $authorPayout = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
+                                    $platformFee  = round($audioPrice - $authorPayout, 2);
+
+                                    \App\Models\AudioBookPurchase::create([
+                                        'user_id'              => $linked->id,
+                                        'book_id'              => $audioBookId,
+                                        'author_id'            => $linkedBook?->author_id,
+                                        'price'                => $audioPrice,
+                                        'author_payout_amount' => $authorPayout,
+                                        'platform_fee_amount'  => $platformFee,
+                                        'currency'             => 'usd',
+                                        'status'               => 'paid',
+                                        'payout_status'        => 'pending',
+                                        'payment_provider'     => 'apple',
+                                        'payment_intent_id'    => 'iap_linked_audio_' . $user->id . '_' . $audioBookId,
+                                    ]);
+                                    Log::info('IAP: audio access granted to linked account', [
+                                        'primary_user_id' => $user->id,
+                                        'linked_user_id'  => $linked->id,
+                                        'book_id'         => $audioBookId,
+                                    ]);
+                                }
+                            }
+                        }
+                    }
+
+                    return [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds];
                 }
             );
 
@@ -319,8 +431,15 @@ class AppStorePurchaseController extends Controller
                         $netFromApple  = $price * (1 - APPLE_COMMISSION);
                         $authorEarning = round($netFromApple * AUTHOR_REVENUE_SHARE, 2);
 
+                        $isAudioItem  = ! empty($item['is_audio']);
+                        $earningKey   = 'iap_author_' . $user->id . '_' . $item['book_id'] . ($isAudioItem ? '_audio' : '');
+                        $purposeType  = $isAudioItem ? 'iap_audio_purchase' : 'iap_book_purchase';
+                        $description  = $isAudioItem
+                            ? "App Store audio sale: {$item['book_title']} (pending Apple remittance)"
+                            : "App Store sale: {$item['book_title']} (pending Apple remittance)";
+
                         foreach ($authors as $author) {
-                            $alreadyCredited = Transaction::where('payment_intent_id', 'iap_author_' . $user->id . '_' . $item['book_id'])
+                            $alreadyCredited = Transaction::where('payment_intent_id', $earningKey)
                                 ->where('user_id', $author->id)
                                 ->exists();
 
@@ -330,19 +449,20 @@ class AppStorePurchaseController extends Controller
                                 'id'               => Str::uuid(),
                                 'user_id'          => $author->id,
                                 'reference'        => uniqid('iap_earn_'),
-                                'payment_intent_id'=> 'iap_author_' . $user->id . '_' . $item['book_id'],
+                                'payment_intent_id'=> $earningKey,
                                 'amount'           => $authorEarning,
                                 'currency'         => 'USD',
                                 'payment_provider' => 'apple',
                                 'status'           => 'iap_pending',
                                 'type'             => 'earning',
                                 'direction'        => 'credit',
-                                'description'      => "App Store sale: {$item['book_title']} (pending Apple remittance)",
-                                'purpose_type'     => 'iap_book_purchase',
+                                'description'      => $description,
+                                'purpose_type'     => $purposeType,
                                 'purpose_id'       => $item['book_id'],
                                 'meta_data'        => [
                                     'buyer_id'         => $item['buyer_id'],
                                     'book_id'          => $item['book_id'],
+                                    'is_audio'         => $isAudioItem,
                                     'gross_price'      => $price,
                                     'apple_cut'        => round($price * APPLE_COMMISSION, 2),
                                     'net_from_apple'   => round($netFromApple, 2),
