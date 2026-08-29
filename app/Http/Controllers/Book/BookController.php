@@ -281,8 +281,7 @@ class BookController extends Controller
     {
         switch ($classification) {
             case 'new_arrivals':
-                return $query->where('created_at', '>=', now()->subDays(30))
-                    ->orderBy('created_at', 'desc');
+                return $query->orderBy('created_at', 'desc');
 
             case 'trending':
                 return $query
