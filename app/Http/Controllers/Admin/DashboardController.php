@@ -136,7 +136,7 @@ class DashboardController extends Controller
             ->where(function ($q) {
                 $q->whereHas('readingProgress', function ($rq) {
                     $rq->where('updated_at', '>=', now()->subDays(30));
-                })->orWhereHas('transactions', function ($tq) {
+                })->orWhereHas('payments', function ($tq) {
                     $tq->where('type', 'purchase')
                         ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
                         ->where('created_at', '>=', now()->subDays(30));
