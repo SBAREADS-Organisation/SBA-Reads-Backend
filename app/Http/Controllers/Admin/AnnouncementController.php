@@ -251,15 +251,16 @@ class AnnouncementController extends Controller
         \Cache::put($cacheKey, true, now()->addHours(24));
 
         Mail::to($author->email)->queue(new GenericAppNotification(
-            'SBA Reads — ID Verification Required',
+            'SBA Reads — Action Required: Upload Your ID to Publish',
             "Hi {$name},\n\n"
-            . "To start receiving payouts from your book sales on SBA Reads, you need to verify your identity by submitting a valid government-issued ID.\n\n"
-            . "Steps:\n"
+            . "We noticed your KYC application is missing a valid ID document. Without it, you will not be able to publish books on SBA Reads — ID verification is required before any book goes live on the platform.\n\n"
+            . "Our review system has already processed your other details, but your application cannot be approved until a government-issued ID is uploaded.\n\n"
+            . "To complete your verification:\n"
             . "1. Open the SBA Reads Author app\n"
             . "2. Go to Profile → KYC Verification\n"
             . "3. Upload a clear photo of your government-issued ID (National ID, Driver's Licence, or International Passport)\n\n"
-            . "Once submitted, our team will review and verify your identity within 24–48 hours.\n\n"
-            . "If you need help, contact us at admin@sbareads.com.\n\n"
+            . "Once your ID is uploaded, our team will review and approve your account within 24–48 hours and you'll be ready to publish.\n\n"
+            . "If you need help, reply to this email or contact us at admin@sbareads.com.\n\n"
             . "— The SBA Reads Team"
         ));
 
