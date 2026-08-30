@@ -148,6 +148,8 @@ class BookController extends Controller
             'books.*.publisher' => 'nullable|string|max:255',
             'books.*.archived' => 'boolean',
             'books.*.deleted' => 'boolean',
+            'books.*.physical_price' => 'nullable|numeric|min:0',
+            'books.*.has_physical' => 'nullable|boolean',
         ];
     }
 
@@ -988,6 +990,8 @@ class BookController extends Controller
                 'file_size' => 'sometimes|nullable|string|max:50',
                 'publisher' => 'sometimes|nullable|string|max:255',
                 'meta_data' => 'sometimes|nullable|array',
+                'physical_price' => 'sometimes|nullable|numeric|min:0',
+                'has_physical' => 'sometimes|nullable|boolean',
             ];
 
             $validator = Validator::make($request->all(), $rules);
