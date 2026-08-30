@@ -129,10 +129,20 @@ class DashboardController extends Controller
 
     private function calculateReaderEngagement()
     {
+        // Primary signal: readers with a reading_progress row updated in the last 30 days.
+        // Fallback signal: readers who purchased a book in the last 30 days (covers
+        // the period before the app synced reading progress to the backend).
         $active_readers = User::where('account_type', 'reader')
-            ->whereHas('readingProgress', function ($q) {
-                $q->where('updated_at', '>=', now()->subDays(30));
-            })->count();
+            ->where(function ($q) {
+                $q->whereHas('readingProgress', function ($rq) {
+                    $rq->where('updated_at', '>=', now()->subDays(30));
+                })->orWhereHas('transactions', function ($tq) {
+                    $tq->where('type', 'purchase')
+                        ->whereIn('status', ['succeeded', 'success', 'iap_pending'])
+                        ->where('created_at', '>=', now()->subDays(30));
+                });
+            })
+            ->count();
 
         $total_reading_sessions = ReadingProgress::count();
         $average_reading_progress = ReadingProgress::avg('progress') ?? 0;
@@ -140,7 +150,6 @@ class DashboardController extends Controller
         $total_reading_time = ReadingProgress::whereNotNull('session_duration')
             ->get()
             ->sum(function ($progress) {
-                // session_duration is JSON-cast by the model, so it's already an array
                 $sessionData = is_array($progress->session_duration)
                     ? $progress->session_duration
                     : json_decode($progress->session_duration, true);
@@ -148,10 +157,10 @@ class DashboardController extends Controller
             });
 
         return [
-            'active_readers' => $active_readers,
-            'total_reading_sessions' => $total_reading_sessions,
-            'average_reading_progress' => round($average_reading_progress, 2),
-            'total_reading_time_minutes' => round($total_reading_time, 2),
+            'active_readers'              => $active_readers,
+            'total_reading_sessions'      => $total_reading_sessions,
+            'average_reading_progress'    => round($average_reading_progress, 2),
+            'total_reading_time_minutes'  => round($total_reading_time, 2),
         ];
     }
 
