@@ -2225,6 +2225,52 @@ class BookController extends Controller
     }
 
     /**
+     * Admin-only: return the books currently in a user's library (book_user table)
+     * along with a breakdown of their paid purchases so the admin can spot gaps.
+     * GET /admin/users/{userId}/library
+     */
+    public function adminGetUserLibrary(int $userId): JsonResponse
+    {
+        $user = User::find($userId);
+        if (! $user) {
+            return $this->error('User not found.', 404);
+        }
+
+        // What the user currently owns (book_user pivot)
+        $ownedBooks = DB::table('book_user')
+            ->where('user_id', $user->id)
+            ->join('books', 'books.id', '=', 'book_user.book_id')
+            ->select('books.id', 'books.title', 'books.status', 'book_user.created_at as added_at')
+            ->orderByDesc('book_user.created_at')
+            ->get();
+
+        // Paid digital purchases
+        $paidDigitalIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+            $q->where('user_id', $user->id)->whereIn('status', ['paid', 'completed'])
+        )->pluck('book_id')->all();
+
+        // Paid IAP purchases
+        $paidIapIds = Transaction::where('user_id', $user->id)
+            ->whereIn('payment_provider', ['apple', 'google_play'])
+            ->whereIn('status', ['success', 'succeeded'])
+            ->whereRaw("meta_data->>'book_id' IS NOT NULL")
+            ->pluck(DB::raw("(meta_data->>'book_id')::integer"))
+            ->all();
+
+        $allPaidIds  = array_values(array_unique(array_merge($paidDigitalIds, $paidIapIds)));
+        $ownedIds    = $ownedBooks->pluck('id')->all();
+        $missingIds  = array_values(array_diff($allPaidIds, $ownedIds));
+
+        return $this->success([
+            'user'         => ['id' => $user->id, 'name' => $user->name, 'email' => $user->email],
+            'library'      => $ownedBooks,
+            'owned_count'  => $ownedBooks->count(),
+            'paid_count'   => count($allPaidIds),
+            'missing_ids'  => $missingIds,
+        ], 'Library fetched successfully.');
+    }
+
+    /**
      * Admin-only: heal ALL users' libraries in one pass.
      * Finds every user who has paid purchases not reflected in book_user
      * and syncs them. Safe to run multiple times — addBooksToUserLibrary
