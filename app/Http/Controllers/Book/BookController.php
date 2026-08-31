@@ -288,7 +288,8 @@ class BookController extends Controller
             case 'trending':
                 return $query
                     ->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
-                    ->orderByDesc('a.views')
+                    ->orderByRaw('COALESCE(a.views, 0) DESC')
+                    ->orderByDesc('books.average_rate')
                     ->select('books.*');
 
             case 'top_picks':
