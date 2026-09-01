@@ -289,7 +289,7 @@ class BookController extends Controller
                 return $query
                     ->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
                     ->orderByRaw('COALESCE(a.views, 0) DESC')
-                    ->orderByDesc('books.average_rate')
+                    ->orderBy('books.id', 'asc')
                     ->select('books.*');
 
             case 'top_picks':
