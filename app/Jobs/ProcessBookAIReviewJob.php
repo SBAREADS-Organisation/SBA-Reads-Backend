@@ -2,10 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Mail\Book\BookDeclined;
 use App\Models\AppSetting;
 use App\Models\Book;
 use App\Services\AI\AIReviewService;
 use App\Services\AI\OpenAIService;
+use App\Services\Notification\NotificationService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -70,6 +72,24 @@ class ProcessBookAIReviewJob implements ShouldQueue
                     'rejection_note'  => $notes,
                 ]);
                 Log::info("AI auto-declined book {$book->id} (confidence {$result['confidence']})");
+
+                $book->load('authors');
+                $reason = "Your book \"{$book->title}\" was not approved. Reason: {$notes}";
+                $notifier = app(NotificationService::class);
+                foreach ($book->authors as $author) {
+                    try {
+                        $notifier->send(
+                            $author,
+                            'Book Declined',
+                            $reason,
+                            ['in-app', 'email', 'push'],
+                            $book,
+                            new BookDeclined($book, $reason)
+                        );
+                    } catch (\Throwable $e) {
+                        Log::warning("Failed to notify author {$author->id} of book {$book->id} decline: " . $e->getMessage());
+                    }
+                }
             }
         }
     }
