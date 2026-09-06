@@ -185,62 +185,73 @@ class PaystackPaymentController extends Controller
      */
     public function handleCallback(Request $request)
     {
-        $reference = $request->query('reference');
+        $reference  = $request->query('reference');
+        $successUrl = config('services.paystack.success_redirect_url');
+        $failUrl    = config('services.paystack.fail_redirect_url', $successUrl);
 
         if (!$reference) {
-            // return redirect()->route('payment.failed')->with('error', 'Invalid payment reference');
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid payment reference'
-            ], 400);
+            Log::warning('Paystack callback received with no reference');
+            return $successUrl
+                ? redirect($failUrl)
+                : response()->json(['success' => false, 'message' => 'Invalid payment reference'], 400);
         }
 
         try {
             $verification = $this->paystackService->verifyPayment($reference);
 
-            if (!$verification['status'] || $verification['data']['status'] !== 'success') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Payment processing failed',
-                    'error' => $verification['message'] ?? 'Payment verification failed'
+            if (!$verification['status'] || ($verification['data']['status'] ?? '') !== 'success') {
+                Log::warning('Paystack callback — payment not confirmed', [
+                    'reference' => $reference,
+                    'paystack_status' => $verification['data']['status'] ?? 'unknown',
                 ]);
+                return $successUrl
+                    ? redirect($failUrl)
+                    : response()->json(['success' => false, 'message' => 'Payment verification failed']);
             }
 
-            // Update transaction
+            // Find the pending transaction by reference.
+            // If the Paystack webhook already arrived and set status=succeeded, this
+            // will be null — that's fine, the webhook already fulfilled the purchase.
             $transaction = Transaction::where('payment_provider', 'paystack')
-                ->where('status', 'pending')
                 ->where('reference', $verification['data']['reference'])
                 ->first();
 
             if ($transaction) {
-                $transaction->update([
-                    'status' => 'succeeded',
-                    'meta_data' => array_merge(
-                        (array)$transaction->meta_data,
-                        ['paystack_verification' => $verification]
-                    ),
-                ]);
+                if ($transaction->status === 'pending') {
+                    $transaction->update([
+                        'status'    => 'succeeded',
+                        'meta_data' => array_merge(
+                            (array) $transaction->meta_data,
+                            ['paystack_verification' => $verification]
+                        ),
+                    ]);
+                }
 
-                // Process the successful transaction using the same logic as the webhook
+                // Replay through the webhook service — it handles idempotency internally
+                // (skips if already fulfilled, reprocesses if succeeded but not yet granted).
                 $webhookService = app(\App\Services\Paystack\PaystackWebhookService::class);
-                $webhookPayload = [
+                $webhookService->handleWebhook([
                     'event' => 'charge.success',
-                    'data' => $verification['data']
-                ];
-                $webhookService->handleWebhook($webhookPayload);
+                    'data'  => $verification['data'],
+                ]);
+            } else {
+                Log::warning('Paystack callback — no matching transaction found', [
+                    'reference' => $reference,
+                ]);
             }
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Payment completed successfully'
-            ]);
+            // Redirect the WebView to the success URL so the mobile app detects
+            // the navigation and shows the success screen. Without this redirect the
+            // WebView displays raw JSON and the user never sees a confirmation.
+            return $successUrl
+                ? redirect($successUrl)
+                : response()->json(['success' => true, 'message' => 'Payment completed successfully']);
+
         } catch (\Exception $e) {
-            Log::error('Paystack callback error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Payment processing failed',
-                'error' => $e->getMessage()
-            ], 500);
+            Log::error('Paystack callback error: ' . $e->getMessage(), ['reference' => $reference]);
+            return $successUrl
+                ? redirect($failUrl)
+                : response()->json(['success' => false, 'message' => 'Payment processing failed'], 500);
         }
     }
 

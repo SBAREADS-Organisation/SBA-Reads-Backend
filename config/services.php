@@ -69,6 +69,10 @@ return [
         'webhook_secret' => env('PAYSTACK_WEBHOOK_SECRET'),
         'base_url' => env('PAYSTACK_BASE_URL', 'https://api.paystack.co'),
         'merchant_email' => env('PAYSTACK_MERCHANT_EMAIL'),
+        // URL the callback redirects to after processing — the mobile WebView detects
+        // this URL and shows the success screen. Set to the web checkout success page.
+        'success_redirect_url' => env('PAYSTACK_SUCCESS_REDIRECT_URL'),
+        'fail_redirect_url' => env('PAYSTACK_FAIL_REDIRECT_URL'),
     ],
 
     'currency' => [
