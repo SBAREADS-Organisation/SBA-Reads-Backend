@@ -22,6 +22,7 @@ use App\Http\Controllers\Withdrawal\StripeWithdrawalController;
 use App\Http\Controllers\Withdrawal\WithdrawalController;
 use App\Http\Controllers\AI\BookAIController;
 use App\Http\Controllers\Audio\AudioController;
+use App\Http\Controllers\Audio\AudioBookmarkController;
 use App\Http\Controllers\User\LinkedAccountController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
@@ -251,6 +252,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
         ->where('action', '^(request_changes|approve|decline|restore)$');
     Route::middleware(['role:admin,superadmin'])->post('books/bulk-action', [BookController::class, 'bulkAction'])->name('books.bulk-action');
     Route::delete('books/{id}/bookmark', [BookController::class, 'removeBookmark'])->where('id', '[0-9]+');
+
+    // Audio bookmark routes
+    Route::get('books/{bookId}/audio-bookmarks', [AudioBookmarkController::class, 'index'])->where('bookId', '[0-9]+');
+    Route::post('books/{bookId}/audio-bookmarks', [AudioBookmarkController::class, 'store'])->where('bookId', '[0-9]+');
+    Route::delete('books/{bookId}/audio-bookmarks/{bookmarkId}', [AudioBookmarkController::class, 'destroy'])->where('bookId', '[0-9]+')->where('bookmarkId', '[0-9]+');
 
     // Audio generation routes
     Route::post('books/{bookId}/generate-audio', [AudioController::class, 'generateAudio'])->name('book.generate-audio');
