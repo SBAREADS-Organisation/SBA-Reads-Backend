@@ -67,6 +67,7 @@ class User extends Authenticatable
         'ai_review_confidence',
         'ai_reviewed_at',
         'wallet_balance',
+        'date_of_birth',
     ];
 
     /**

@@ -63,6 +63,7 @@ class UserResource extends JsonResource
                 'username' => $this->username,
                 'preferences' => $this->preferences ?? [],
                 'bio' => $this->bio ?? '',
+                'pronouns' => $this->pronouns ?? '',
                 'profile_info' => $this->profile_info ?? [],
                 'socials' => is_array($this->profile_info) ? ($this->profile_info['socials'] ?? []) : [],
                 'voice_sample_url' => $this->voice_sample_url ?? null,
@@ -83,7 +84,8 @@ class UserResource extends JsonResource
             'status' => $this->status,
             'kyc_status' => $this->kyc_status,
             'profile_picture' => $this->formatProfilePicture($this->profile_picture ?? []),
-            'bio' => $this->bio,
+            'bio' => $this->bio ?? '',
+            'pronouns' => $this->pronouns ?? '',
             'preferences' => $this->preferences ?? [],
             'last_login_at' => $this->last_login_at,
             'created_at' => $this->created_at,
@@ -104,15 +106,20 @@ class UserResource extends JsonResource
         ];
     }
 
-    private function formatProfilePicture($profilePicture)
+    private function formatProfilePicture($profilePicture): array
     {
-        $rawId = $profilePicture['public_id'] ?? null;
-        $rawUrl = $profilePicture['public_url'] ?? null;
+        if (!is_array($profilePicture)) {
+            // Legacy users may have a plain URL string stored; treat as no picture.
+            return ['public_id' => 0, 'public_url' => ''];
+        }
+
+        $rawId    = $profilePicture['public_id'] ?? null;
+        $rawUrl   = $profilePicture['public_url'] ?? null;
         $publicId = is_numeric($rawId) ? (int) $rawId : null;
         $publicUrl = is_string($rawUrl) ? $rawUrl : null;
 
         return [
-            'public_id' => (int) $publicId,
+            'public_id'  => (int) $publicId,
             'public_url' => (string) $publicUrl,
         ];
     }

@@ -56,10 +56,7 @@ class UserController extends Controller
 
             // Validation logic
             $validator = Validator::make($request->all(), [
-                // 'fullname' => 'required|max:255',
-                // 'username' => 'required|unique:users',
                 'email' => 'required|unique:users',
-                // 'country' => 'required',
                 'password' => [
                     'required',
                     'string',
@@ -69,17 +66,23 @@ class UserController extends Controller
                     'regex:/[0-9]/',
                     'regex:/[\W_]/',
                 ],
-                'account_type' => 'required|string|in:reader,author',
-                // 'role' => 'string|exists:roles, name',
-                // 'confirm_password' => 'required|same:password',
+                'account_type'  => 'required|string|in:reader,author',
+                'date_of_birth' => [
+                    'required',
+                    'date',
+                    'before:' . now()->subYears(14)->toDateString(),
+                ],
             ], [
-                'email.required'        => 'Please enter your email address.',
-                'email.unique'          => 'An account with this email already exists. Try logging in instead.',
-                'password.required'     => 'Please create a password.',
-                'password.min'          => 'Your password must be at least 8 characters long.',
-                'password.regex'        => 'Your password must include at least one uppercase letter, one lowercase letter, one number, and one special character.',
-                'account_type.required' => 'Please select an account type (reader or author).',
-                'account_type.in'       => 'Account type must be either "reader" or "author".',
+                'email.required'              => 'Please enter your email address.',
+                'email.unique'                => 'An account with this email already exists. Try logging in instead.',
+                'password.required'           => 'Please create a password.',
+                'password.min'                => 'Your password must be at least 8 characters long.',
+                'password.regex'              => 'Your password must include at least one uppercase letter, one lowercase letter, one number, and one special character.',
+                'account_type.required'       => 'Please select an account type (reader or author).',
+                'account_type.in'             => 'Account type must be either "reader" or "author".',
+                'date_of_birth.required'      => 'Please enter your date of birth.',
+                'date_of_birth.date'          => 'Please enter a valid date of birth.',
+                'date_of_birth.before'        => 'You must be at least 14 years old to create an account.',
             ]);
 
             // NOTE: set fullname to concatenate first_name and last_name
@@ -123,11 +126,12 @@ class UserController extends Controller
 
                 // Cache data for 10 minutes
                 Cache::put($cacheKey, json_encode([
-                    'email' => $email,
-                    'password' => Hash::make($request->password),
-                    'account_type' => $accountType,
+                    'email'         => $email,
+                    'password'      => Hash::make($request->password),
+                    'account_type'  => $accountType,
                     'default_login' => 'email',
-                    'token' => $token,
+                    'token'         => $token,
+                    'date_of_birth' => $request->date_of_birth,
                 ]), now()->addMinutes(10));
 
                 // Send email with token (non-fatal — OTP is returned in response)
@@ -163,11 +167,12 @@ class UserController extends Controller
                 $token = rand(1000, 9999);
 
                 Cache::put($cacheKey, json_encode([
-                    'email' => $email,
-                    'password' => Hash::make($request->password),
-                    'account_type' => $accountType,
+                    'email'         => $email,
+                    'password'      => Hash::make($request->password),
+                    'account_type'  => $accountType,
                     'default_login' => 'email',
-                    'token' => $token,
+                    'token'         => $token,
+                    'date_of_birth' => $request->date_of_birth,
                 ]), now()->addMinutes(10));
 
                 try {
@@ -386,12 +391,13 @@ class UserController extends Controller
 
             $user = new User;
             $user->fill([
-                'email' => $userData['email'],
-                'password' => $userData['password'],
+                'email'         => $userData['email'],
+                'password'      => $userData['password'],
                 'default_login' => $userData['default_login'],
-                'account_type' => $userData['account_type'],
-                'status' => $isReader ? 'active' : 'unverified',
-                'preferences' => $isReader ? [] : null,
+                'account_type'  => $userData['account_type'],
+                'status'        => $isReader ? 'active' : 'unverified',
+                'preferences'   => $isReader ? [] : null,
+                'date_of_birth' => $userData['date_of_birth'] ?? null,
             ]);
             $user->save();
 
@@ -498,9 +504,9 @@ class UserController extends Controller
             if ($user->account_type === 'author') {
                 // Add author-specific required fields
                 $rules = array_merge($rules, [
-                    'socials'             => 'nullable|array',
+                    'socials'             => 'nullable|array|max:20',
                     'socials.*.platform'  => 'nullable|string|max:50',
-                    'socials.*.url'       => 'nullable|string|max:500',
+                    'socials.*.url'       => 'nullable|string|max:2048',
                     'preferences.genres'  => 'nullable|array',
                     'preferences.genres.*'=> 'nullable|string|max:50',
                 ]);
@@ -519,16 +525,14 @@ class UserController extends Controller
 
             if ($validator->fails()) {
                 $firstError = collect($validator->errors()->all())->first();
-                return response()->json([
-                    'message' => $firstError,
-                    'errors'  => $validator->errors(),
-                ], 422);
+                return $this->error($firstError, 422, $validator->errors());
             }
 
             // ── Profile picture upload (non-fatal) ───────────────────────────
             // Isolated in its own try-catch so a media upload failure (S3 hiccup,
             // timeout, wrong format) never aborts the rest of the profile save.
-            $profilePicture   = $user->profile_picture ?? [];
+            // Normalize legacy string values (old code stored plain URL strings).
+            $profilePicture   = is_array($user->profile_picture) ? $user->profile_picture : [];
             $pictureUploadId  = null;
 
             if ($request->hasFile('profile_picture')) {
