@@ -80,8 +80,8 @@ class KYCController extends Controller
                             if ($dob->isFuture()) {
                                 $fail('Date of birth cannot be in the future.');
                             }
-                            if ($dob->greaterThan(Carbon::now()->subYears(18))) {
-                                $fail('You must be at least 18 years old.');
+                            if ($dob->greaterThan(Carbon::now()->subYears(14))) {
+                                $fail('You must be at least 14 years old.');
                             }
                         } catch (\Exception $e) {
                             $fail('Invalid date of birth provided.');
@@ -97,7 +97,8 @@ class KYCController extends Controller
                 'country'             => ['required', 'size:2', 'alpha', Rule::in($this->getValidCountryCodes())],
             ]);
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                $firstError = $validator->errors()->first();
+                return $this->error($firstError ?: 'Please check your details and try again.', 400, $validator->errors());
             }
 
             // Early exit if already verified, pending admin review, or currently in Stripe review
@@ -263,7 +264,8 @@ class KYCController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                $firstError = $validator->errors()->first();
+                return $this->error($firstError ?: 'Please check your details and try again.', 400, $validator->errors());
             }
 
             $frontFilePath = $request->file('document')->store('stripe_uploads');
@@ -334,7 +336,8 @@ class KYCController extends Controller
             ]);
 
             if ($validator->fails()) {
-                return $this->error('Validation failed', 400, $validator->errors());
+                $firstError = $validator->errors()->first();
+                return $this->error($firstError ?: 'Please check your details and try again.', 400, $validator->errors());
             }
 
             $kycInfo = UserKycInfo::where('user_id', $user->id)->first();
