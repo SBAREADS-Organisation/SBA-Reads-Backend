@@ -1676,7 +1676,7 @@ class BookController extends Controller
             $since = match ($period) {
                 'month'    => now()->subDays(30),
                 'all_time' => null,
-                default    => now()->subDays(7),   // 'week'
+                default    => now()->subDays(60),  // 'week' (~2 months)
             };
 
             $salesSubquery = \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
