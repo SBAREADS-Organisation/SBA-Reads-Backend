@@ -23,6 +23,7 @@ use App\Http\Controllers\Withdrawal\WithdrawalController;
 use App\Http\Controllers\AI\BookAIController;
 use App\Http\Controllers\Audio\AudioController;
 use App\Http\Controllers\Audio\AudioBookmarkController;
+use App\Http\Controllers\Referral\ReferralCodeController;
 use App\Http\Controllers\User\LinkedAccountController;
 use App\Http\Controllers\User\UserController;
 use App\Models\WebhookEvent;
@@ -320,6 +321,14 @@ Route::middleware(['auth:sanctum'])->prefix('transaction')->group(function () {
 Route::middleware(['auth:sanctum'])->prefix('analytics')->group(function () {
     Route::get('/', [AnalyticsController::class, 'index']);
     Route::get('/monthly-revenue', [AnalyticsController::class, 'monthlyRevenue']);
+});
+
+// Referral Code Routes (admin/superadmin only)
+Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('referral-codes')->group(function () {
+    Route::get('/', [ReferralCodeController::class, 'index']);
+    Route::post('/', [ReferralCodeController::class, 'store']);
+    Route::get('/{code}', [ReferralCodeController::class, 'show']);
+    Route::delete('/{code}', [ReferralCodeController::class, 'destroy']);
 });
 
 // Admin Routes

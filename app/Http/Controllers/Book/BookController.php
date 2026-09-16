@@ -1665,13 +1665,26 @@ class BookController extends Controller
     }
 
     /**
-     * Return books ordered by actual paid purchase count — real best sellers,
-     * not admin-assigned ranking. Counts rows in digital_book_purchase_items
-     * that belong to a paid DigitalBookPurchase for each book.
+     * Return books ranked by paid purchase count within a rolling window.
+     * Default: last 7 days (weekly bestsellers). Pass ?period=month for 30 days,
+     * or ?period=all_time for all-time totals.
      */
     public function bestSellers(Request $request): JsonResponse
     {
         try {
+            $period = $request->input('period', 'week');
+            $since = match ($period) {
+                'month'    => now()->subDays(30),
+                'all_time' => null,
+                default    => now()->subDays(7),   // 'week'
+            };
+
+            $salesSubquery = \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
+                ->join('digital_book_purchases as dp', 'digital_book_purchase_items.digital_book_purchase_id', '=', 'dp.id')
+                ->where('dp.status', 'paid')
+                ->whereColumn('digital_book_purchase_items.book_id', 'books.id')
+                ->when($since, fn ($q) => $q->where('dp.created_at', '>=', $since));
+
             $books = Book::where('books.visibility', 'public')
                 ->where('books.archived', false)
                 ->whereIn('books.status', ['approved', 'published'])
@@ -1679,21 +1692,16 @@ class BookController extends Controller
                     strtolower($request->header('x-platform', '')) === 'ios',
                     fn ($q) => $q->where('books.ios_available', true)
                 )
-                ->whereExists(function ($q) {
+                ->whereExists(function ($q) use ($since) {
                     $q->select(DB::raw(1))
                         ->from('digital_book_purchase_items as dbpi')
                         ->join('digital_book_purchases as dp', 'dbpi.digital_book_purchase_id', '=', 'dp.id')
                         ->where('dp.status', 'paid')
-                        ->whereColumn('dbpi.book_id', 'books.id');
+                        ->whereColumn('dbpi.book_id', 'books.id')
+                        ->when($since, fn ($q) => $q->where('dp.created_at', '>=', $since));
                 })
                 ->select('books.*')
-                ->selectSub(
-                    \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
-                        ->join('digital_book_purchases as dp', 'digital_book_purchase_items.digital_book_purchase_id', '=', 'dp.id')
-                        ->where('dp.status', 'paid')
-                        ->whereColumn('digital_book_purchase_items.book_id', 'books.id'),
-                    'sales_count'
-                )
+                ->selectSub($salesSubquery, 'sales_count')
                 ->orderByDesc('sales_count')
                 ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
                 ->limit(50)

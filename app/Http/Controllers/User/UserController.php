@@ -126,12 +126,13 @@ class UserController extends Controller
 
                 // Cache data for 10 minutes
                 Cache::put($cacheKey, json_encode([
-                    'email'         => $email,
-                    'password'      => Hash::make($request->password),
-                    'account_type'  => $accountType,
-                    'default_login' => 'email',
-                    'token'         => $token,
-                    'date_of_birth' => $request->date_of_birth,
+                    'email'            => $email,
+                    'password'         => Hash::make($request->password),
+                    'account_type'     => $accountType,
+                    'default_login'    => 'email',
+                    'token'            => $token,
+                    'date_of_birth'    => $request->date_of_birth,
+                    'referral_code'    => $request->referral_code ?? null,
                 ]), now()->addMinutes(10));
 
                 // Send email with token (non-fatal — OTP is returned in response)
@@ -173,6 +174,7 @@ class UserController extends Controller
                     'default_login' => 'email',
                     'token'         => $token,
                     'date_of_birth' => $request->date_of_birth,
+                    'referral_code' => $request->referral_code ?? null,
                 ]), now()->addMinutes(10));
 
                 try {
@@ -391,13 +393,14 @@ class UserController extends Controller
 
             $user = new User;
             $user->fill([
-                'email'         => $userData['email'],
-                'password'      => $userData['password'],
-                'default_login' => $userData['default_login'],
-                'account_type'  => $userData['account_type'],
-                'status'        => $isReader ? 'active' : 'unverified',
-                'preferences'   => $isReader ? [] : null,
-                'date_of_birth' => $userData['date_of_birth'] ?? null,
+                'email'            => $userData['email'],
+                'password'         => $userData['password'],
+                'default_login'    => $userData['default_login'],
+                'account_type'     => $userData['account_type'],
+                'status'           => $isReader ? 'active' : 'unverified',
+                'preferences'      => $isReader ? [] : null,
+                'date_of_birth'    => $userData['date_of_birth'] ?? null,
+                'referred_by_code' => $userData['referral_code'] ?? null,
             ]);
             $user->save();
 

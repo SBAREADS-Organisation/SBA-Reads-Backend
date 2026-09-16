@@ -105,6 +105,7 @@ class BookResource extends JsonResource
             'author' => new UserResource($this->whenLoaded('author')),
             'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
             'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
+            'sales_count' => isset($this->resource->sales_count) ? (int) $this->resource->sales_count : null,
         ];
     }
 
