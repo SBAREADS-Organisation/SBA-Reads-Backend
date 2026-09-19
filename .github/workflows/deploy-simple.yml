@@ -137,6 +137,9 @@ jobs:
             # ── 10. Run migrations ────────────────────────────────────────────
             sudo -u www-data php artisan migrate --force || echo "Migration failed"
 
+            # ── 10a. Seed one-time data (idempotent — skips if already exists) ─
+            sudo -u www-data php artisan db:seed --class=BorrowSenseBookSeeder --force || echo "Seeder skipped or failed"
+
             # ── 11. Install/update Horizon Supervisor config ──────────────────
             sudo tee /etc/supervisor/conf.d/sba-horizon.conf > /dev/null <<'SUPERVISOREOF'
             [program:sba-horizon]
