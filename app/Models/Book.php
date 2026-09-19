@@ -72,6 +72,7 @@ class Book extends Model
         'ios_available',
         'physical_price',
         'has_physical',
+        'preorder_url',
     ];
 
     protected $hidden = [

@@ -993,6 +993,7 @@ class BookController extends Controller
                 'meta_data' => 'sometimes|nullable|array',
                 'physical_price' => 'sometimes|nullable|numeric|min:0',
                 'has_physical' => 'sometimes|nullable|boolean',
+                'preorder_url' => 'sometimes|nullable|url|max:2048',
             ];
 
             $validator = Validator::make($request->all(), $rules);

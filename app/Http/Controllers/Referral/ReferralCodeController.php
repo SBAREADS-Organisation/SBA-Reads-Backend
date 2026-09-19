@@ -60,7 +60,7 @@ class ReferralCodeController extends Controller
             'id'    => $referral->id,
             'code'  => $referral->code,
             'label' => $referral->label,
-            'link'  => 'https://sbareads.com/ref/' . $referral->code,
+            'link'  => 'sbareads://signup?referral=' . $referral->code,
         ], 'Referral code created.', 201);
     }
 
@@ -79,7 +79,7 @@ class ReferralCodeController extends Controller
             'label'      => $referral->label,
             'active'     => $referral->active,
             'signups'    => $signups->count(),
-            'link'       => 'https://sbareads.com/ref/' . $referral->code,
+            'link'       => 'sbareads://signup?referral=' . $referral->code,
             'users'      => $signups,
             'created_at' => $referral->created_at,
         ], 'Referral code details.');

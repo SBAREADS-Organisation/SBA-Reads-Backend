@@ -10,6 +10,7 @@ use App\Mail\Onboarding\WelcomeEmail;
 use App\Mail\Registration\AuthorVerificationToken;
 use App\Mail\Registration\ReaderVerificationToken;
 use App\Models\MediaUpload;
+use App\Models\ReferralCode;
 use App\Models\User;
 use App\Services\Stripe\StripeConnectService;
 use App\Traits\ApiResponse;
@@ -72,6 +73,16 @@ class UserController extends Controller
                     'date',
                     'before:' . now()->subYears(14)->toDateString(),
                 ],
+                'referral_code' => [
+                    'nullable',
+                    'string',
+                    'max:50',
+                    function ($attribute, $value, $fail) {
+                        if ($value && !ReferralCode::where('code', strtoupper($value))->where('active', true)->exists()) {
+                            $fail('The referral code is invalid or no longer active.');
+                        }
+                    },
+                ],
             ], [
                 'email.required'              => 'Please enter your email address.',
                 'email.unique'                => 'An account with this email already exists. Try logging in instead.',
@@ -132,7 +143,7 @@ class UserController extends Controller
                     'default_login'    => 'email',
                     'token'            => $token,
                     'date_of_birth'    => $request->date_of_birth,
-                    'referral_code'    => $request->referral_code ?? null,
+                    'referral_code'    => $request->referral_code ? strtoupper($request->referral_code) : null,
                 ]), now()->addMinutes(10));
 
                 // Send email with token (non-fatal — OTP is returned in response)
@@ -400,7 +411,7 @@ class UserController extends Controller
                 'status'           => $isReader ? 'active' : 'unverified',
                 'preferences'      => $isReader ? [] : null,
                 'date_of_birth'    => $userData['date_of_birth'] ?? null,
-                'referred_by_code' => $userData['referral_code'] ?? null,
+                'referred_by_code' => isset($userData['referral_code']) ? strtoupper($userData['referral_code']) : null,
             ]);
             $user->save();
 

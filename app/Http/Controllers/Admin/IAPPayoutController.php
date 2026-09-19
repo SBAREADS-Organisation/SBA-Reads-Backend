@@ -34,16 +34,31 @@ class IAPPayoutController extends Controller
             ->groupBy('user_id')
             ->map(function ($txns) {
                 $author = $txns->first()->user;
+                $totalUSD = round($txns->sum('amount'), 2);
+
+                // Calculate NGN using the rate locked at sale time for each transaction
+                $totalNGN = 0;
+                foreach ($txns as $txn) {
+                    $meta       = is_array($txn->meta_data) ? $txn->meta_data : json_decode($txn->meta_data ?? '{}', true);
+                    $lockedRate = (float) ($meta['ngn_rate_at_sale'] ?? $this->safeRate('USD', 'NGN'));
+                    $totalNGN  += (float) $txn->amount * $lockedRate;
+                }
+
+                $isPaystack = $author?->payout_method === 'paystack' || ! empty($author?->paystack_recipient_code);
+
                 return [
-                    'author_id'         => $author?->id,
-                    'author_name'       => $author?->name,
-                    'author_email'      => $author?->email,
-                    'payout_method'     => $author?->payout_method,
-                    'bank_name'         => $author?->bank_name,
-                    'stripe_connected'  => ! empty($author?->kyc_account_id),
-                    'total_pending_usd' => round($txns->sum('amount'), 2),
-                    'transaction_count' => $txns->count(),
-                    'transactions'      => $txns->pluck('id'),
+                    'author_id'           => $author?->id,
+                    'author_name'         => $author?->name,
+                    'author_email'        => $author?->email,
+                    'payout_method'       => $author?->payout_method,
+                    'bank_name'           => $author?->bank_name,
+                    'stripe_connected'    => ! empty($author?->kyc_account_id),
+                    'total_pending_usd'   => $totalUSD,
+                    // Amount admin must settle: NGN for Paystack authors, USD for Stripe authors
+                    'settle_amount'       => $isPaystack ? round($totalNGN, 2) : $totalUSD,
+                    'settle_currency'     => $isPaystack ? 'NGN' : 'USD',
+                    'transaction_count'   => $txns->count(),
+                    'transactions'        => $txns->pluck('id'),
                 ];
             })
             ->values();

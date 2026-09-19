@@ -313,14 +313,18 @@ class User extends Authenticatable
     protected static function booted()
     {
         static::created(function ($user) {
-            DashboardCacheService::clearAdminDashboard();
+            try {
+                DashboardCacheService::clearAdminDashboard();
+            } catch (\Throwable) {}
         });
 
         static::updated(function ($user) {
-            DashboardCacheService::clearAdminDashboard();
-            if ($user->account_type === 'author') {
-                DashboardCacheService::clearAuthorDashboard($user->id);
-            }
+            try {
+                DashboardCacheService::clearAdminDashboard();
+                if ($user->account_type === 'author') {
+                    DashboardCacheService::clearAuthorDashboard($user->id);
+                }
+            } catch (\Throwable) {}
         });
     }
 }
