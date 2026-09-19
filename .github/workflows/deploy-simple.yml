@@ -140,6 +140,9 @@ jobs:
             # ── 10a. Seed one-time data (idempotent — skips if already exists) ─
             sudo -u www-data php artisan db:seed --class=BorrowSenseBookSeeder --force || echo "Seeder skipped or failed"
 
+            # ── 10b. Upload Borrow Sense cover (skips if already set) ──────────
+            sudo -u www-data php artisan book:upload-cover borrow-sense "https://sbareads.com/wp-content/uploads/2026/09/cover3-scaled.jpg" || echo "Cover upload skipped"
+
             # ── 11. Install/update Horizon Supervisor config ──────────────────
             sudo tee /etc/supervisor/conf.d/sba-horizon.conf > /dev/null <<'SUPERVISOREOF'
             [program:sba-horizon]
