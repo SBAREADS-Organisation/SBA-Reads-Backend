@@ -44,9 +44,10 @@ class BorrowSenseBookSeeder extends Seeder
             'tags'             => ['money', 'wealth', 'finance', 'financial literacy', 'personal development'],
             'language'         => ['English'],
             'target_audience'  => ['Adults', 'Young Adults'],
-            'cover_image'      => ['public_url' => '', 'public_id' => ''],
-            'files'            => [],
-            'approved_at'      => now(),
+            'cover_image'       => ['public_url' => '', 'public_id' => ''],
+            'files'             => [],
+            'table_of_contents' => [],
+            'approved_at'       => now(),
         ]);
 
         // Add to book_authors pivot so it appears under the platform account
