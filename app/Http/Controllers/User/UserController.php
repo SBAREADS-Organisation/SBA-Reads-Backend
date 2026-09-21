@@ -69,7 +69,7 @@ class UserController extends Controller
                 ],
                 'account_type'  => 'required|string|in:reader,author',
                 'date_of_birth' => [
-                    'required',
+                    'nullable',
                     'date',
                     'before:' . now()->subYears(14)->toDateString(),
                 ],
