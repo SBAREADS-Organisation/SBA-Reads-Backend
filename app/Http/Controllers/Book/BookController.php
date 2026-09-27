@@ -1681,31 +1681,26 @@ class BookController extends Controller
                 default    => now()->subDays(60),
             };
 
-            // Date-filter fragments (no user input — safe to inline)
-            $dpDate  = $since ? " AND dp2.created_at >= '{$since->toDateTimeString()}'" : '';
-            $txDate  = $since ? " AND t2.created_at  >= '{$since->toDateTimeString()}'" : '';
+            // Safe to inline: $since comes only from the match() above, never user input.
+            $sinceStr = $since ? $since->toDateTimeString() : null;
+            $dpDate   = $sinceStr ? " AND dp2.created_at >= '{$sinceStr}'" : '';
+            $txDate   = $sinceStr ? " AND t2.created_at  >= '{$sinceStr}'" : '';
 
-            // Combined sales count: standard digital purchases + IAP transactions
+            // Combined correlated subquery used for both SELECT and ORDER BY.
             $salesCountSql = "
-                (
-                    SELECT COALESCE(COUNT(*), 0)
-                    FROM digital_book_purchase_items dbpi2
-                    JOIN digital_book_purchases dp2
-                      ON dbpi2.digital_book_purchase_id = dp2.id
-                    WHERE dp2.status = 'paid'
-                      AND dbpi2.book_id = books.id
-                      {$dpDate}
-                )
+                (SELECT COALESCE(COUNT(*),0)
+                 FROM digital_book_purchase_items dbpi2
+                 JOIN digital_book_purchases dp2
+                   ON dbpi2.digital_book_purchase_id = dp2.id
+                 WHERE dp2.status = 'paid'
+                   AND dbpi2.book_id = books.id{$dpDate})
                 +
-                (
-                    SELECT COALESCE(COUNT(*), 0)
-                    FROM transactions t2
-                    WHERE t2.type      = 'purchase'
-                      AND t2.direction = 'debit'
-                      AND t2.status   IN ('iap_pending', 'succeeded', 'success')
-                      AND (t2.meta_data->>'book_id')::integer = books.id
-                      {$txDate}
-                )
+                (SELECT COALESCE(COUNT(*),0)
+                 FROM transactions t2
+                 WHERE t2.type      = 'purchase'
+                   AND t2.direction = 'debit'
+                   AND t2.status   IN ('iap_pending','succeeded','success')
+                   AND (t2.meta_data->>'book_id')::integer = books.id{$txDate})
             ";
 
             $books = Book::where('books.visibility', 'public')
@@ -1715,23 +1710,24 @@ class BookController extends Controller
                     strtolower($request->header('x-platform', '')) === 'ios',
                     fn ($q) => $q->where('books.ios_available', true)
                 )
-                // Only include books that have at least one purchase from either source
-                ->where(function ($q) use ($since, $dpDate, $txDate) {
-                    $q->whereExists(function ($sq) use ($dpDate) {
+                // Only show books with at least one purchase from either source.
+                ->where(function ($q) use ($sinceStr) {
+                    $q->whereExists(function ($sq) use ($sinceStr) {
                         $sq->select(DB::raw(1))
                             ->from('digital_book_purchase_items as dbpi')
                             ->join('digital_book_purchases as dp', 'dbpi.digital_book_purchase_id', '=', 'dp.id')
                             ->where('dp.status', 'paid')
                             ->whereColumn('dbpi.book_id', 'books.id')
-                            ->whereRaw("1=1 {$dpDate}");
+                            ->when($sinceStr, fn ($q) => $q->where('dp.created_at', '>=', $sinceStr));
                     })
-                    ->orWhereExists(function ($sq) use ($txDate) {
+                    ->orWhereExists(function ($sq) use ($sinceStr) {
                         $sq->select(DB::raw(1))
                             ->from('transactions as t')
                             ->where('t.type', 'purchase')
                             ->where('t.direction', 'debit')
                             ->whereIn('t.status', ['iap_pending', 'succeeded', 'success'])
-                            ->whereRaw("(t.meta_data->>'book_id')::integer = books.id {$txDate}");
+                            ->whereRaw("(t.meta_data->>'book_id')::integer = books.id")
+                            ->when($sinceStr, fn ($q) => $q->where('t.created_at', '>=', $sinceStr));
                     });
                 })
                 ->select('books.*')
