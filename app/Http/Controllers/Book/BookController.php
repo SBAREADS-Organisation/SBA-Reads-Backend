@@ -1667,8 +1667,9 @@ class BookController extends Controller
 
     /**
      * Return books ranked by paid purchase count within a rolling window.
-     * Default: last 7 days (weekly bestsellers). Pass ?period=month for 30 days,
-     * or ?period=all_time for all-time totals.
+     * Counts both Paystack/Stripe purchases (digital_book_purchase_items)
+     * AND iOS/Android IAP purchases (transactions.meta_data->>'book_id').
+     * Default: last 60 days. Pass ?period=month for 30 days, ?period=all_time for all-time.
      */
     public function bestSellers(Request $request): JsonResponse
     {
@@ -1677,14 +1678,35 @@ class BookController extends Controller
             $since = match ($period) {
                 'month'    => now()->subDays(30),
                 'all_time' => null,
-                default    => now()->subDays(60),  // 'week' (~2 months)
+                default    => now()->subDays(60),
             };
 
-            $salesSubquery = \App\Models\DigitalBookPurchaseItem::select(DB::raw('COUNT(*)'))
-                ->join('digital_book_purchases as dp', 'digital_book_purchase_items.digital_book_purchase_id', '=', 'dp.id')
-                ->where('dp.status', 'paid')
-                ->whereColumn('digital_book_purchase_items.book_id', 'books.id')
-                ->when($since, fn ($q) => $q->where('dp.created_at', '>=', $since));
+            // Date-filter fragments (no user input — safe to inline)
+            $dpDate  = $since ? " AND dp2.created_at >= '{$since->toDateTimeString()}'" : '';
+            $txDate  = $since ? " AND t2.created_at  >= '{$since->toDateTimeString()}'" : '';
+
+            // Combined sales count: standard digital purchases + IAP transactions
+            $salesCountSql = "
+                (
+                    SELECT COALESCE(COUNT(*), 0)
+                    FROM digital_book_purchase_items dbpi2
+                    JOIN digital_book_purchases dp2
+                      ON dbpi2.digital_book_purchase_id = dp2.id
+                    WHERE dp2.status = 'paid'
+                      AND dbpi2.book_id = books.id
+                      {$dpDate}
+                )
+                +
+                (
+                    SELECT COALESCE(COUNT(*), 0)
+                    FROM transactions t2
+                    WHERE t2.type      = 'purchase'
+                      AND t2.direction = 'debit'
+                      AND t2.status   IN ('iap_pending', 'succeeded', 'success')
+                      AND (t2.meta_data->>'book_id')::integer = books.id
+                      {$txDate}
+                )
+            ";
 
             $books = Book::where('books.visibility', 'public')
                 ->where('books.archived', false)
@@ -1693,17 +1715,28 @@ class BookController extends Controller
                     strtolower($request->header('x-platform', '')) === 'ios',
                     fn ($q) => $q->where('books.ios_available', true)
                 )
-                ->whereExists(function ($q) use ($since) {
-                    $q->select(DB::raw(1))
-                        ->from('digital_book_purchase_items as dbpi')
-                        ->join('digital_book_purchases as dp', 'dbpi.digital_book_purchase_id', '=', 'dp.id')
-                        ->where('dp.status', 'paid')
-                        ->whereColumn('dbpi.book_id', 'books.id')
-                        ->when($since, fn ($q) => $q->where('dp.created_at', '>=', $since));
+                // Only include books that have at least one purchase from either source
+                ->where(function ($q) use ($since, $dpDate, $txDate) {
+                    $q->whereExists(function ($sq) use ($dpDate) {
+                        $sq->select(DB::raw(1))
+                            ->from('digital_book_purchase_items as dbpi')
+                            ->join('digital_book_purchases as dp', 'dbpi.digital_book_purchase_id', '=', 'dp.id')
+                            ->where('dp.status', 'paid')
+                            ->whereColumn('dbpi.book_id', 'books.id')
+                            ->whereRaw("1=1 {$dpDate}");
+                    })
+                    ->orWhereExists(function ($sq) use ($txDate) {
+                        $sq->select(DB::raw(1))
+                            ->from('transactions as t')
+                            ->where('t.type', 'purchase')
+                            ->where('t.direction', 'debit')
+                            ->whereIn('t.status', ['iap_pending', 'succeeded', 'success'])
+                            ->whereRaw("(t.meta_data->>'book_id')::integer = books.id {$txDate}");
+                    });
                 })
                 ->select('books.*')
-                ->selectSub($salesSubquery, 'sales_count')
-                ->orderByDesc('sales_count')
+                ->selectRaw("({$salesCountSql}) as sales_count")
+                ->orderByRaw("({$salesCountSql}) DESC")
                 ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
                 ->limit(50)
                 ->get();
