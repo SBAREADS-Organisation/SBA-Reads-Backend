@@ -53,17 +53,41 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->where('status', 'declined')->count();
 
-            // Gross sales = sum of book prices for every copy sold (NGN)
-            $total_sales = $this->calculateTotalSales($authorBooks->toArray());
-            // Author revenue = 75% of gross sales (25% SBAReads commission)
-            $revenue = round($total_sales * 0.75, 2);
             $books_sold = $this->calculateBooksSold($authorBooks->toArray());
 
-            // Detect dominant currency from the author's books
-            $dominantCurrency = Book::whereHas('authors', function ($q) use ($author) {
-                $q->where('author_id', $author->id);
-            })->select('currency')->groupBy('currency')
-              ->orderByRaw('COUNT(*) DESC')->value('currency') ?? 'NGN';
+            // Primary: USD earnings from transactions (same source as the wallet).
+            // This keeps stats and wallet consistent for all authors.
+            $usdRevenue = (float) Transaction::where('user_id', $author->id)
+                ->where('type', 'earning')
+                ->where('direction', 'credit')
+                ->whereIn('status', ['succeeded', 'iap_pending'])
+                ->whereRaw("UPPER(currency) = 'USD'")
+                ->sum('amount');
+
+            $ngnRevenue = (float) Transaction::where('user_id', $author->id)
+                ->where('type', 'earning')
+                ->where('direction', 'credit')
+                ->whereIn('status', ['succeeded', 'iap_pending'])
+                ->whereRaw("UPPER(currency) = 'NGN'")
+                ->sum('amount');
+
+            // Use whichever currency has actual earnings; prefer USD when both are present.
+            // Fall back to NGN book-price calculation for legacy data that predates transactions.
+            if ($usdRevenue > 0) {
+                $revenue      = round($usdRevenue, 2);
+                $total_sales  = round($usdRevenue / 0.75, 2);
+                $dominantCurrency = 'USD';
+            } elseif ($ngnRevenue > 0) {
+                $revenue      = round($ngnRevenue, 2);
+                $total_sales  = round($ngnRevenue / 0.75, 2);
+                $dominantCurrency = 'NGN';
+            } else {
+                // No transactions yet — fall back to book_user pivot sum.
+                $total_sales = $this->calculateTotalSales($authorBooks->toArray());
+                $revenue     = round($total_sales * 0.75, 2);
+                // Default to USD so the empty state matches the wallet ($0.00 everywhere).
+                $dominantCurrency = 'USD';
+            }
 
             // Reader engagement
             $reader_engagement = $this->calculateReaderEngagement($authorBooks->toArray());
@@ -94,7 +118,7 @@ class AuthorDashboardController extends Controller
 
             $response_data = [
                 'revenue' => $revenue,
-                'currency' => strtoupper($dominantCurrency ?? 'NGN'),
+                'currency' => strtoupper($dominantCurrency ?? 'USD'),
                 'reader_engagement' => $reader_engagement,
                 'books_published' => $books_published,
                 'total_views' => (int) $total_views,

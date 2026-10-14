@@ -407,8 +407,9 @@ class KYCController extends Controller
 
         // Stripe webhook can arrive after the WebView redirect, creating a race condition
         // where the app checks status before the DB is updated. When the DB still says
-        // document-required but a Stripe account exists, do a live check to self-heal.
-        if ($status === 'document-required' && $user->kyc_provider === 'stripe' && $user->kyc_account_id) {
+        // document-required or in-review but a Stripe account exists and is fully enabled,
+        // do a live check to self-heal rather than leaving the user permanently stuck.
+        if (in_array($status, ['document-required', 'in-review']) && $user->kyc_provider === 'stripe' && $user->kyc_account_id) {
             try {
                 $stripe  = new \Stripe\StripeClient(config('services.stripe.secret'));
                 $account = $stripe->accounts->retrieve($user->kyc_account_id);

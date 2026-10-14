@@ -90,7 +90,10 @@ class AdminKYCController extends Controller
             return $this->error('User is not an author.', 422);
         }
 
-        $user->update(['kyc_status' => 'rejected']);
+        $user->update([
+            'kyc_status'       => 'rejected',
+            'ai_review_status' => 'rejected',
+        ]);
 
         // Notify the author with the rejection reason
         if ($user->email) {

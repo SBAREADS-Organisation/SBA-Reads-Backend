@@ -408,6 +408,12 @@ class StripeWebhookService
                 return;
             }
 
+            // account.updated fires for ALL account changes (bank account added, payout schedule
+            // updated, etc.). Skip users who are already verified to avoid duplicate notifications.
+            if ($user->kyc_status === 'verified') {
+                return;
+            }
+
             $individual      = $account->individual ?? null;
             $verification    = $individual?->verification ?? null;
             $status          = $verification?->status ?? null;
