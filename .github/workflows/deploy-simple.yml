@@ -117,9 +117,20 @@ jobs:
             else
               sudo sed -i 's/client_body_timeout .*/client_body_timeout 300;/' /etc/nginx/nginx.conf
             fi
-            # Also patch the active site config so FastCGI timeout applies at location level
+            # Also patch the active site config — server-block directives override the global http block,
+            # so client_max_body_size must be set here too or the global 210M is silently ignored.
             for SITE_CONF in /etc/nginx/sites-enabled/*; do
               if grep -q "fastcgi_pass" "$SITE_CONF"; then
+                if ! grep -q "client_max_body_size" "$SITE_CONF"; then
+                  sudo sed -i '/server_name/a\\tclient_max_body_size 210M;' "$SITE_CONF"
+                else
+                  sudo sed -i 's/client_max_body_size .*/client_max_body_size 210M;/' "$SITE_CONF"
+                fi
+                if ! grep -q "client_body_timeout" "$SITE_CONF"; then
+                  sudo sed -i '/server_name/a\\tclient_body_timeout 300;' "$SITE_CONF"
+                else
+                  sudo sed -i 's/client_body_timeout .*/client_body_timeout 300;/' "$SITE_CONF"
+                fi
                 if ! grep -q "fastcgi_read_timeout" "$SITE_CONF"; then
                   sudo sed -i '/fastcgi_pass/a\\t\tfastcgi_read_timeout 300;' "$SITE_CONF"
                 else

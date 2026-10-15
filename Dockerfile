@@ -42,6 +42,9 @@ RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 # Copy PHP-FPM configuration
 COPY docker/php/php-fpm.conf /usr/local/etc/php-fpm.d/zz-docker.conf
 
+# Apply upload size limits (upload_max_filesize=210M, post_max_size=215M)
+COPY .docker/php/99-uploads.ini /usr/local/etc/php/conf.d/99-uploads.ini
+
 # Expose PHP-FPM port
 EXPOSE 9000
 

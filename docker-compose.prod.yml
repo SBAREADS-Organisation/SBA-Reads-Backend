@@ -33,7 +33,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./docker/nginx/production.conf:/etc/nginx/conf.d/default.conf
       - ./ssl:/etc/nginx/ssl
       - ./storage/app/public:/var/www/storage/app/public
     depends_on:
