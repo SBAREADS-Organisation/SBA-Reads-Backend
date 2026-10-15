@@ -60,7 +60,8 @@ class AuthController extends Controller
                 && ! Hash::check($request->password, $user->password)) {
                 $provider = ucfirst($user->default_login); // 'Google', 'Apple', …
                 return $this->error(
-                    "This account was created with {$provider}. Please sign in with {$provider} instead.",
+                    "This account was originally created with {$provider}. "
+                    . "To sign in with email and password, use 'Forgot Password' to set a password first.",
                     400
                 );
             }
