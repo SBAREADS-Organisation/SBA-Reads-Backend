@@ -1482,6 +1482,19 @@ class UserController extends Controller
             return $this->error('Your account is undergoing manual review. No further action is needed.', 400);
         }
 
+        // Permanent Stripe rejections (rejected.fraud, rejected.terms_of_service, etc.) cannot be
+        // retried — Stripe will refuse the AccountLink or produce a dead-end onboarding page.
+        if ($user->kyc_status === 'rejected') {
+            $rejectionReason = $user->kyc_metadata['rejection_reason'] ?? null;
+            if ($rejectionReason && str_starts_with((string) $rejectionReason, 'rejected.')) {
+                return $this->error(
+                    'Your account has been permanently declined by our payment processor. '
+                    . 'Please contact support at support@sbareads.com for further assistance.',
+                    422
+                );
+            }
+        }
+
         if (empty($user->kyc_account_id)) {
             return $this->error('Stripe account not yet created. Please complete your KYC details first.', 400);
         }

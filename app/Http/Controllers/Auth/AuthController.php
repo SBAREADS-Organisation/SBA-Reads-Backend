@@ -49,8 +49,23 @@ class AuthController extends Controller
             }
 
             $user = $userQuery->first();
-            // dd('User Password', $user->password, Hash::check($request->password, $user->password));
-            if (! $user || ! Hash::check($request->password, $user->password)) {
+
+            if (! $user) {
+                return $this->error('Invalid credentials', 400);
+            }
+
+            // Detect social-login accounts before running the password check so we
+            // can return a specific message instead of the generic "wrong password".
+            if (! in_array($user->default_login, ['email', 'password_only', null], true)
+                && ! Hash::check($request->password, $user->password)) {
+                $provider = ucfirst($user->default_login); // 'Google', 'Apple', …
+                return $this->error(
+                    "This account was created with {$provider}. Please sign in with {$provider} instead.",
+                    400
+                );
+            }
+
+            if (! Hash::check($request->password, $user->password)) {
                 return $this->error('Invalid credentials', 400);
             }
 

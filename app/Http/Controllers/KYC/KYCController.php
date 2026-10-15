@@ -429,8 +429,21 @@ class KYCController extends Controller
             }
         }
 
+        $data = ['status' => $status];
+
+        // Surface rejection details so the app can show actionable guidance
+        // instead of the generic "rejected" badge with no explanation.
+        if ($status === 'rejected') {
+            $metadata = $user->kyc_metadata ?? [];
+            $reason   = $metadata['rejection_reason'] ?? null;
+            $data['rejection_reason']  = $reason;
+            $data['rejection_details'] = $metadata['document_details'] ?? null;
+            // Flag permanently disabled Stripe accounts so the app can suppress the retry button
+            $data['permanent'] = $reason && str_starts_with((string) $reason, 'rejected.');
+        }
+
         return $this->success(
-            ['status' => $status],
+            $data,
             'KYC status retrieved successfully',
             200
         );
