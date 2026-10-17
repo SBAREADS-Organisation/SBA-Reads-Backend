@@ -216,6 +216,7 @@ Route::prefix('paystack')->group(function () {
 // Book Routes
 Route::middleware(['auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
+    Route::get('books/upload-credentials', [BookController::class, 'uploadCredentials']);
     Route::post('books', [BookController::class, 'store']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
 

@@ -113,11 +113,35 @@ class BookService
             $mediaUploadIds[] = $upload['id'];
         }
 
-        // Upload each file in 'files' array — PDFs go to S3 to avoid Cloudinary's 10 MB image cap
+        // Upload each file in 'files' array — PDFs go to S3 to avoid Cloudinary's 10 MB image cap.
+        // Also handles files pre-uploaded directly to S3 (file_s3_key path — no server-side transfer needed).
+        if (isset($data['file_s3_key']) && ! empty($data['file_s3_key'])) {
+            $data['files'] = [['s3_key' => $data['file_s3_key']]];
+        }
+
         if (! empty($data['files']) && is_array($data['files'])) {
             $uploadedFiles = [];
             foreach ($data['files'] as $file) {
-                if ($file instanceof UploadedFile) {
+                if (is_array($file) && isset($file['s3_key'])) {
+                    // File was pre-uploaded directly to S3 — just record the metadata.
+                    $s3Key = $file['s3_key'];
+                    $s3Url = Storage::disk('s3')->url($s3Key);
+
+                    $media = \App\Models\MediaUpload::create([
+                        'context'       => 'book_content',
+                        'type'          => 'raw',
+                        'folder'        => dirname($s3Key),
+                        'public_id'     => $s3Key,
+                        'url'           => $s3Url,
+                        'watermarked'   => false,
+                        'is_temporary'  => false,
+                        'mediable_type' => null,
+                        'mediable_id'   => null,
+                    ]);
+
+                    $uploadedFiles[]   = ['public_url' => $s3Url, 'public_id' => $s3Key];
+                    $mediaUploadIds[]  = $media->id;
+                } elseif ($file instanceof UploadedFile) {
                     $ext      = $file->getClientOriginalExtension() ?: 'pdf';
                     $fileName = Str::uuid() . '.' . $ext;
                     $s3Dir    = 'books/content/' . date('Y/m/d');

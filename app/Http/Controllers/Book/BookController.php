@@ -127,10 +127,9 @@ class BookController extends Controller
             // 'books.*.cover_image.url'            => 'nullable|url',
             // 'books.*.cover_image.public_id'      => 'nullable|string',
             'books.*.format' => 'nullable|string|max:50',
-            'books.*.files' => 'required|array',
-            'books.*.files.*' => 'file|mimes:jpg,jpeg,png,pdf|max:204800',
-            // 'books.*.files.*.url'                => 'required_with:books.*.files|url',
-            // 'books.*.files.*.public_id'          => 'nullable|string',
+            'books.*.files'        => 'sometimes|array',
+            'books.*.files.*'      => 'sometimes|file|mimes:jpg,jpeg,png,pdf|max:204800',
+            'books.*.file_s3_key'  => 'sometimes|nullable|string|max:500',
             'books.*.target_audience' => 'nullable|array',
             'books.*.target_audience.*' => 'string|max:50',
             'books.*.pricing' => 'nullable|array',
@@ -307,6 +306,48 @@ class BookController extends Controller
     }
 
     /**
+     * Generate a pre-signed S3 PUT URL so the app can upload the book PDF
+     * directly to S3 without routing the file through the server.
+     */
+    public function uploadCredentials(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        if ($user->kyc_status !== 'verified') {
+            return $this->error(
+                'Your account must be KYC-verified before you can upload books.',
+                403
+            );
+        }
+
+        $extension   = strtolower($request->input('extension', 'pdf'));
+        $extension   = in_array($extension, ['pdf', 'docx'], true) ? $extension : 'pdf';
+        $contentType = $extension === 'pdf'
+            ? 'application/pdf'
+            : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+        $s3Key = 'books/content/' . date('Y/m/d') . '/' . \Illuminate\Support\Str::uuid() . '.' . $extension;
+
+        try {
+            $uploadUrl = Storage::disk('s3')->temporaryUploadUrl(
+                $s3Key,
+                now()->addMinutes(15),
+                ['ContentType' => $contentType]
+            );
+
+            return $this->success([
+                'upload_url'   => $uploadUrl,
+                's3_key'       => $s3Key,
+                'content_type' => $contentType,
+                'expires_at'   => now()->addMinutes(15)->toIso8601String(),
+            ], 'Upload credentials generated');
+        } catch (\Throwable $e) {
+            Log::error('Failed to generate S3 upload credentials: ' . $e->getMessage());
+            return $this->error('Could not generate upload URL. Please try again.', 500);
+        }
+    }
+
+    /**
      * Store a newly created resource in storage.
      */
     public function store(Request $request)
@@ -328,6 +369,15 @@ class BookController extends Controller
             }
 
             $validatedBooks = $validator->validated()['books'];
+
+            // Each book needs either an uploaded file or a pre-uploaded S3 key.
+            foreach ($validatedBooks as $bookData) {
+                $hasFile    = ! empty($bookData['files']);
+                $hasS3Key   = ! empty($bookData['file_s3_key']);
+                if (! $hasFile && ! $hasS3Key) {
+                    return $this->error('Please upload your book file (PDF).', 400);
+                }
+            }
 
             foreach ($validatedBooks as $bookData) {
                 $titleExists = Book::where('author_id', $bookData['author_id'])
