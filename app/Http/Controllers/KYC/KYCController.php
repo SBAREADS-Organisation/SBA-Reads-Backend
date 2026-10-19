@@ -326,8 +326,8 @@ class KYCController extends Controller
                 return $this->error('Stripe-verified accounts must use the /upload-document endpoint instead.', 400);
             }
 
-            if (in_array($user->kyc_status, ['verified', 'rejected'])) {
-                return $this->error('Document upload is not available for your current account status.', 400);
+            if ($user->kyc_status === 'verified') {
+                return $this->error('Your identity is already verified.', 400);
             }
 
             $validator = Validator::make($request->all(), [
