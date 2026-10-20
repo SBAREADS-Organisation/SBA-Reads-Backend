@@ -7,6 +7,7 @@ use App\Http\Controllers\Analytics\AnalyticsController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Author\AuthorDashboardController;
 use App\Http\Controllers\Book\BookController;
+use App\Http\Controllers\Book\BookDraftController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\IAP\AppStorePurchaseController;
 use App\Http\Controllers\KYC\AdminKYCController;
@@ -217,6 +218,9 @@ Route::prefix('paystack')->group(function () {
 Route::middleware(['auth:sanctum'])->group(function () {
     // Public book endpoints (for readers)
     Route::get('books/upload-credentials', [BookController::class, 'uploadCredentials']);
+    Route::get('books/draft',              [BookDraftController::class, 'get']);
+    Route::post('books/draft',             [BookDraftController::class, 'save']);
+    Route::delete('books/draft',           [BookDraftController::class, 'delete']);
     Route::post('books', [BookController::class, 'store']);
     Route::middleware(['role:admin,superadmin'])->get('books/all', [BookController::class, 'getAllBooks'])->name('get-all-books');
 
