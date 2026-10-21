@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Author\AuthorDashboardController;
 use App\Http\Controllers\Book\BookController;
 use App\Http\Controllers\Book\BookDraftController;
+use App\Http\Controllers\Book\DiscountCodeController;
 use App\Http\Controllers\Category\CategoryController;
 use App\Http\Controllers\IAP\AppStorePurchaseController;
 use App\Http\Controllers\KYC\AdminKYCController;
@@ -228,6 +229,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('books/my-purchases', [BookController::class, 'myPurchasedBooks']);
     Route::get('books/recommended', [BookController::class, 'recommended']);
     Route::post('books/purchase', [BookController::class, 'purchaseBooks'])->name('book.purchase');
+    Route::post('books/apply-discount-code', [DiscountCodeController::class, 'apply'])->name('discount.apply');
+    Route::post('books/{book}/discount-codes', [DiscountCodeController::class, 'store'])->name('discount.store')->where('book', '[0-9]+');
+    Route::get('books/{book}/discount-codes', [DiscountCodeController::class, 'index'])->name('discount.index')->where('book', '[0-9]+');
+    Route::delete('discount-codes/{discountCode}', [DiscountCodeController::class, 'destroy'])->name('discount.destroy');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show')->where('id', '[0-9]+');
     Route::get('books/{id}/reviews', [BookController::class, 'getReviews'])->where('id', '[0-9]+');

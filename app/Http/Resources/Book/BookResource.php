@@ -69,6 +69,8 @@ class BookResource extends JsonResource
             'is_featured'    => (bool) ($this->is_featured ?? false),
             'ios_available'  => (bool) ($this->ios_available ?? false),
             'preorder_url'   => $this->preorder_url,
+            'is_preorder'    => (bool) ($this->is_preorder ?? false),
+            'release_at'     => $this->release_at,
             'ranking'        => $this->ranking,
             'audio_price'    => $this->audio_price ?? 10.00,
             'audio_status' => $this->audio_status ?? 'none',
