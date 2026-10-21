@@ -329,17 +329,28 @@ class BookController extends Controller
         $s3Key = 'books/content/' . date('Y/m/d') . '/' . \Illuminate\Support\Str::uuid() . '.' . $extension;
 
         try {
-            $uploadUrl = Storage::disk('s3')->temporaryUploadUrl(
+            $result = Storage::disk('s3')->temporaryUploadUrl(
                 $s3Key,
                 now()->addMinutes(15),
                 ['ContentType' => $contentType]
             );
 
+            // Flysystem may return [url, headers] or just the URL string depending on
+            // the AWS SDK / Flysystem version. Always normalise to a plain URL string.
+            $uploadUrl     = is_array($result) ? ($result[0] ?? '') : (string) $result;
+            $uploadHeaders = is_array($result) ? ($result[1] ?? []) : [];
+
+            if (empty($uploadUrl)) {
+                Log::error('temporaryUploadUrl returned an empty URL', ['s3_key' => $s3Key]);
+                return $this->error('Could not generate upload URL. Please try again.', 500);
+            }
+
             return $this->success([
-                'upload_url'   => $uploadUrl,
-                's3_key'       => $s3Key,
-                'content_type' => $contentType,
-                'expires_at'   => now()->addMinutes(15)->toIso8601String(),
+                'upload_url'     => $uploadUrl,
+                'upload_headers' => $uploadHeaders,
+                's3_key'         => $s3Key,
+                'content_type'   => $contentType,
+                'expires_at'     => now()->addMinutes(15)->toIso8601String(),
             ], 'Upload credentials generated');
         } catch (\Throwable $e) {
             Log::error('Failed to generate S3 upload credentials: ' . $e->getMessage());
