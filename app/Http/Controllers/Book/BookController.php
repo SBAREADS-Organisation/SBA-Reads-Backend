@@ -147,8 +147,12 @@ class BookController extends Controller
             'books.*.publisher' => 'nullable|string|max:255',
             'books.*.archived' => 'boolean',
             'books.*.deleted' => 'boolean',
-            'books.*.physical_price' => 'nullable|numeric|min:0',
-            'books.*.has_physical' => 'nullable|boolean',
+            'books.*.physical_price'     => 'nullable|numeric|min:0',
+            'books.*.has_physical'       => 'nullable|boolean',
+            'books.*.physical_pricing'   => 'nullable|array',
+            'books.*.physical_pricing.*' => 'nullable|numeric|min:0',
+            'books.*.is_preorder'        => 'nullable|boolean',
+            'books.*.release_at'         => 'nullable|date|after:today',
         ];
     }
 
@@ -335,10 +339,16 @@ class BookController extends Controller
                 ['ContentType' => $contentType]
             );
 
-            // Flysystem may return [url, headers] or just the URL string depending on
-            // the AWS SDK / Flysystem version. Always normalise to a plain URL string.
-            $uploadUrl     = is_array($result) ? ($result[0] ?? '') : (string) $result;
-            $uploadHeaders = is_array($result) ? ($result[1] ?? []) : [];
+            // Flysystem returns ['url' => '...', 'headers' => [...]] for S3.
+            // Older versions may return a plain string. Normalise either to a URL string.
+            $uploadUrl     = is_array($result) ? ($result['url'] ?? '') : (string) $result;
+            // Strip the Host header — the HTTP client sets it automatically from the URL.
+            $rawHeaders    = is_array($result) ? ($result['headers'] ?? []) : [];
+            $uploadHeaders = array_filter(
+                $rawHeaders,
+                fn ($key) => strtolower($key) !== 'host',
+                ARRAY_FILTER_USE_KEY
+            );
 
             if (empty($uploadUrl)) {
                 Log::error('temporaryUploadUrl returned an empty URL', ['s3_key' => $s3Key]);

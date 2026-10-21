@@ -72,7 +72,10 @@ class Book extends Model
         'ios_available',
         'physical_price',
         'has_physical',
+        'physical_pricing',
         'preorder_url',
+        'is_preorder',
+        'release_at',
     ];
 
     protected $hidden = [
@@ -115,8 +118,11 @@ class Book extends Model
             'ranking'         => 'integer',
             'audio_price'     => 'float',
             'audio_chapters'  => 'array',
-            'physical_price'  => 'float',
-            'has_physical'    => 'boolean',
+            'physical_price'   => 'float',
+            'has_physical'     => 'boolean',
+            'physical_pricing' => 'array',
+            'is_preorder'      => 'boolean',
+            'release_at'       => 'datetime',
         ];
     }
 
