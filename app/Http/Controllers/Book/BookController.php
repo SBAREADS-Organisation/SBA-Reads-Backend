@@ -153,6 +153,7 @@ class BookController extends Controller
             'books.*.physical_pricing.*' => 'nullable|numeric|min:0',
             'books.*.is_preorder'        => 'nullable|boolean',
             'books.*.release_at'         => 'nullable|date|after:today',
+            'books.*.preorder_url'       => 'nullable|url|max:2048',
         ];
     }
 
@@ -1065,6 +1066,8 @@ class BookController extends Controller
                 'physical_price' => 'sometimes|nullable|numeric|min:0',
                 'has_physical' => 'sometimes|nullable|boolean',
                 'preorder_url' => 'sometimes|nullable|url|max:2048',
+                'is_preorder'  => 'sometimes|nullable|boolean',
+                'release_at'   => 'sometimes|nullable|date',
             ];
 
             $validator = Validator::make($request->all(), $rules);
