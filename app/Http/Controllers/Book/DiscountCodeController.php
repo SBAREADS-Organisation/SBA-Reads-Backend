@@ -145,10 +145,8 @@ class DiscountCodeController extends Controller
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+                    $code->increment('used_count');
                 }
-
-                // Increment usage count
-                $code->increment('used_count');
             }
 
             return response()->json([
@@ -161,9 +159,8 @@ class DiscountCodeController extends Controller
             ]);
         }
 
-        // Paid but discounted — increment usage and return the adjusted price
-        $code->increment('used_count');
-
+        // Paid but discounted — return the adjusted price; usage is incremented
+        // only when the purchase actually completes (books/purchase endpoint).
         return response()->json([
             'code'           => 200,
             'granted'        => false,

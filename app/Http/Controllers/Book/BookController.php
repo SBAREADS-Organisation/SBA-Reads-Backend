@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Http\JsonResponse;
 
 // use App\Services\Notification\NotificationService;
@@ -384,7 +385,21 @@ class BookController extends Controller
                 );
             }
 
-            $validator = Validator::make($request->all(), $this->rules, $this->messages);
+            // Allow the same author to reuse an ISBN they already own (re-submission
+            // after rejection, edit-then-reupload, etc.) while still blocking a
+            // different author from registering the same ISBN.
+            $authorId = $request->input('books.0.author_id');
+            $rules = $this->rules;
+            $rules['books.*.isbn'] = [
+                'nullable', 'string',
+                Rule::unique('books', 'isbn')
+                    ->where(function ($query) use ($authorId) {
+                        $query->where('author_id', '!=', $authorId)
+                              ->whereNull('deleted_at');
+                    }),
+            ];
+
+            $validator = Validator::make($request->all(), $rules, $this->messages);
 
             if ($validator->fails()) {
                 return $this->error('Some required information is missing or incorrect. Please review your submission.', 400, $validator->errors());
@@ -1520,9 +1535,10 @@ class BookController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'books'    => 'required|array|min:1',
-                'books.*'  => 'required|integer|exists:books,id',
-                'currency' => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
+                'books'         => 'required|array|min:1',
+                'books.*'       => 'required|integer|exists:books,id',
+                'currency'      => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
+                'discount_code' => 'nullable|string|max:64',
             ]);
 
             if ($validator->fails()) {
@@ -1576,6 +1592,44 @@ class BookController extends Controller
                 return $this->error('Total amount cannot be zero. Please check book prices.', 400);
             }
 
+            // Apply discount code if provided
+            $discountCodeModel = null;
+            $rawCode = $request->input('discount_code');
+            if ($rawCode) {
+                $discountCodeModel = \App\Models\DiscountCode::where('code', strtoupper(trim($rawCode)))
+                    ->where(function ($q) use ($bookIds) {
+                        $q->whereIn('book_id', $bookIds)->orWhereNull('book_id');
+                    })
+                    ->first();
+
+                if ($discountCodeModel && $discountCodeModel->isUsable()) {
+                    $discounted = match ($discountCodeModel->type) {
+                        'free'    => 0.0,
+                        'percent' => max(0, $totalAmount - ($totalAmount * $discountCodeModel->value / 100)),
+                        'fixed'   => max(0, $totalAmount - $discountCodeModel->value),
+                        default   => $totalAmount,
+                    };
+                    $totalAmount = $discounted;
+                }
+            }
+
+            if ($totalAmount <= 0) {
+                // Discount makes the book free — grant immediately without going through payment
+                $purchaseService = app(BookPurchaseService::class);
+                foreach ($bookIds as $bookId) {
+                    if (! $purchaseService->userOwnsBook($user, (int) $bookId)) {
+                        DB::table('book_user')->insertOrIgnore([
+                            'user_id'    => $user->id,
+                            'book_id'    => $bookId,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
+                    }
+                }
+                if ($discountCodeModel) $discountCodeModel->increment('used_count');
+                return $this->success(['granted' => true], 'Books granted via discount code.');
+            }
+
             $platformFeePercent  = config('payments.digital_books.platform_fee_percent', 0.25);
             $authorPayoutPercent = config('payments.digital_books.author_payout_percent', 0.75);
             $platformFeeAmount   = $totalAmount * $platformFeePercent;
@@ -1586,7 +1640,7 @@ class BookController extends Controller
 
             return DB::transaction(function () use (
                 $user, $bookIds, $books, $totalAmount, $platformFeeAmount,
-                $authorPayoutPercent, $currency, $provider, $payableAmount
+                $authorPayoutPercent, $currency, $provider, $payableAmount, $discountCodeModel
             ) {
                 $purchase = DigitalBookPurchase::create([
                     'user_id'             => $user->id,
@@ -1640,6 +1694,10 @@ class BookController extends Controller
                     $body = $transaction->getData(true);
                     throw new \RuntimeException($body['error'] ?? 'Payment initialization failed.');
                 }
+
+                // Discount usage is tracked at payment initiation (not on completion)
+                // so the code cannot be reused while a payment is in-flight.
+                if ($discountCodeModel) $discountCodeModel->increment('used_count');
 
                 return $this->success([
                     'purchase'           => $purchase->load('items.book'),
