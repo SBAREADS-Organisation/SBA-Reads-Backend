@@ -13,6 +13,7 @@ return new class extends Migration
 
         if ($driver === 'pgsql') {
             DB::statement("ALTER TABLE digital_book_purchases ALTER COLUMN status TYPE VARCHAR(32)");
+            DB::statement("ALTER TABLE digital_book_purchases DROP CONSTRAINT IF EXISTS digital_book_purchases_status_check");
             DB::statement("ALTER TABLE digital_book_purchases ADD CONSTRAINT digital_book_purchases_status_check
                 CHECK (status IN ('pending','paid','failed','payout_initiated','payout_completed','payout_failed','preordered'))");
         } else {
