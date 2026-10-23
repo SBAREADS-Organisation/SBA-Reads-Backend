@@ -152,18 +152,15 @@ class AppStorePurchaseController extends Controller
             }
 
             // ── Phase 1: Grant books (committed immediately — user gets their book no matter what) ──
-            [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds] = DB::transaction(
+            [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds, $preorderedBooks] = DB::transaction(
                 function () use ($user, $receiptInfo, $environment, $purchaseType, $bookIdFromRequest) {
                     $grantedBooks        = [];
                     $bookIdsToGrant      = [];
-                    $audioBookIdsGranted = []; // book IDs for which AudioBookPurchase was created
-                    $purchaseItems       = []; // passed to Phase 2 for author earnings
+                    $audioBookIdsGranted = [];
+                    $purchaseItems       = [];
+                    $preorderedBooks     = []; // paid preorders — access deferred until release_at
                     $bookPurchaseService = app(BookPurchaseService::class);
 
-                    // Tracks every book that is confirmed in the user's library after this
-                    // call — whether just granted or already owned. Returned to the caller
-                    // so the frontend knows the receipt was definitively processed and can
-                    // safely delete its local retry key.
                     $confirmedBookIds = [];
 
                     foreach ($receiptInfo as $item) {
@@ -312,19 +309,76 @@ class AppStorePurchaseController extends Controller
                             $alreadyPurchased = $bookPurchaseService->userOwnsBook($user, $book->id);
 
                             if (! $alreadyPurchased) {
-                                $bookIdsToGrant[]   = $book->id;
-                                $confirmedBookIds[]  = $book->id;
-                                $grantedBooks[]      = [
-                                    'id'         => $book->id,
-                                    'product_id' => $productId,
-                                    'title'      => $book->title,
-                                ];
-                                $purchaseItems[]     = [
-                                    'book_id'    => $book->id,
-                                    'book_title' => $book->title,
-                                    'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
-                                    'buyer_id'   => $user->id,
-                                ];
+                                $isUnreleasedPreorder = $book->is_preorder
+                                    && $book->release_at
+                                    && $book->release_at->isFuture();
+
+                                if ($isUnreleasedPreorder) {
+                                    // Paid preorder — money charged by Apple, reading access deferred to release_at.
+                                    // Author earning still recorded now (payment is confirmed).
+                                    $alreadyPreordered = \App\Models\DigitalBookPurchase::where('user_id', $user->id)
+                                        ->where('status', 'preordered')
+                                        ->whereHas('items', fn ($q) => $q->where('book_id', $book->id))
+                                        ->exists();
+
+                                    if (! $alreadyPreordered) {
+                                        $iapPreorder = \App\Models\DigitalBookPurchase::create([
+                                            'user_id'             => $user->id,
+                                            'total_amount'        => (float) ($book->actual_price ?? 0),
+                                            'platform_fee_amount' => 0.0,
+                                            'currency'            => 'USD',
+                                            'status'              => 'preordered',
+                                        ]);
+                                        $iapPreorder->items()->create([
+                                            'book_id'                  => $book->id,
+                                            'author_id'                => $book->author_id,
+                                            'quantity'                 => 1,
+                                            'price_at_purchase'        => (float) ($book->actual_price ?? 0),
+                                            'price_at_purchase_usd'    => (float) ($book->actual_price ?? 0),
+                                            'author_payout_amount'     => 0.0,
+                                            'author_payout_amount_usd' => 0.0,
+                                            'platform_fee_amount'      => 0.0,
+                                            'platform_fee_amount_usd'  => 0.0,
+                                            'payout_status'            => 'pending',
+                                            'currency'                 => 'USD',
+                                        ]);
+                                    }
+
+                                    $preorderedBooks[]  = [
+                                        'id'         => $book->id,
+                                        'product_id' => $productId,
+                                        'title'      => $book->title,
+                                        'release_at' => $book->release_at->toISOString(),
+                                    ];
+                                    // Include in purchaseItems so author earning is created now
+                                    $purchaseItems[] = [
+                                        'book_id'    => $book->id,
+                                        'book_title' => $book->title,
+                                        'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
+                                        'buyer_id'   => $user->id,
+                                    ];
+                                    $confirmedBookIds[] = $book->id;
+
+                                    Log::info('IAP: preorder recorded — access deferred until release', [
+                                        'user_id'    => $user->id,
+                                        'book_id'    => $book->id,
+                                        'release_at' => $book->release_at->toISOString(),
+                                    ]);
+                                } else {
+                                    $bookIdsToGrant[]   = $book->id;
+                                    $confirmedBookIds[]  = $book->id;
+                                    $grantedBooks[]      = [
+                                        'id'         => $book->id,
+                                        'product_id' => $productId,
+                                        'title'      => $book->title,
+                                    ];
+                                    $purchaseItems[]     = [
+                                        'book_id'    => $book->id,
+                                        'book_title' => $book->title,
+                                        'price'      => (float) ($book->actual_price ?? $book->discounted_price ?? 0),
+                                        'buyer_id'   => $user->id,
+                                    ];
+                                }
                             } else {
                                 // Book already in library — still confirmed so the client clears its retry key.
                                 $confirmedBookIds[] = $book->id;
@@ -401,7 +455,7 @@ class AppStorePurchaseController extends Controller
                         }
                     }
 
-                    return [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds];
+                    return [$grantedBooks, $bookIdsToGrant, $audioBookIdsGranted, $purchaseItems, $confirmedBookIds, $preorderedBooks];
                 }
             );
 
@@ -504,19 +558,18 @@ class AppStorePurchaseController extends Controller
             }
 
             return response()->json([
-                'status'      => 'success',
-                'environment' => $environment,
-                'books'       => $grantedBooks,
-                // confirmed = true means the purchase is definitively accounted for
-                // (either just granted or already in the user's library). The client
-                // uses this to decide whether it is safe to delete its local retry key.
-                'confirmed'   => ! empty($confirmedBookIds),
-                // pending = true means book_id was provided but its transaction is not
-                // yet in the receipt — Apple propagation delay. Client should retry.
-                'pending'     => $pending,
-                'message'     => count($grantedBooks) > 0
-                    ? 'Purchase verified successfully'
-                    : ($pending ? 'Purchase pending Apple receipt update' : 'All books in receipt are already in your library'),
+                'status'           => 'success',
+                'environment'      => $environment,
+                'books'            => $grantedBooks,
+                'confirmed'        => ! empty($confirmedBookIds),
+                'pending'          => $pending,
+                'preordered'       => ! empty($preorderedBooks),
+                'preordered_books' => $preorderedBooks,
+                'message'          => ! empty($preorderedBooks) && empty($grantedBooks)
+                    ? 'Pre-order confirmed. Access will be granted on release.'
+                    : (count($grantedBooks) > 0
+                        ? 'Purchase verified successfully'
+                        : ($pending ? 'Purchase pending Apple receipt update' : 'All books in receipt are already in your library')),
             ]);
 
         } catch (\Exception $e) {

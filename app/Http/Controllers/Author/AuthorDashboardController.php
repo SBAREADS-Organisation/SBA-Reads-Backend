@@ -53,7 +53,9 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->where('status', 'declined')->count();
 
-            $books_sold = $this->calculateBooksSold($authorBooks->toArray());
+            $books_sold      = $this->calculateBooksSold($authorBooks->toArray());
+            $free_downloads  = $this->calculateFreeDownloads($authorBooks->toArray());
+            $preorders_pending = $this->calculatePendingPreorders($authorBooks->toArray());
 
             // Primary: USD earnings from transactions (same source as the wallet).
             // This keeps stats and wallet consistent for all authors.
@@ -124,6 +126,8 @@ class AuthorDashboardController extends Controller
                 'total_views' => (int) $total_views,
                 'total_sales' => round($total_sales, 2),
                 'books_sold' => $books_sold,
+                'free_downloads' => $free_downloads,
+                'preorders_pending' => $preorders_pending,
                 'books_uploaded' => $books_uploaded,
                 'books_rejected' => $books_rejected,
                 'books_approved' => $books_published,
@@ -152,9 +156,9 @@ class AuthorDashboardController extends Controller
     }
 
     /**
-     * Calculate total gross sales for the author's books.
-     * Sums the book's actual_price for every unit sold (via IAP book_user pivot or Paystack).
-     * This gives the raw sales figure in the book's native currency (NGN).
+     * Fallback gross sales (USD) for authors with no Transaction records yet.
+     * Sums price_at_purchase_usd from paid, non-free purchase items only,
+     * so free/discount downloads never inflate the revenue figure.
      */
     private function calculateTotalSales(array $authorBookIds): float
     {
@@ -163,11 +167,12 @@ class AuthorDashboardController extends Controller
         }
 
         try {
-            // Primary: sum actual_price for every copy sold (covers both IAP + Paystack)
-            $total = DB::table('book_user')
-                ->join('books', 'books.id', '=', 'book_user.book_id')
-                ->whereIn('book_user.book_id', $authorBookIds)
-                ->sum('books.actual_price');
+            $total = DB::table('digital_book_purchase_items')
+                ->join('digital_book_purchases', 'digital_book_purchases.id', '=', 'digital_book_purchase_items.digital_book_purchase_id')
+                ->whereIn('digital_book_purchase_items.book_id', $authorBookIds)
+                ->whereIn('digital_book_purchases.status', ['paid', 'completed'])
+                ->where('digital_book_purchases.total_amount', '>', 0)
+                ->sum('digital_book_purchase_items.price_at_purchase_usd');
 
             return (float) $total;
         } catch (\Throwable $th) {
@@ -228,7 +233,7 @@ class AuthorDashboardController extends Controller
     }
 
     /**
-     * Calculate number of unique books sold (books that have been purchased).
+     * Count paid (non-free) purchases for the author's books.
      */
     private function calculateBooksSold(array $authorBookIds): int
     {
@@ -237,25 +242,58 @@ class AuthorDashboardController extends Controller
         }
 
         try {
-            // Count unique books from digital purchases
-            $digitalBooksSold = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+            $digitalSold = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
                 $q->whereIn('book_id', $authorBookIds);
-            })->where('status', 'paid')
-                ->distinct()
+            })->whereIn('status', ['paid', 'completed'])
+                ->where('total_amount', '>', 0)
                 ->count();
 
-            // Count unique books from physical orders
-            $physicalBooksSold = Order::whereHas('items', function ($q) use ($authorBookIds) {
+            $physicalSold = Order::whereHas('items', function ($q) use ($authorBookIds) {
                 $q->whereIn('book_id', $authorBookIds);
             })->where('status', 'completed')
-                ->distinct()
                 ->count();
 
-            $total = $digitalBooksSold + $physicalBooksSold;
-
-            return $total;
+            return $digitalSold + $physicalSold;
         } catch (\Throwable $th) {
+            return 0;
+        }
+    }
 
+    /**
+     * Count free downloads (discount-code grants, $0 purchases) for the author's books.
+     */
+    private function calculateFreeDownloads(array $authorBookIds): int
+    {
+        if (empty($authorBookIds)) {
+            return 0;
+        }
+
+        try {
+            return DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+                $q->whereIn('book_id', $authorBookIds);
+            })->whereIn('status', ['paid', 'completed'])
+                ->where('total_amount', 0)
+                ->count();
+        } catch (\Throwable $th) {
+            return 0;
+        }
+    }
+
+    /**
+     * Count preorder reservations not yet converted to full access.
+     */
+    private function calculatePendingPreorders(array $authorBookIds): int
+    {
+        if (empty($authorBookIds)) {
+            return 0;
+        }
+
+        try {
+            return DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
+                $q->whereIn('book_id', $authorBookIds);
+            })->where('status', 'preordered')
+                ->count();
+        } catch (\Throwable $th) {
             return 0;
         }
     }
@@ -289,7 +327,8 @@ class AuthorDashboardController extends Controller
         try {
             $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($authorBookIds) {
                 $q->whereIn('book_id', $authorBookIds);
-            })->where('status', 'paid')
+            })->whereIn('status', ['paid', 'completed'])
+                ->where('total_amount', '>', 0)
                 ->where('created_at', '>=', now()->subDays(30))
                 ->count();
 
@@ -320,16 +359,32 @@ class AuthorDashboardController extends Controller
                 foreach ($authorBookIds as $bookId) {
                     $digitalSales = DigitalBookPurchase::whereHas('items', function ($q) use ($bookId) {
                         $q->where('book_id', $bookId);
-                    })->where('status', 'paid')->count();
+                    })->whereIn('status', ['paid', 'completed'])
+                        ->where('total_amount', '>', 0)
+                        ->count();
+
+                    $freeDownloads = DigitalBookPurchase::whereHas('items', function ($q) use ($bookId) {
+                        $q->where('book_id', $bookId);
+                    })->whereIn('status', ['paid', 'completed'])
+                        ->where('total_amount', 0)
+                        ->count();
+
+                    $preorderCount = DigitalBookPurchase::whereHas('items', function ($q) use ($bookId) {
+                        $q->where('book_id', $bookId);
+                    })->where('status', 'preordered')
+                        ->count();
 
                     $physicalSales = Order::whereHas('items', function ($q) use ($bookId) {
                         $q->where('book_id', $bookId);
                     })->where('status', 'completed')->count();
 
                     $sales_by_book[$bookId] = [
-                        'digital_sales' => $digitalSales,
+                        'digital_sales'  => $digitalSales,
+                        'free_downloads' => $freeDownloads,
+                        'preorders'      => $preorderCount,
                         'physical_sales' => $physicalSales,
-                        'total_sales' => $digitalSales + $physicalSales
+                        'total_sales'    => $digitalSales + $physicalSales,
+                        'total_downloads'=> $digitalSales + $physicalSales + $freeDownloads,
                     ];
                 }
             }
@@ -338,7 +393,7 @@ class AuthorDashboardController extends Controller
             $top_books = Book::whereHas('authors', function ($q) use ($authorId) {
                 $q->where('author_id', $authorId);
             })->withCount(['digitalPurchases as sales_count' => function ($query) {
-                $query->where('status', 'paid');
+                $query->whereIn('status', ['paid', 'completed'])->where('total_amount', '>', 0);
             }])->orderBy('sales_count', 'desc')
                 ->limit(5)
                 ->get(['id', 'title', 'cover_image', 'price']);
@@ -346,9 +401,8 @@ class AuthorDashboardController extends Controller
             return [
                 'sales_by_book' => $sales_by_book,
                 'top_performing_books' => $top_books,
-                'total_books_with_sales' => count(array_filter($sales_by_book, function ($book) {
-                    return $book['total_sales'] > 0;
-                }))
+                'total_books_with_sales' => count(array_filter($sales_by_book, fn ($b) => $b['total_sales'] > 0)),
+                'total_books_with_downloads' => count(array_filter($sales_by_book, fn ($b) => $b['total_downloads'] > 0)),
             ];
         } catch (\Throwable $th) {
 

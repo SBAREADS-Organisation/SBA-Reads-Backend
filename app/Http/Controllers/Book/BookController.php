@@ -1644,6 +1644,7 @@ class BookController extends Controller
                                 'platform_fee_amount' => 0.0,
                                 'currency'            => 'USD',
                                 'status'              => 'preordered',
+                                'discount_code_id'    => $discountCodeModel?->id,
                             ]);
                             $purchase->items()->create([
                                 'book_id'                  => $bookId,
@@ -1666,6 +1667,28 @@ class BookController extends Controller
                             'book_id'    => $bookId,
                             'created_at' => now(),
                             'updated_at' => now(),
+                        ]);
+                        // Record the free acquisition for author analytics
+                        $freePurchase = DigitalBookPurchase::create([
+                            'user_id'             => $user->id,
+                            'total_amount'        => 0.0,
+                            'platform_fee_amount' => 0.0,
+                            'currency'            => 'USD',
+                            'status'              => 'paid',
+                            'discount_code_id'    => $discountCodeModel?->id,
+                        ]);
+                        $freePurchase->items()->create([
+                            'book_id'                  => $bookId,
+                            'author_id'                => $book->author_id,
+                            'quantity'                 => 1,
+                            'price_at_purchase'        => 0.0,
+                            'price_at_purchase_usd'    => 0.0,
+                            'author_payout_amount'     => 0.0,
+                            'author_payout_amount_usd' => 0.0,
+                            'platform_fee_amount'      => 0.0,
+                            'platform_fee_amount_usd'  => 0.0,
+                            'payout_status'            => 'pending',
+                            'currency'                 => 'USD',
                         ]);
                         $grantedIds[] = $bookId;
                     }
@@ -1711,6 +1734,7 @@ class BookController extends Controller
                     'platform_fee_amount' => (float) $this->currencyConversionService->convert((float) $platformFeeAmount, 'USD', $currency),
                     'currency'            => $currency,
                     'status'              => 'pending',
+                    'discount_code_id'    => $discountCodeModel?->id,
                 ]);
 
                 foreach ($bookIds as $bookId) {

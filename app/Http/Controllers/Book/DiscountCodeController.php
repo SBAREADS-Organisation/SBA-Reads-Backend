@@ -199,6 +199,7 @@ class DiscountCodeController extends Controller
                                 'platform_fee_amount' => 0.0,
                                 'currency'            => 'USD',
                                 'status'              => 'preordered',
+                                'discount_code_id'    => $code->id,
                             ]);
                             $purchase->items()->create([
                                 'book_id'                  => $book->id,
@@ -229,11 +230,33 @@ class DiscountCodeController extends Controller
                     }
 
                     // Normal grant: book is available now
-                    DB::table('book_user')->insert([
+                    DB::table('book_user')->insertOrIgnore([
                         'user_id'    => $user->id,
                         'book_id'    => $book->id,
                         'created_at' => now(),
                         'updated_at' => now(),
+                    ]);
+                    // Record the free acquisition so authors can see download counts
+                    $freePurchase = DigitalBookPurchase::create([
+                        'user_id'             => $user->id,
+                        'total_amount'        => 0.0,
+                        'platform_fee_amount' => 0.0,
+                        'currency'            => 'USD',
+                        'status'              => 'paid',
+                        'discount_code_id'    => $code->id,
+                    ]);
+                    $freePurchase->items()->create([
+                        'book_id'                  => $book->id,
+                        'author_id'                => $book->author_id,
+                        'quantity'                 => 1,
+                        'price_at_purchase'        => 0.0,
+                        'price_at_purchase_usd'    => 0.0,
+                        'author_payout_amount'     => 0.0,
+                        'author_payout_amount_usd' => 0.0,
+                        'platform_fee_amount'      => 0.0,
+                        'platform_fee_amount_usd'  => 0.0,
+                        'payout_status'            => 'pending',
+                        'currency'                 => 'USD',
                     ]);
                     $code->increment('used_count');
                 }
