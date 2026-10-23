@@ -1614,20 +1614,83 @@ class BookController extends Controller
             }
 
             if ($totalAmount <= 0) {
-                // Discount makes the book free — grant immediately without going through payment
+                // Discount makes the book(s) free — grant or pre-order
                 $purchaseService = app(BookPurchaseService::class);
+                $grantedIds   = [];
+                $preorderedIds = [];
+
                 foreach ($bookIds as $bookId) {
-                    if (! $purchaseService->userOwnsBook($user, (int) $bookId)) {
+                    if ($purchaseService->userOwnsBook($user, (int) $bookId)) {
+                        continue;
+                    }
+
+                    $book             = $books->find($bookId);
+                    $isUnreleased     = $book
+                        && $book->is_preorder
+                        && $book->release_at
+                        && $book->release_at->isFuture();
+
+                    if ($isUnreleased) {
+                        // Record preorder claim; scheduler grants access on release date
+                        $alreadyPreordered = DigitalBookPurchase::where('user_id', $user->id)
+                            ->where('status', 'preordered')
+                            ->whereHas('items', fn ($q) => $q->where('book_id', $bookId))
+                            ->exists();
+
+                        if (! $alreadyPreordered) {
+                            $purchase = DigitalBookPurchase::create([
+                                'user_id'             => $user->id,
+                                'total_amount'        => 0.0,
+                                'platform_fee_amount' => 0.0,
+                                'currency'            => 'USD',
+                                'status'              => 'preordered',
+                            ]);
+                            $purchase->items()->create([
+                                'book_id'                  => $bookId,
+                                'author_id'                => $book->author_id,
+                                'quantity'                 => 1,
+                                'price_at_purchase'        => 0.0,
+                                'price_at_purchase_usd'    => 0.0,
+                                'author_payout_amount'     => 0.0,
+                                'author_payout_amount_usd' => 0.0,
+                                'platform_fee_amount'      => 0.0,
+                                'platform_fee_amount_usd'  => 0.0,
+                                'payout_status'            => 'pending',
+                                'currency'                 => 'USD',
+                            ]);
+                            $preorderedIds[] = $bookId;
+                        }
+                    } else {
                         DB::table('book_user')->insertOrIgnore([
                             'user_id'    => $user->id,
                             'book_id'    => $bookId,
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
+                        $grantedIds[] = $bookId;
                     }
                 }
-                if ($discountCodeModel) $discountCodeModel->increment('used_count');
-                return $this->success(['granted' => true], 'Books granted via discount code.');
+
+                if ($discountCodeModel && (count($grantedIds) + count($preorderedIds)) > 0) {
+                    $discountCodeModel->increment('used_count');
+                }
+
+                if (! empty($preorderedIds) && empty($grantedIds)) {
+                    $releaseAt = $books->whereIn('id', $preorderedIds)->min('release_at');
+                    return $this->success([
+                        'granted'       => false,
+                        'preordered'    => true,
+                        'preordered_ids'=> $preorderedIds,
+                        'release_at'    => $releaseAt?->toISOString(),
+                    ], 'Pre-order confirmed. Access will be granted on release.');
+                }
+
+                return $this->success([
+                    'granted'       => true,
+                    'preordered'    => ! empty($preorderedIds),
+                    'preordered_ids'=> $preorderedIds,
+                    'granted_ids'   => $grantedIds,
+                ], 'Books granted via discount code.');
             }
 
             $platformFeePercent  = config('payments.digital_books.platform_fee_percent', 0.25);

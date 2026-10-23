@@ -502,9 +502,11 @@ class UserController extends Controller
                 'name' => 'nullable|string|max:255',
                 'profile_info.username' => [
                     'nullable', 'string', 'max:255',
-                    // Allow same-email accounts (reader + author dual accounts) to share a username.
-                    // Only enforce uniqueness against users with a different email address.
+                    // Ignore this user's own row. Allow same-email accounts (reader +
+                    // author dual accounts) to share a username by only enforcing
+                    // uniqueness against users with a different email address.
                     Rule::unique('users', 'username')
+                        ->ignoreModel($user)
                         ->where(fn ($q) => $q->where('email', '!=', $user->email)),
                 ],
                 'profile_info.bio' => 'nullable|string|max:5000',
@@ -520,7 +522,7 @@ class UserController extends Controller
                 $rules = array_merge($rules, [
                     'socials'             => 'nullable|array|max:20',
                     'socials.*.platform'  => 'nullable|string|max:50',
-                    'socials.*.url'       => 'nullable|string|max:2048',
+                    'socials.*.url'       => 'nullable|url|max:2048',
                     'preferences.genres'  => 'nullable|array',
                     'preferences.genres.*'=> 'nullable|string|max:50',
                 ]);
@@ -535,7 +537,11 @@ class UserController extends Controller
                 'socials.*.url.max'            => 'One of your social links is too long.',
             ];
 
-            $validator = Validator::make($request->all(), $rules, $messages);
+            $validator = Validator::make(
+                array_merge($request->all(), $request->allFiles()),
+                $rules,
+                $messages
+            );
 
             if ($validator->fails()) {
                 $firstError = collect($validator->errors()->all())->first();
@@ -568,6 +574,7 @@ class UserController extends Controller
             }
 
             // ── Core profile fields ───────────────────────────────────────────
+            Log::info('updateProfile: assigning fields', ['user_id' => $user->id, 'step' => 'core_fields']);
             $penName = $request->input('profile_info.username');
             if ($penName) {
                 $user->username   = $penName;
@@ -587,12 +594,14 @@ class UserController extends Controller
             $user->profile_picture = $profilePicture;
 
             // ── Preferences (merge, guard against non-array) ──────────────────
+            Log::info('updateProfile: merging preferences', ['user_id' => $user->id, 'step' => 'preferences']);
             $existingPreferences = is_array($user->preferences) ? $user->preferences : [];
             $newPreferences      = is_array($request->input('preferences')) ? $request->input('preferences') : [];
             $user->preferences   = array_merge($existingPreferences, $newPreferences);
 
             // ── Author-only fields ────────────────────────────────────────────
             if ($user->account_type === 'author') {
+                Log::info('updateProfile: setting author fields', ['user_id' => $user->id, 'step' => 'author_fields']);
                 if ($request->has('socials')) {
                     $existingInfo        = is_array($user->profile_info) ? $user->profile_info : [];
                     $user->profile_info  = array_merge($existingInfo, [
@@ -605,7 +614,9 @@ class UserController extends Controller
                 $user->settings   = array_merge($existingSettings, $newSettings);
             }
 
+            Log::info('updateProfile: saving user', ['user_id' => $user->id, 'step' => 'save']);
             $user->save();
+            Log::info('updateProfile: save complete', ['user_id' => $user->id, 'step' => 'save_done']);
 
             // Link uploaded photo to this user (deferred until after save so we
             // have a confirmed user_id even for brand-new accounts).
@@ -623,14 +634,17 @@ class UserController extends Controller
             );
         } catch (\Throwable $th) {
             Log::error('updateProfile: unexpected error', [
-                'user_id' => $request->user()?->id,
-                'error'   => $th->getMessage(),
-                'trace'   => $th->getTraceAsString(),
+                'user_id'   => $request->user()?->id,
+                'error'     => $th->getMessage(),
+                'file'      => $th->getFile(),
+                'line'      => $th->getLine(),
+                'exception' => get_class($th),
+                'trace'     => $th->getTraceAsString(),
             ]);
             return $this->error(
                 'An error occurred while updating your profile.',
                 500,
-                config('app.debug') ? $th->getMessage() : 'An error occurred while updating your profile.',
+                config('app.debug') ? '[' . get_class($th) . '] ' . $th->getMessage() : 'An error occurred while updating your profile.',
                 $th
             );
         }

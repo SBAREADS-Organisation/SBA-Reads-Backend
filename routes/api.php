@@ -232,6 +232,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('books/apply-discount-code', [DiscountCodeController::class, 'apply'])->name('discount.apply');
     Route::post('books/{book}/discount-codes', [DiscountCodeController::class, 'store'])->name('discount.store')->where('book', '[0-9]+');
     Route::get('books/{book}/discount-codes', [DiscountCodeController::class, 'index'])->name('discount.index')->where('book', '[0-9]+');
+    Route::put('discount-codes/{discountCode}', [DiscountCodeController::class, 'update'])->name('discount.update');
     Route::delete('discount-codes/{discountCode}', [DiscountCodeController::class, 'destroy'])->name('discount.destroy');
     Route::post('books/preview', [BookController::class, 'extractPreview']);
     Route::get('books/{id}', [BookController::class, 'show'])->name('book.show')->where('id', '[0-9]+');

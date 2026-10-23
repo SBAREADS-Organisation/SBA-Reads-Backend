@@ -17,6 +17,12 @@ class Kernel extends ConsoleKernel
             ->dailyAt('00:30')
             ->withoutOverlapping()
             ->runInBackground();
+
+        // Grant library access to preordered books whose release date has now passed.
+        $schedule->command('books:release-preorders')
+            ->hourly()
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 
     protected function commands(): void
