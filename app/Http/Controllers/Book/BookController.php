@@ -203,7 +203,7 @@ class BookController extends Controller
         $books = $query->with([
             'categories:id,name',
             'authors:id,name',
-            'reviews:id,book_id,rating',
+            'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
         ])->paginate($request->get('items_per_page', 10));
 
         if ($books->isEmpty()) {
@@ -268,7 +268,7 @@ class BookController extends Controller
         $books = $query->with([
             'categories:id,name',
             'authors:id,name',
-            'reviews:id,book_id,rating',
+            'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
         ])->paginate($request->get('items_per_page', 10));
 
         $resourceCollection = BookResource::collection($books->getCollection());
@@ -1821,8 +1821,9 @@ class BookController extends Controller
                 )
                 ->whereNotNull('ranking')
                 ->orderBy('ranking')
-                ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
-                ->get();
+                ->with(['categories:id,name', 'authors:id,name',
+                    'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
+                ])->get();
 
             return $this->success(BookResource::collection($books), 'Top ranking books retrieved successfully.');
         } catch (\Exception $e) {
@@ -1952,8 +1953,9 @@ class BookController extends Controller
                 ->select('books.*')
                 ->selectRaw("({$salesCountSql}) as sales_count")
                 ->orderByRaw("({$salesCountSql}) DESC")
-                ->with(['categories:id,name', 'authors:id,name', 'reviews:id,book_id,rating'])
-                ->limit(50)
+                ->with(['categories:id,name', 'authors:id,name',
+                    'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
+                ])->limit(50)
                 ->get();
 
             return $this->success(BookResource::collection($books), 'Best sellers retrieved successfully.');
