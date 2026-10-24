@@ -104,9 +104,7 @@ class User extends Authenticatable
         ];
     }
 
-    protected $with = [
-        'purchasedBooks'
-    ];
+    protected $with = [];
 
     public function media()
     {
