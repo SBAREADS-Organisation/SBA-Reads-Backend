@@ -19,8 +19,11 @@ class GrantReleasedPreorders extends Command
         $granted = 0;
 
         // Stream through preordered purchases in chunks to avoid loading all at once.
+        // Select only the 3 columns needed — text_content alone can be megabytes per book.
         DigitalBookPurchase::where('status', 'preordered')
-            ->with(['items.book'])
+            ->with(['items' => fn ($q) => $q->with([
+                'book' => fn ($bq) => $bq->select('id', 'is_preorder', 'release_at'),
+            ])])
             ->chunkById(200, function ($purchases) use ($now, &$granted) {
                 foreach ($purchases as $purchase) {
                     $allGranted = true;
