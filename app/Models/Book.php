@@ -82,23 +82,6 @@ class Book extends Model
         'text_content',
     ];
 
-    protected static function booted(): void
-    {
-        // Exclude text_content (potentially megabytes per book) from every query that
-        // doesn't explicitly set its own SELECT list. Callers that legitimately need
-        // text_content must opt out: Book::withoutGlobalScope('without_text_content')->...
-        static::addGlobalScope('without_text_content', function (\Illuminate\Database\Eloquent\Builder $builder) {
-            if ($builder->getQuery()->columns === null) {
-                static $safe;
-                $safe ??= array_values(array_diff(
-                    \Illuminate\Support\Facades\Schema::getColumnListing('books'),
-                    ['text_content']
-                ));
-                $builder->select($safe);
-            }
-        });
-    }
-
     /**
      * Get the attributes that should be casted
      *
@@ -223,8 +206,21 @@ class Book extends Model
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | $flags);
     }
 
-    protected static function booted()
+    protected static function booted(): void
     {
+        // Exclude text_content (potentially megabytes per book) from every query that
+        // doesn't set its own SELECT. Opt out with withoutGlobalScope('without_text_content').
+        static::addGlobalScope('without_text_content', function (\Illuminate\Database\Eloquent\Builder $builder) {
+            if ($builder->getQuery()->columns === null) {
+                static $safe;
+                $safe ??= array_values(array_diff(
+                    \Illuminate\Support\Facades\Schema::getColumnListing('books'),
+                    ['text_content']
+                ));
+                $builder->select($safe);
+            }
+        });
+
         static::created(function ($book) {
             DashboardCacheService::clearAdminDashboard();
             foreach ($book->authors as $author) {
