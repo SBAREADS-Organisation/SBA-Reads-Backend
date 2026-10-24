@@ -20,7 +20,7 @@ class GrantReleasedPreorders extends Command
         // holds full payment-provider responses that can be hundreds of KB each.
         $granted = DB::affectingStatement("
             INSERT INTO book_user (user_id, book_id, created_at, updated_at)
-            SELECT DISTINCT dbp.user_id, dbpi.book_id, ?, ?
+            SELECT DISTINCT dbp.user_id, dbpi.book_id, ?::timestamp, ?::timestamp
             FROM digital_book_purchases dbp
             INNER JOIN digital_book_purchase_items dbpi
                 ON dbpi.digital_book_purchase_id = dbp.id
@@ -30,7 +30,7 @@ class GrantReleasedPreorders extends Command
               AND (
                   books.is_preorder = false
                   OR books.release_at IS NULL
-                  OR books.release_at <= ?
+                  OR books.release_at <= ?::timestamp
               )
             ON CONFLICT DO NOTHING
         ", [$now, $now, $now]);
@@ -50,7 +50,7 @@ class GrantReleasedPreorders extends Command
                   WHERE dbp2.status = 'preordered'
                     AND books.is_preorder = true
                     AND books.release_at IS NOT NULL
-                    AND books.release_at > ?
+                    AND books.release_at > ?::timestamp
               )
         ", [$now]);
 
