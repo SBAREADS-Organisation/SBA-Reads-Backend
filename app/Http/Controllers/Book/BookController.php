@@ -163,8 +163,14 @@ class BookController extends Controller
      */
     public function index(Request $request)
     {
+        $safeColumns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+            ->reject(fn ($c) => $c === 'text_content')
+            ->map(fn ($c) => 'books.' . $c)
+            ->all();
+
         // Filter for visible books (public visibility and any status except rejected)
         $query = Book::query()
+            ->select($safeColumns)
             ->where('visibility', 'public')
             ->where('archived', false)
             ->whereIn('status', ['pending', 'approved', 'published'])
@@ -250,7 +256,13 @@ class BookController extends Controller
             ], 'No preferences set');
         }
 
+        $safeColumns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+            ->reject(fn ($c) => $c === 'text_content')
+            ->map(fn ($c) => 'books.' . $c)
+            ->all();
+
         $query = Book::query()
+            ->select($safeColumns)
             ->where('visibility', 'public')
             ->where('archived', false)
             ->whereIn('status', ['pending', 'approved', 'published'])
@@ -291,11 +303,15 @@ class BookController extends Controller
                 return $query->orderBy('created_at', 'desc');
 
             case 'trending':
+                $trendingColumns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+                    ->reject(fn ($c) => $c === 'text_content')
+                    ->map(fn ($c) => 'books.' . $c)
+                    ->all();
                 return $query
                     ->leftJoin('book_meta_data_analytics as a', 'books.id', '=', 'a.book_id')
                     ->orderByRaw('COALESCE(a.views, 0) DESC')
                     ->orderBy('books.id', 'asc')
-                    ->select('books.*');
+                    ->select($trendingColumns);
 
             case 'top_picks':
                 return $query->whereIn('id', function ($subquery) {
@@ -1812,7 +1828,13 @@ class BookController extends Controller
     public function topRanking(Request $request): JsonResponse
     {
         try {
-            $books = Book::where('visibility', 'public')
+            $safeColumns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+                ->reject(fn ($c) => $c === 'text_content')
+                ->map(fn ($c) => 'books.' . $c)
+                ->all();
+
+            $books = Book::select($safeColumns)
+                ->where('visibility', 'public')
                 ->where('archived', false)
                 ->whereIn('status', ['pending', 'approved', 'published'])
                 ->when(
@@ -1951,8 +1973,13 @@ class BookController extends Controller
                             ->when($sinceStr, fn ($q) => $q->where('t.created_at', '>=', $sinceStr));
                     });
                 })
-                ->select('books.*')
-                ->selectRaw("({$salesCountSql}) as sales_count")
+                ->select(array_merge(
+                    collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+                        ->reject(fn ($c) => $c === 'text_content')
+                        ->map(fn ($c) => 'books.' . $c)
+                        ->all(),
+                    [\Illuminate\Support\Facades\DB::raw("({$salesCountSql}) as sales_count")]
+                ))
                 ->orderByRaw("({$salesCountSql}) DESC")
                 ->with(['categories:id,name', 'authors:id,name',
                     'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
@@ -1971,7 +1998,13 @@ class BookController extends Controller
     public function featured(Request $request): JsonResponse
     {
         try {
-            $books = Book::where('is_featured', true)
+            $safeColumns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('books'))
+                ->reject(fn ($c) => $c === 'text_content')
+                ->map(fn ($c) => 'books.' . $c)
+                ->all();
+
+            $books = Book::select($safeColumns)
+                ->where('is_featured', true)
                 ->when(
                     strtolower($request->header('x-platform', '')) === 'ios',
                     fn ($q) => $q->where('ios_available', true)
