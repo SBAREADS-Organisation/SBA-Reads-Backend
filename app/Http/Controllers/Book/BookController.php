@@ -207,8 +207,7 @@ class BookController extends Controller
         $query->orderBy($sortBy, $sortDir);
 
         $books = $query->with([
-            'categories:id,name',
-            'authors:id,name',
+            'categories',
             'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
         ])->paginate($request->get('items_per_page', 10));
 
@@ -278,8 +277,7 @@ class BookController extends Controller
             ->orderBy('books.created_at', 'desc');
 
         $books = $query->with([
-            'categories:id,name',
-            'authors:id,name',
+            'categories',
             'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
         ])->paginate($request->get('items_per_page', 10));
 
@@ -648,8 +646,8 @@ class BookController extends Controller
         $query->orderBy($sortBy, $sortDir);
 
         $books = $query->with([
-            'authors:id,name,email,profile_picture,bio',
-            'categories:id,name',
+            'authors',
+            'categories',
             'analytics',
         ])->paginate($request->input('per_page', 20));
 
@@ -960,8 +958,7 @@ class BookController extends Controller
                     $q->where('user_id', $user->id);
                 })
                 ->with([
-                    'authors:id,name',
-                    'categories:id,name',
+                    'categories',
                     'analytics:id,book_id,views,downloads,likes',
                     'readingProgress' => fn($q) => $q->where('user_id', $user->id),
                 ]);
@@ -1844,7 +1841,7 @@ class BookController extends Controller
                 ->whereNotNull('ranking')
                 ->orderBy('ranking')
                 ->limit(50)
-                ->with(['categories:id,name', 'authors:id,name',
+                ->with(['categories',
                     'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
                 ])->get();
 
@@ -1981,7 +1978,7 @@ class BookController extends Controller
                     [\Illuminate\Support\Facades\DB::raw("({$salesCountSql}) as sales_count")]
                 ))
                 ->orderByRaw("({$salesCountSql}) DESC")
-                ->with(['categories:id,name', 'authors:id,name',
+                ->with(['categories',
                     'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
                 ])->limit(50)
                 ->get();
@@ -2451,8 +2448,7 @@ class BookController extends Controller
                 ->orderByDesc('bu.created_at')
                 ->select('books.*')
                 ->with([
-                    'authors:id,name',
-                    'categories:id,name',
+                    'categories',
                     'analytics:id,book_id,views,downloads,likes',
                     'readingProgress' => fn($q) => $q->where('user_id', $user->id),
                     'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),

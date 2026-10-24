@@ -82,7 +82,7 @@ class DashboardController extends Controller
             $recent_signups = User::orderBy('created_at', 'desc')->take(5)->get();
             $recent_transactions = Transaction::with('user:id,name,email')
                 ->orderBy('created_at', 'desc')->take(5)->get();
-            $recent_book_uploads = Book::with('authors:id,name')
+            $recent_book_uploads = Book::with('authors')
                 ->orderBy('created_at', 'desc')->take(5)->get();
 
             // Weekly trends
