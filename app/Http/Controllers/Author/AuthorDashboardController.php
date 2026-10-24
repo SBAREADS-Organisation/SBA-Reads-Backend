@@ -208,13 +208,15 @@ class AuthorDashboardController extends Controller
             $average_reading_progress = ReadingProgress::whereIn('book_id', $authorBookIds)
                 ->avg('progress') ?? 0;
 
-            $total_reading_time = ReadingProgress::whereIn('book_id', $authorBookIds)
+            // Sum session durations on the DB side to avoid loading all rows into PHP memory.
+            // session_duration is a JSON array of numbers; sum its elements with a lateral subquery.
+            $total_reading_time = (float) DB::table('reading_progress')
+                ->whereIn('book_id', $authorBookIds)
                 ->whereNotNull('session_duration')
-                ->get()
-                ->sum(function ($progress) {
-                    $sessionData = json_decode($progress->session_duration, true);
-                    return is_array($sessionData) ? array_sum($sessionData) : 0;
-                });
+                ->sum(DB::raw("(
+                    SELECT COALESCE(SUM(val::numeric), 0)
+                    FROM jsonb_array_elements_text(session_duration::jsonb) AS t(val)
+                )"));
 
             return [
                 'active_readers' => $active_readers,
