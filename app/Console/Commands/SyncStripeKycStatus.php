@@ -40,7 +40,7 @@ class SyncStripeKycStatus extends Command
         $this->newLine();
 
         $usersQuery->chunkById(50, function ($users) use ($dryRun, &$updated, &$errors, &$emailed) {
-        foreach ($users as $user) {
+            foreach ($users as $user) {
             try {
                 $account        = Account::retrieve($user->kyc_account_id);
                 $individual     = $account->individual ?? null;
@@ -120,7 +120,7 @@ class SyncStripeKycStatus extends Command
                 ]);
                 $errors++;
             }
-        }
+            }
         }); // end chunkById
 
         $this->newLine();
