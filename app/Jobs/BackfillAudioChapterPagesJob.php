@@ -28,7 +28,10 @@ class BackfillAudioChapterPagesJob implements ShouldQueue
 
     public function handle(): void
     {
-        $book = $this->book;
+        // Re-fetch with text_content — SerializesModels restores the model via the
+        // standard query (which applies the without_text_content global scope), so
+        // we need an explicit opt-out to read the stored text.
+        $book = Book::withoutGlobalScope('without_text_content')->findOrFail($this->book->id);
 
         if (empty($book->text_content) || empty($book->audio_segments)) {
             return;

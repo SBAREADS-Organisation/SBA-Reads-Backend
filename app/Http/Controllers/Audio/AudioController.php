@@ -271,7 +271,7 @@ class AudioController extends Controller
      */
     public function backfillChapters(int $bookId): \Illuminate\Http\JsonResponse
     {
-        $book = Book::findOrFail($bookId);
+        $book = Book::withoutGlobalScope('without_text_content')->findOrFail($bookId);
 
         if (empty($book->text_content)) {
             return $this->error('No text content stored for this book. Regenerate audio to populate chapter data.', 422);
