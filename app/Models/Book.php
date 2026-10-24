@@ -217,7 +217,7 @@ class Book extends Model
                     \Illuminate\Support\Facades\Schema::getColumnListing('books'),
                     ['text_content']
                 ));
-                $builder->select($safe);
+                $builder->select(array_map(fn ($col) => 'books.' . $col, $safe));
             }
         });
 
