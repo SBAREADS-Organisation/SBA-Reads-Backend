@@ -147,14 +147,12 @@ class DashboardController extends Controller
         $total_reading_sessions = ReadingProgress::count();
         $average_reading_progress = ReadingProgress::avg('progress') ?? 0;
 
-        $total_reading_time = ReadingProgress::whereNotNull('session_duration')
-            ->get()
-            ->sum(function ($progress) {
-                $sessionData = is_array($progress->session_duration)
-                    ? $progress->session_duration
-                    : json_decode($progress->session_duration, true);
-                return is_array($sessionData) ? array_sum($sessionData) : 0;
-            });
+        $total_reading_time = (float) DB::table('reading_progress')
+            ->whereNotNull('session_duration')
+            ->sum(DB::raw("(
+                SELECT COALESCE(SUM(val::numeric), 0)
+                FROM jsonb_array_elements_text(session_duration::jsonb) AS t(val)
+            )"));
 
         return [
             'active_readers'              => $active_readers,

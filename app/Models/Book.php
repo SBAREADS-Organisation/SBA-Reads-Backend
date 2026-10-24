@@ -177,6 +177,12 @@ class Book extends Model
         return $this->hasMany(BookReviews::class);
     }
 
+    // Use this for listings — caps at 5 so eager loads never pull thousands of rows.
+    public function reviewsPreview()
+    {
+        return $this->hasMany(BookReviews::class)->latest()->limit(5);
+    }
+
     // public function pricing()
     // {
     //     return $this->belongsTo(BookPricing::class);

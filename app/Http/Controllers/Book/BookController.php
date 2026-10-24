@@ -1821,6 +1821,7 @@ class BookController extends Controller
                 )
                 ->whereNotNull('ranking')
                 ->orderBy('ranking')
+                ->limit(50)
                 ->with(['categories:id,name', 'authors:id,name',
                     'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
                 ])->get();
@@ -1977,6 +1978,7 @@ class BookController extends Controller
                 )
                 ->orderBy('ranking')
                 ->orderByDesc('updated_at')
+                ->limit(50)
                 ->get();
 
             return $this->success(BookResource::collection($books), 'Featured books retrieved successfully.');
@@ -2356,6 +2358,15 @@ class BookController extends Controller
                     $q->where('user_id', $user->id)->whereIn('status', ['paid', 'completed'])
                 )->pluck('book_id')->all();
 
+                // Released preorders: preordered purchases where the book's release_at has passed
+                $releasedPreorderIds = DigitalBookPurchaseItem::whereHas('digitalBookPurchase', fn ($q) =>
+                    $q->where('user_id', $user->id)->where('status', 'preordered')
+                )->whereHas('book', fn ($q) =>
+                    $q->where(function ($bq) {
+                        $bq->whereNull('release_at')->orWhere('release_at', '<=', now());
+                    })
+                )->pluck('book_id')->all();
+
                 // PostgreSQL JSON extraction: prefer meta_data->>'book_id'; fall back to
                 // purpose_id so transactions created before meta_data was standardised are
                 // still healed (both fields hold the same book_id in modern records).
@@ -2383,7 +2394,7 @@ class BookController extends Controller
                     ->all();
 
                 $missingIds = array_values(array_diff(
-                    array_unique(array_merge($paidDigitalIds, $paidIapIds, $paidAudioIds)),
+                    array_unique(array_merge($paidDigitalIds, $releasedPreorderIds, $paidIapIds, $paidAudioIds)),
                     $ownedBookIds
                 ));
 
@@ -2394,7 +2405,7 @@ class BookController extends Controller
             } catch (\Throwable $healEx) {
                 Log::error("myPurchasedBooks heal failed for user {$user->id}: " . $healEx->getMessage());
             }
-            $perPage = $request->input('items_per_page', 10000);
+            $perPage = (int) $request->input('items_per_page', 500);
             // $search = $request->input('search');
             // $sortBy = $request->input('sort_by', 'purchase_date');
             // $sortDir = strtolower($request->input('sort_dir', 'desc')) === 'asc' ? 'asc' : 'desc';
@@ -2411,7 +2422,7 @@ class BookController extends Controller
                     'categories:id,name',
                     'analytics:id,book_id,views,downloads,likes',
                     'readingProgress' => fn($q) => $q->where('user_id', $user->id),
-                    'reviews.user:id,name,email,profile_picture',
+                    'reviews' => fn ($q) => $q->select('id', 'book_id', 'rating', 'comment', 'user_id', 'created_at')->latest()->limit(5)->with('user:id,name,profile_picture'),
                     'bookmarkedBy:id',
                     'purchasers:id',
                 ]);

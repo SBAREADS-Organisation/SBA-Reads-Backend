@@ -24,7 +24,7 @@ class UsdPayoutRequestController extends Controller
         $requests = PayoutRequest::with('user:id,name,email,bank_name,paystack_recipient_code,kyc_account_id')
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->latest()
-            ->get();
+            ->paginate(100);
 
         $summary = [
             'total_pending_usd'    => round(PayoutRequest::where('status', 'pending')->sum('amount'), 2),

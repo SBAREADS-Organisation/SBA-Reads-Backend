@@ -13,15 +13,18 @@ class ExpireSubscriptions extends Command
 
     public function handle()
     {
-        $subscriptions = UserSubscription::where('status', 'active')
+        $count = 0;
+
+        UserSubscription::where('status', 'active')
             ->where('ends_at', '<', now())
-            ->get();
+            ->chunkById(200, function ($subscriptions) use (&$count) {
+                foreach ($subscriptions as $subscription) {
+                    $subscription->update(['status' => 'expired']);
+                    $subscription->user->notify(new \App\Notifications\Subscriptions\SubscriptionExpiredNotification($subscription));
+                    $count++;
+                }
+            });
 
-        foreach ($subscriptions as $subscription) {
-            $subscription->update(['status' => 'expired']);
-            $subscription->user->notify(new \App\Notifications\Subscriptions\SubscriptionExpiredNotification($subscription));
-        }
-
-        $this->info('Expired subscriptions processed.');
+        $this->info("Expired {$count} subscription(s).");
     }
 }

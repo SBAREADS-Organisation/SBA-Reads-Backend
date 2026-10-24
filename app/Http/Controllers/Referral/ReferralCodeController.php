@@ -17,7 +17,7 @@ class ReferralCodeController extends Controller
     {
         $codes = ReferralCode::withCount('signups')
             ->orderByDesc('created_at')
-            ->get()
+            ->paginate(100)
             ->map(fn ($c) => [
                 'id'         => $c->id,
                 'code'       => $c->code,
@@ -71,7 +71,7 @@ class ReferralCodeController extends Controller
         $signups = $referral->signups()
             ->select('id', 'email', 'account_type', 'created_at')
             ->orderByDesc('created_at')
-            ->get();
+            ->paginate(100);
 
         return $this->success([
             'id'         => $referral->id,

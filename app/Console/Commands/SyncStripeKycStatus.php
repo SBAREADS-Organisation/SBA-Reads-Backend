@@ -20,24 +20,26 @@ class SyncStripeKycStatus extends Command
     {
         Stripe::setApiKey(config('services.stripe.secret'));
 
-        $users = User::whereNotNull('kyc_account_id')
-            ->where('kyc_provider', 'stripe')
-            ->where('kyc_status', '!=', 'verified')
-            ->get();
-
-        if ($users->isEmpty()) {
-            $this->info('No unverified Stripe authors found.');
-            return 0;
-        }
-
         $dryRun   = $this->option('dry-run');
         $updated  = 0;
         $errors   = 0;
         $emailed  = 0;
 
-        $this->info("Found {$users->count()} unverified Stripe author(s). " . ($dryRun ? '[DRY RUN]' : ''));
+        $usersQuery = User::whereNotNull('kyc_account_id')
+            ->where('kyc_provider', 'stripe')
+            ->where('kyc_status', '!=', 'verified');
+
+        $total = $usersQuery->count();
+
+        if ($total === 0) {
+            $this->info('No unverified Stripe authors found.');
+            return 0;
+        }
+
+        $this->info("Found {$total} unverified Stripe author(s). " . ($dryRun ? '[DRY RUN]' : ''));
         $this->newLine();
 
+        $usersQuery->chunkById(50, function ($users) use ($dryRun, &$updated, &$errors, &$emailed) {
         foreach ($users as $user) {
             try {
                 $account        = Account::retrieve($user->kyc_account_id);
@@ -119,6 +121,7 @@ class SyncStripeKycStatus extends Command
                 $errors++;
             }
         }
+        }); // end chunkById
 
         $this->newLine();
         $label = $dryRun ? 'Would update' : 'Updated';

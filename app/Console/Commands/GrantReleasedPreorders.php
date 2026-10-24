@@ -16,51 +16,51 @@ class GrantReleasedPreorders extends Command
     {
         $now = now();
 
-        // Find all preordered purchases where the book is now available
-        $purchases = DigitalBookPurchase::where('status', 'preordered')
-            ->with(['items.book'])
-            ->get();
-
         $granted = 0;
 
-        foreach ($purchases as $purchase) {
-            $allGranted = true;
+        // Stream through preordered purchases in chunks to avoid loading all at once.
+        DigitalBookPurchase::where('status', 'preordered')
+            ->with(['items.book'])
+            ->chunkById(200, function ($purchases) use ($now, &$granted) {
+                foreach ($purchases as $purchase) {
+                    $allGranted = true;
 
-            foreach ($purchase->items as $item) {
-                $book = $item->book;
+                    foreach ($purchase->items as $item) {
+                        $book = $item->book;
 
-                if (! $book) {
-                    continue;
+                        if (! $book) {
+                            continue;
+                        }
+
+                        // Still unreleased — skip this purchase
+                        if ($book->is_preorder && $book->release_at && $book->release_at->isFuture()) {
+                            $allGranted = false;
+                            continue;
+                        }
+
+                        // Book is released — grant access
+                        $inserted = DB::table('book_user')->insertOrIgnore([
+                            'user_id'    => $purchase->user_id,
+                            'book_id'    => $item->book_id,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ]);
+
+                        if ($inserted) {
+                            $granted++;
+                            Log::info('GrantReleasedPreorders: granted access', [
+                                'user_id'    => $purchase->user_id,
+                                'book_id'    => $item->book_id,
+                                'purchase_id'=> $purchase->id,
+                            ]);
+                        }
+                    }
+
+                    if ($allGranted) {
+                        $purchase->update(['status' => 'paid']);
+                    }
                 }
-
-                // Still unreleased — skip this purchase
-                if ($book->is_preorder && $book->release_at && $book->release_at->isFuture()) {
-                    $allGranted = false;
-                    continue;
-                }
-
-                // Book is released — grant access
-                $inserted = DB::table('book_user')->insertOrIgnore([
-                    'user_id'    => $purchase->user_id,
-                    'book_id'    => $item->book_id,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ]);
-
-                if ($inserted) {
-                    $granted++;
-                    Log::info('GrantReleasedPreorders: granted access', [
-                        'user_id'    => $purchase->user_id,
-                        'book_id'    => $item->book_id,
-                        'purchase_id'=> $purchase->id,
-                    ]);
-                }
-            }
-
-            if ($allGranted) {
-                $purchase->update(['status' => 'paid']);
-            }
-        }
+            });
 
         $this->info("Granted access for {$granted} preordered book(s).");
 

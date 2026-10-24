@@ -25,17 +25,19 @@ class CleanupMediaUploads extends Command
      */
     public function handle()
     {
-        $expired = \App\Models\MediaUpload::onlyTrashed()->where('deleted_at', '<=', now()->subDays(7))->get();
-
-        foreach ($expired as $media) {
-            try {
-                \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::destroy($media->public_id);
-                $media->forceDelete();
-                $this->info("Deleted: {$media->public_id}");
-            } catch (\Exception $e) {
-                $this->error("Failed to delete {$media->public_id}: ".$e->getMessage());
-            }
-        }
+        \App\Models\MediaUpload::onlyTrashed()
+            ->where('deleted_at', '<=', now()->subDays(7))
+            ->chunkById(200, function ($chunk) {
+                foreach ($chunk as $media) {
+                    try {
+                        \CloudinaryLabs\CloudinaryLaravel\Facades\Cloudinary::destroy($media->public_id);
+                        $media->forceDelete();
+                        $this->info("Deleted: {$media->public_id}");
+                    } catch (\Exception $e) {
+                        $this->error("Failed to delete {$media->public_id}: ".$e->getMessage());
+                    }
+                }
+            });
 
         return Command::SUCCESS;
     }

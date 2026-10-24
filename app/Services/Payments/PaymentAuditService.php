@@ -66,7 +66,7 @@ class PaymentAuditService
     {
         return PaymentAudit::whereBetween('created_at', [$startDate, $endDate])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(200);
     }
 
     /**

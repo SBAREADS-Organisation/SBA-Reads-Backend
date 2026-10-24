@@ -51,19 +51,20 @@ class HealPaystackPending extends Command
             $query->where('user_id', $userId);
         }
 
-        $pending = $query->get();
+        $total = $query->count();
 
-        if ($pending->isEmpty()) {
+        if ($total === 0) {
             $this->info('No pending Paystack transactions found.');
             return self::SUCCESS;
         }
 
-        $this->info("Found {$pending->count()} pending Paystack transaction(s). Verifying with Paystack…");
+        $this->info("Found {$total} pending Paystack transaction(s). Verifying with Paystack…");
 
         $fulfilled = 0;
         $skipped   = 0;
         $failed    = 0;
 
+        $query->chunkById(100, function ($pending) use ($dryRun, &$fulfilled, &$skipped, &$failed) {
         foreach ($pending as $txn) {
             $meta = is_string($txn->meta_data)
                 ? json_decode($txn->meta_data, true)
@@ -111,6 +112,7 @@ class HealPaystackPending extends Command
                 $failed++;
             }
         }
+        }); // end chunkById
 
         $this->newLine();
         $this->info("Done — fulfilled: {$fulfilled} | skipped: {$skipped} | errors: {$failed}");
