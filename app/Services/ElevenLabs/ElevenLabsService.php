@@ -306,6 +306,14 @@ class ElevenLabsService
             throw new \RuntimeException("ELEVENLABS_RATE_LIMITED: {$context}. Back off and retry.");
         }
 
+        if ($status === 400) {
+            $decoded     = json_decode($body, true) ?? [];
+            $errorStatus = $decoded['detail']['status'] ?? $decoded['detail'] ?? '';
+            if (str_contains((string) $errorStatus, 'voice_limit') || str_contains($body, 'voice_limit_reached')) {
+                throw new \RuntimeException("ELEVENLABS_VOICE_LIMIT: {$context}. Delete old voices in your ElevenLabs dashboard to free up slots.");
+            }
+        }
+
         if ($status === 401 || $status === 403) {
             // ElevenLabs sends 401 for both auth failure and quota exhaustion.
             // Check body in multiple ways — their response format has varied across API versions.

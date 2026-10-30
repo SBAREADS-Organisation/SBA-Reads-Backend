@@ -148,6 +148,21 @@ class VoiceCloningJob implements ShouldQueue
                 return;
             }
 
+            // Voice slot limit reached: fail immediately — retrying won't help until admin deletes old voices
+            if (str_starts_with($e->getMessage(), 'ELEVENLABS_VOICE_LIMIT')) {
+                User::where('id', $this->userId)
+                    ->where('voice_status', '!=', 'ready')
+                    ->update(['voice_status' => 'failed']);
+                $notifications->send(
+                    $user,
+                    'Voice cloning temporarily unavailable',
+                    'Our voice service is at capacity. We\'re working to fix this — please try again in a few hours.',
+                    ['in-app', 'push']
+                );
+                Log::critical("VoiceCloningJob: ElevenLabs voice limit reached. Admin must delete old voices at elevenlabs.io/voice-lab.");
+                return;
+            }
+
             User::where('id', $this->userId)
                 ->where('voice_status', '!=', 'ready')
                 ->update(['voice_status' => 'failed']);
