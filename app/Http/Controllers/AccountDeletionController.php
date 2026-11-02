@@ -27,9 +27,10 @@ class AccountDeletionController extends Controller
             return $this->error('Please enter a valid email address.', 400, $validator->errors());
         }
 
-        $user = User::where('email', $request->email)->first();
+        $accounts = User::where('email', $request->email)->orderBy('id')->get();
+        $user = $accounts->first();
 
-        if ($user && ! $this->isStaff($user)) {
+        if ($user && ! $accounts->contains(fn (User $account) => $this->isStaff($account))) {
             $code = (string) random_int(100000, 999999);
             $expiresAt = now()->addMinutes(self::CODE_MINUTES);
 
@@ -84,7 +85,10 @@ class AccountDeletionController extends Controller
 
         Cache::forget($key);
 
-        $user = User::where('email', $request->email)->first();
+        // One email can hold a reader and an author account. Record the author one when both
+        // exist, so staff handle it by hand rather than deleting the reader one automatically.
+        $accounts = User::where('email', $request->email)->orderBy('id')->get();
+        $user = $accounts->first(fn (User $account) => $account->account_type !== 'reader') ?? $accounts->first();
         if (! $user) {
             return $this->error('Invalid or expired code', 400);
         }
@@ -101,6 +105,7 @@ class AccountDeletionController extends Controller
             'email' => $user->email,
             'account_type' => $user->account_type,
             'reason' => $request->input('reason'),
+            'admin_notes' => $accounts->count() > 1 ? 'This email has more than one account: ' . $accounts->pluck('account_type')->join(', ') . '.' : null,
         ]);
 
         $this->sendMail($user->email, new AccountDeletionNotice('We received your account deletion request', [

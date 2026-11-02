@@ -52,7 +52,11 @@ class AuthController extends Controller
                 $userQuery->where('account_type', $request->account_type);
             }
 
-            $user = $userQuery->first();
+            // One email can hold a reader and an author account with different passwords.
+            // Clients that don't send account_type sign in to the account the password fits.
+            $accounts = $userQuery->orderBy('id')->get();
+            $user = $accounts->first(fn (User $account) => $account->password && Hash::check($request->password, $account->password))
+                ?? $accounts->first();
 
             if (! $user) {
                 return $this->error('Invalid credentials', 400);

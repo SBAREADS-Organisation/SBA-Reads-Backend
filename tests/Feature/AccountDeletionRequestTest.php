@@ -180,6 +180,24 @@ class AccountDeletionRequestTest extends TestCase
     }
 
     #[Test]
+    public function an_email_with_reader_and_author_accounts_is_never_deleted_automatically(): void
+    {
+        $reader = $this->reader();
+        $author = User::factory()->create(['account_type' => 'author', 'email' => $reader->email]);
+
+        $this->confirm($reader, $this->codeFor($reader))->assertStatus(201);
+        $request = AccountDeletionRequest::first();
+
+        $this->assertSame($author->id, $request->user_id);
+        $this->assertStringContainsString('more than one account', $request->admin_notes);
+
+        Sanctum::actingAs($this->admin());
+        $this->postJson("/api/account-deletion-requests/{$request->id}/complete")->assertStatus(409);
+        $this->assertDatabaseHas('users', ['id' => $reader->id]);
+        $this->assertDatabaseHas('users', ['id' => $author->id]);
+    }
+
+    #[Test]
     public function only_staff_can_see_or_process_requests(): void
     {
         $user = $this->reader();
