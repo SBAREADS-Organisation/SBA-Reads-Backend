@@ -301,6 +301,26 @@ Route::middleware(['auth:sanctum'])->group(function () {
     });
 });
 
+// Account deletion requests: public so people who signed up with Google or Apple,
+// or who can't sign in, can still use them. Required by the app stores.
+Route::prefix('account-deletion')->group(function () {
+    Route::post('request', [\App\Http\Controllers\AccountDeletionController::class, 'sendCode'])->middleware('throttle:3,5');
+    Route::post('confirm', [\App\Http\Controllers\AccountDeletionController::class, 'confirm'])->middleware('throttle:5,5');
+});
+Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('account-deletion-requests')->group(function () {
+    Route::get('/', [\App\Http\Controllers\AccountDeletionController::class, 'index']);
+    Route::post('/{id}/complete', [\App\Http\Controllers\AccountDeletionController::class, 'complete'])->where('id', '[0-9]+');
+    Route::patch('/{id}', [\App\Http\Controllers\AccountDeletionController::class, 'update'])->where('id', '[0-9]+');
+});
+
+// Listing, publishing and ISBN applications
+Route::post('applications', [\App\Http\Controllers\ApplicationController::class, 'store'])->middleware('throttle:5,60');
+Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('applications')->group(function () {
+    Route::get('/', [\App\Http\Controllers\ApplicationController::class, 'index']);
+    Route::get('/{id}', [\App\Http\Controllers\ApplicationController::class, 'show'])->where('id', '[0-9]+');
+    Route::patch('/{id}', [\App\Http\Controllers\ApplicationController::class, 'update'])->where('id', '[0-9]+');
+});
+
 Route::get('books', [BookController::class, 'index']);
 Route::get('books/featured', [BookController::class, 'featured']);
 Route::get('books/top-ranking', [BookController::class, 'topRanking']);

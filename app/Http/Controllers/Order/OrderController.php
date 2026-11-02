@@ -208,7 +208,7 @@ class OrderController extends Controller
     {
         try {
             // dd($request->user()->orders());
-            $order = $request->user()->orders()->with(['items.book', 'transaction', 'deliveryAddress'])->find($id);
+            $order = $request->user()->orders()->with(['items.book' => fn ($q) => $q->without(['author', 'authors']), 'transaction', 'deliveryAddress'])->find($id);
             if (! $order) {
                 return $this->error('Not Found', 404);
             }

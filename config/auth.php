@@ -13,6 +13,15 @@ return [
     |
     */
 
+    /*
+    | Until every installed app sends the email and reset token, this can be
+    | switched on to keep older versions working. It is weaker: during its short
+    | window, a verified reset can be completed knowing only the account's email.
+    */
+    'password_reset' => [
+        'allow_legacy_flow' => env('PASSWORD_RESET_ALLOW_LEGACY', false),
+    ],
+
     'defaults' => [
         'guard' => env('AUTH_GUARD', 'api'),
         'passwords' => env('AUTH_PASSWORD_BROKER', 'users'),

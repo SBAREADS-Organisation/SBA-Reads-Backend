@@ -276,7 +276,9 @@ class OrderService
     public function trackOrder($user, $tracking_number)
     {
         try {
-            return Order::where('tracking_number', $tracking_number)->with('items.book')->firstOrFail();
+            return Order::where('tracking_number', $tracking_number)
+                ->with(['items.book' => fn ($q) => $q->without(['author', 'authors'])])
+                ->firstOrFail();
         } catch (\Exception $e) {
             throw new \Exception('An error occurred while tracking the order: ' . $e->getMessage(), 0, $e);
             // throw $e;

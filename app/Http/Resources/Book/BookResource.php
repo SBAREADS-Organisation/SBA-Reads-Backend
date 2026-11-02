@@ -2,8 +2,11 @@
 
 namespace App\Http\Resources\Book;
 
+use App\Http\Resources\User\PublicAuthorResource;
 use App\Http\Resources\User\UserResource;
 use App\Models\AudioBookPurchase;
+use App\Models\User;
+use App\Services\Book\BookPurchaseService;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class BookResource extends JsonResource
@@ -52,9 +55,9 @@ class BookResource extends JsonResource
             'visibility' => $this->visibility,
             'status' => $this->status,
             'approved_at' => $this->approved_at,
-            'approved_by' => $this->approved_by,
-            'review_notes' => $this->review_notes,
-            'rejection_note' => $this->rejection_note,
+            'approved_by' => $this->canManage() ? $this->approved_by : null,
+            'review_notes' => $this->canManage() ? $this->review_notes : null,
+            'rejection_note' => $this->canManage() ? $this->rejection_note : null,
             'expired_at' => $this->expired_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
@@ -65,7 +68,7 @@ class BookResource extends JsonResource
             'stock_reserved' => $this->stock_reserved ?? 0,
             'stock_available' => max(0, ($this->stock_quantity ?? 0) - ($this->stock_reserved ?? 0)),
             'author_id' => $this->author_id,
-            'files' => $this->resolveFiles(),
+            'files' => $this->canReadBook() ? $this->resolveFiles() : [],
             'is_featured'    => (bool) ($this->is_featured ?? false),
             'ios_available'  => (bool) ($this->ios_available ?? false),
             'preorder_url'   => $this->preorder_url,
@@ -74,10 +77,10 @@ class BookResource extends JsonResource
             'ranking'        => $this->ranking,
             'audio_price'    => $this->audio_price ?? 10.00,
             'audio_status' => $this->audio_status ?? 'none',
-            'audio_url' => $this->audio_url,
+            'audio_url' => $this->canListen() ? $this->audio_url : null,
             'audio_sample_url' => $this->audio_sample_url,
             'audio_duration' => $this->audio_duration,
-            'audio_segments' => $this->audio_segments ?? [],
+            'audio_segments' => $this->canListen() ? ($this->audio_segments ?? []) : [],
             'audio_chapters' => $this->audio_chapters ?? [],
             'is_purchased'   => $this->resolveBookPurchased(),
             'audio_purchased' => $this->resolveAudioPurchased(),
@@ -98,30 +101,94 @@ class BookResource extends JsonResource
                     'user' => $review->user ? [
                         'id' => $review->user->id,
                         'name' => $review->user->name,
-                        'email' => $review->user->email,
                         'profile_picture' => $this->formatProfilePicture($review->user->profile_picture ?? []),
                     ] : null,
                 ];
             }),
             'average_rate' => $this->reviews->avg('rating') ?? 0,
-            'authors' => UserResource::collection($this->whenLoaded('authors')),
-            'author' => new UserResource($this->whenLoaded('author')),
-            'bookmarks' => $this->bookmarkedBy ? $this->bookmarkedBy->pluck('id')->toArray() : [],
-            'readers' => $this->purchasers ? $this->purchasers->pluck('id')->toArray() : [],
+            'authors' => $this->whenLoaded('authors', fn () => $this->authors->map(fn ($author) => $this->authorResource($author))),
+            'author' => $this->whenLoaded('author', fn () => $this->author ? $this->authorResource($this->author) : null),
+            'bookmarks' => $this->visibleUserIds('bookmarkedBy'),
+            'readers' => $this->visibleUserIds('purchasers'),
             'sales_count' => isset($this->resource->sales_count) ? (int) $this->resource->sales_count : null,
         ];
     }
 
+    // Public routes don't run the auth middleware, so read the token directly.
+    private function viewer(): ?User
+    {
+        return auth('sanctum')->user();
+    }
+
+    private function isStaff(): bool
+    {
+        $viewer = $this->viewer();
+
+        return $viewer && $viewer->hasAnyRole(['admin', 'superadmin', 'manager']);
+    }
+
+    private function isOwnAuthor(): bool
+    {
+        $viewerId = $this->viewer()?->id;
+        if (! $viewerId) return false;
+
+        return $this->author_id === $viewerId || $this->authors->contains('id', $viewerId);
+    }
+
+    private function canManage(): bool
+    {
+        return $this->isStaff() || $this->isOwnAuthor();
+    }
+
+    private function canReadBook(): bool
+    {
+        return $this->canManage() || $this->resolveBookPurchased();
+    }
+
+    private function canListen(): bool
+    {
+        return $this->isStaff() || $this->resolveAudioPurchased();
+    }
+
+    private function authorResource(User $author): JsonResource
+    {
+        return $this->isStaff() || $this->viewer()?->id === $author->id
+            ? new UserResource($author)
+            : new PublicAuthorResource($author);
+    }
+
+    /**
+     * Staff and the book's authors see every user ID. Anyone else only learns about
+     * themselves, which is all a client needs to check "have I bookmarked this?".
+     *
+     * @return array<int, int>
+     */
+    private function visibleUserIds(string $relation): array
+    {
+        $viewer = $this->viewer();
+        if (! $viewer) return [];
+
+        $ids = $this->{$relation}->pluck('id');
+
+        return $this->canManage()
+            ? $ids->toArray()
+            : $ids->filter(fn ($id) => $id === $viewer->id)->values()->toArray();
+    }
+
     private function resolveBookPurchased(): bool
     {
-        $userId = auth()->id();
-        if (! $userId) return false;
+        $viewer = $this->viewer();
+        if (! $viewer) return false;
 
         try {
-            return \Illuminate\Support\Facades\DB::table('book_user')
-                ->where('user_id', $userId)
-                ->where('book_id', $this->id)
-                ->exists();
+            // Cached for the request so listing many books doesn't repeat the lookup per book.
+            $request = request();
+            $cacheKey = 'owned_book_ids_' . $viewer->id;
+            if (! $request->attributes->has($cacheKey)) {
+                $request->attributes->set($cacheKey, app(BookPurchaseService::class)->ownedBookIds($viewer));
+            }
+
+            return in_array((int) $this->id, $request->attributes->get($cacheKey), true);
         } catch (\Throwable) {
             return false;
         }
@@ -132,7 +199,7 @@ class BookResource extends JsonResource
 
     private function resolveAudioPurchased(): bool
     {
-        $userId = auth()->id();
+        $userId = $this->viewer()?->id;
         if (!$userId) return false;
 
         try {
