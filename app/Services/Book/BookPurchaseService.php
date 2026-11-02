@@ -48,6 +48,20 @@ class BookPurchaseService
      * correctly returns true. Use this instead of $user->purchasedBooks()
      * wherever ownership must be account-type-agnostic.
      */
+    /**
+     * IDs of every book the user owns, including through linked accounts.
+     *
+     * @return array<int, int>
+     */
+    public function ownedBookIds(User $user): array
+    {
+        return DB::table('book_user')
+            ->whereIn('user_id', $this->resolveAllLinkedAccountIds($user))
+            ->pluck('book_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function userOwnsBook(User $user, int $bookId): bool
     {
         $allIds = $this->resolveAllLinkedAccountIds($user);

@@ -507,7 +507,7 @@ class BookController extends Controller
             $book = Book::with([
                 'authors',
                 'categories',
-                'reviews.user:id,name,email,profile_picture',
+                'reviews.user:id,name,profile_picture',
                 'analytics',
                 'bookmarkedBy:id',
                 'purchasers:id',
@@ -1598,12 +1598,14 @@ class BookController extends Controller
                 return $this->error('You already own the following book(s): ' . $conflictingTitles, 409);
             }
 
-            $books       = Book::whereIn('id', $bookIds)->get();
-            $totalAmount = $books->sum('actual_price');
+            $books = Book::whereIn('id', $bookIds)->get();
 
-            if ($totalAmount <= 0) {
-                return $this->error('Total amount cannot be zero. Please check book prices.', 400);
+            // A missing price is unfinished data, not a free book.
+            if ($books->contains(fn (Book $book) => $book->actual_price === null)) {
+                return $this->error('One or more of these books is not available to buy yet.', 400);
             }
+
+            $totalAmount = $books->sum(fn (Book $book) => $book->sellingPrice());
 
             // Apply discount code if provided
             $discountCodeModel = null;
@@ -1752,16 +1754,17 @@ class BookController extends Controller
 
                 foreach ($bookIds as $bookId) {
                     $book              = $books->find($bookId);
-                    $authorPayoutUsd   = round($book->actual_price * $authorPayoutPercent, 2);
-                    $platformFeeUsd    = round($book->actual_price - $authorPayoutUsd, 2);
+                    $sellingPriceUsd   = $book->sellingPrice();
+                    $authorPayoutUsd   = round($sellingPriceUsd * $authorPayoutPercent, 2);
+                    $platformFeeUsd    = round($sellingPriceUsd - $authorPayoutUsd, 2);
 
                     DigitalBookPurchaseItem::create([
                         'digital_book_purchase_id' => $purchase->id,
                         'book_id'                  => $bookId,
                         'author_id'                => $book->author_id,
                         'quantity'                 => 1,
-                        'price_at_purchase'        => (float) $this->currencyConversionService->convert((float) $book->actual_price, 'USD', $currency),
-                        'price_at_purchase_usd'    => (float) $book->actual_price,
+                        'price_at_purchase'        => (float) $this->currencyConversionService->convert($sellingPriceUsd, 'USD', $currency),
+                        'price_at_purchase_usd'    => $sellingPriceUsd,
                         'author_payout_amount'     => (float) $this->currencyConversionService->convert($authorPayoutUsd, 'USD', $currency),
                         'author_payout_amount_usd' => $authorPayoutUsd,
                         'platform_fee_amount'      => (float) $this->currencyConversionService->convert($platformFeeUsd, 'USD', $currency),
@@ -1800,7 +1803,8 @@ class BookController extends Controller
                 if ($discountCodeModel) $discountCodeModel->increment('used_count');
 
                 return $this->success([
-                    'purchase'           => $purchase->load('items.book'),
+                    // Without the author relation: a buyer's response must not carry the author's account data.
+                    'purchase'           => $purchase->load(['items.book' => fn ($q) => $q->without(['author', 'authors'])]),
                     'transaction'        => $transaction,
                     'currency'           => $currency,
                     'provider'           => $provider,
@@ -2233,7 +2237,7 @@ class BookController extends Controller
         try {
             $book = Book::findOrFail($bookId);
 
-            $query = BookReviews::with('user:id,name,email,profile_picture')
+            $query = BookReviews::with('user:id,name,profile_picture')
                 ->where('book_id', $bookId);
 
             // Filter by rating

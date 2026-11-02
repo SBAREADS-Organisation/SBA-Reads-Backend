@@ -63,6 +63,14 @@ return [
         // 'cdn_subdomain' => env('CLOUDINARY_CDN_SUBDOMAIN', false),
     ],
 
+    'account_deletion' => [
+        'notify_email' => env('ACCOUNT_DELETION_NOTIFY_EMAIL', 'admin@sbareads.com'),
+    ],
+
+    'applications' => [
+        'notify_email' => env('APPLICATIONS_NOTIFY_EMAIL', 'admin@sbareads.com'),
+    ],
+
     'paystack' => [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'secret' => env('PAYSTACK_SECRET_KEY'),

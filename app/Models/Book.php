@@ -80,7 +80,21 @@ class Book extends Model
 
     protected $hidden = [
         'text_content',
+        'files',
+        'audio_url',
+        'audio_segments',
     ];
+
+    /**
+     * What a buyer pays: the discounted price when it is a real discount, otherwise the list price.
+     */
+    public function sellingPrice(): float
+    {
+        $actual = (float) $this->actual_price;
+        $discounted = (float) $this->discounted_price;
+
+        return $discounted > 0 && $discounted < $actual ? $discounted : $actual;
+    }
 
     /**
      * Get the attributes that should be casted

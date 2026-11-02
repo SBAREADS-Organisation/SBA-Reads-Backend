@@ -18,6 +18,10 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
+    private const RESET_OTP_MINUTES = 10;
+    private const RESET_OTP_MAX_ATTEMPTS = 5;
+    private const RESET_TOKEN_MINUTES = 15;
+
     public function __construct(protected TotpService $totp) {}
 
     public function login(Request $request)
@@ -48,7 +52,11 @@ class AuthController extends Controller
                 $userQuery->where('account_type', $request->account_type);
             }
 
-            $user = $userQuery->first();
+            // One email can hold a reader and an author account with different passwords.
+            // Clients that don't send account_type sign in to the account the password fits.
+            $accounts = $userQuery->orderBy('id')->get();
+            $user = $accounts->first(fn (User $account) => $account->password && Hash::check($request->password, $account->password))
+                ?? $accounts->first();
 
             if (! $user) {
                 return $this->error('Invalid credentials', 400);
@@ -303,11 +311,10 @@ class AuthController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                'email' => 'required|email|exists:users,email',
+                'email' => 'required|email',
             ], [
                 'email.required' => 'Please enter your email address.',
                 'email.email'    => 'Please enter a valid email address.',
-                'email.exists'   => 'We couldn\'t find an account with that email address.',
             ]);
 
             if ($validator->fails()) {
@@ -316,25 +323,25 @@ class AuthController extends Controller
 
             $user = User::where('email', $request->email)->first();
 
-            // Generate a secure 6-digit OTP
-            $otp = rand(100000, 999999);
+            // Same response whether or not the account exists, so this can't be used to discover who has one.
+            if ($user) {
+                $otp = (string) random_int(100000, 999999);
+                $expiresAt = now()->addMinutes(self::RESET_OTP_MINUTES);
 
-            $value = [
-                'otp' => $otp,
-                'email' => $user->email,
-            ];
+                Cache::put($this->resetOtpKey($request->email), [
+                    'hash'       => $this->resetHash($otp),
+                    'attempts'   => 0,
+                    'expires_at' => $expiresAt->getTimestamp(),
+                ], $expiresAt);
 
-            // Store OTP in Redis with a 10-minute expiration
-            $key = "password_reset:otp:{$otp}";
-            Cache::put($key, $value, now()->addMinutes(10));
+                if ($this->allowsLegacyReset()) {
+                    Cache::put('password_reset:legacy_otp:' . $this->resetHash($otp), $user->email, $expiresAt);
+                }
 
-            // Send OTP email
-            $this->sendOtpEmail($user, $otp);
+                $this->sendOtpEmail($user, $otp);
+            }
 
-            return $this->success(null, 'OTP sent to your email', 200);
-        } catch (\Exception $e) {
-            // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
+            return $this->success(null, 'If an account exists for that email, we have sent it a code.', 200);
         } catch (\Throwable $th) {
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
         }
@@ -347,56 +354,68 @@ class AuthController extends Controller
     {
         try {
             $validator = Validator::make($request->all(), [
-                // 'email' => 'required|email|exists:users,email',
-                'otp' => 'required|digits:6',
+                'email' => [$this->allowsLegacyReset() ? 'nullable' : 'required', 'email'],
+                'otp'   => 'required|digits:6',
             ], [
-                'otp.required' => 'Please enter the OTP sent to your email.',
-                'otp.digits'   => 'The OTP must be exactly 6 digits.',
+                'email.required' => 'Please update your app to reset your password.',
+                'otp.required'   => 'Please enter the OTP sent to your email.',
+                'otp.digits'     => 'The OTP must be exactly 6 digits.',
             ]);
 
             if ($validator->fails()) {
                 return $this->error('Please enter a valid 6-digit OTP.', 400, $validator->errors());
             }
 
-            // $user = User::where('email', $request->email)->first();
-            $key = "password_reset:otp:{$request->otp}";
+            $otp = (string) $request->otp;
 
-            // Verify OTP from Redis
-            $storedOtp = Cache::get($key);
-            logger($storedOtp);
+            // Older app versions only send the code; see password_reset.allow_legacy_flow.
+            if (! $request->filled('email')) {
+                $legacyKey = 'password_reset:legacy_otp:' . $this->resetHash($otp);
+                $email = Cache::pull($legacyKey);
+                if (! $email) {
+                    return $this->error('Invalid or expired OTP', 400);
+                }
+                Cache::forget($this->resetOtpKey($email));
+                Cache::put($this->legacyResetKey($email), true, now()->addMinutes(self::RESET_OTP_MINUTES));
 
-            if (! $storedOtp || $storedOtp['otp'] != $request->otp) {
+                return $this->success(null, 'OTP verified successfully', 200);
+            }
+
+            $key = $this->resetOtpKey($request->email);
+            $record = Cache::get($key);
+
+            if (! $record || $record['attempts'] >= self::RESET_OTP_MAX_ATTEMPTS) {
+                Cache::forget($key);
                 return $this->error('Invalid or expired OTP', 400);
             }
 
-            // Delete OTP from Redis after use
+            if (! hash_equals($record['hash'], $this->resetHash($otp))) {
+                $record['attempts']++;
+                Cache::put($key, $record, Carbon::createFromTimestamp($record['expires_at']));
+                return $this->error('Invalid or expired OTP', 400);
+            }
+
             Cache::forget($key);
+            Cache::forget('password_reset:legacy_otp:' . $record['hash']);
 
-            $email = $storedOtp['email'];
+            $token = Str::random(64);
+            Cache::put($this->resetTokenKey($request->email), $this->resetHash($token), now()->addMinutes(self::RESET_TOKEN_MINUTES));
 
-            // Reset Password permissions
-            $reset_password_key = "reset_password_key:{$email}";
-            Cache::put($reset_password_key, true, now()->addMinutes(60));
-
-            return $this->success(null, 'OTP verified successfully', 200);
+            return $this->success(['reset_token' => $token], 'OTP verified successfully', 200);
         } catch (\Throwable $th) {
-            // throw $th;
-            // dd($th->getMessage());
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
-        } catch (\Exception $e) {
-            return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
     }
 
     /**
-     * Reset password using OTP
+     * Reset password
      */
     public function resetPassword(Request $request)
     {
         try {
-            // Validate Input
             $validator = Validator::make($request->all(), [
-                'email' => ['required', 'email', 'exists:users,email'],
+                'email' => ['required', 'email'],
+                'reset_token' => [$this->allowsLegacyReset() ? 'nullable' : 'required', 'string'],
                 'password' => [
                     'required',
                     'string',
@@ -408,7 +427,7 @@ class AuthController extends Controller
             ], [
                 'email.required'    => 'Please enter your email address.',
                 'email.email'       => 'Please enter a valid email address.',
-                'email.exists'      => 'We couldn\'t find an account with that email address.',
+                'reset_token.required' => 'Please update your app to reset your password.',
                 'password.required' => 'Please enter a new password.',
                 'password.min'      => 'Your password must be at least 8 characters long.',
                 'password.confirmed' => 'The passwords you entered do not match.',
@@ -419,34 +438,69 @@ class AuthController extends Controller
                 return $this->error('Please fix the errors below and try again.', 400, $validator->errors());
             }
 
-            // Verify reset password permissions
-            $reset_password_key = "reset_password_key:{$request->email}";
-            if (! Cache::get($reset_password_key)) {
+            if (! $this->consumeResetPermission($request)) {
                 return $this->error('Invalid or expired password reset request', 400);
             }
 
-            // Delete reset password permissions
             $user = User::where('email', $request->email)->first();
+            if (! $user) {
+                return $this->error('Invalid or expired password reset request', 400);
+            }
 
-            // Hash and update the password
             $user->update([
                 'password' => Hash::make($request->password),
             ]);
 
-            // Delete OTP from Redis after use
-            Cache::forget($reset_password_key);
+            // Anyone signed in with the old password, possibly an intruder, is signed out.
+            $user->tokens()->delete();
 
-            // Send reset confirmation email
             $this->sendPasswordResetConfirmationEmail($user);
 
             return $this->success(null, 'Password reset successful', 200);
         } catch (\Throwable $th) {
-            // throw $th;
             return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
-        } catch (\Exception $e) {
-
-            return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
+    }
+
+    private function consumeResetPermission(Request $request): bool
+    {
+        if ($request->filled('reset_token')) {
+            $key = $this->resetTokenKey($request->email);
+            $expected = Cache::get($key);
+            if (! $expected || ! hash_equals($expected, $this->resetHash($request->reset_token))) {
+                return false;
+            }
+            Cache::forget($key);
+
+            return true;
+        }
+
+        return $this->allowsLegacyReset() && (bool) Cache::pull($this->legacyResetKey($request->email));
+    }
+
+    private function allowsLegacyReset(): bool
+    {
+        return (bool) config('auth.password_reset.allow_legacy_flow');
+    }
+
+    private function resetHash(string $value): string
+    {
+        return hash_hmac('sha256', $value, config('app.key'));
+    }
+
+    private function resetOtpKey(string $email): string
+    {
+        return 'password_reset:otp:' . $this->resetHash(strtolower(trim($email)));
+    }
+
+    private function resetTokenKey(string $email): string
+    {
+        return 'password_reset:token:' . $this->resetHash(strtolower(trim($email)));
+    }
+
+    private function legacyResetKey(string $email): string
+    {
+        return 'password_reset:legacy_allowed:' . $this->resetHash(strtolower(trim($email)));
     }
 
     /**
