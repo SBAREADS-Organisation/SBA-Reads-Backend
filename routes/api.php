@@ -314,7 +314,7 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('ac
 });
 
 // Listing, publishing and ISBN applications
-Route::post('applications', [\App\Http\Controllers\ApplicationController::class, 'store'])->middleware('throttle:5,60');
+Route::post('applications', [\App\Http\Controllers\ApplicationController::class, 'store'])->middleware('throttle:5,60,applications');
 Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('applications')->group(function () {
     Route::get('/', [\App\Http\Controllers\ApplicationController::class, 'index']);
     Route::get('/{id}', [\App\Http\Controllers\ApplicationController::class, 'show'])->where('id', '[0-9]+');

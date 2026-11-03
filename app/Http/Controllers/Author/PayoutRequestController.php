@@ -36,8 +36,9 @@ class PayoutRequestController extends Controller
 
         $errorMsg      = null;
         $payoutRequest = null;
+        $available     = 0.0;
 
-        DB::transaction(function () use ($author, $amount, &$errorMsg, &$payoutRequest) {
+        DB::transaction(function () use ($author, $amount, &$errorMsg, &$payoutRequest, &$available) {
             // Lock the author row so two simultaneous requests cannot both pass
             // the active-request check before either has committed its insert.
             \App\Models\User::lockForUpdate()->findOrFail($author->id);
@@ -85,15 +86,21 @@ class PayoutRequestController extends Controller
 
         // Notify all admins by email
         try {
+            $notice = new GenericAppNotification(
+                'New USD Payout Request — ' . $author->name,
+                "Author {$author->name} ({$author->email}) has requested a USD payout of \${$amount}.\n\n" .
+                "Request ID: {$payoutRequest->id}\n" .
+                "Available balance: \${$available}\n\n" .
+                "Log in to the admin panel to review and process this request."
+            );
+            $inbox = config('services.admin_requests.notify_email');
+            Mail::to($inbox)->queue($notice);
+
             $admins = User::role(['admin', 'superadmin', 'manager'])->get(['id', 'email', 'name']);
             foreach ($admins as $admin) {
-                Mail::to($admin->email)->queue(new GenericAppNotification(
-                    'New USD Payout Request — ' . $author->name,
-                    "Author {$author->name} ({$author->email}) has requested a USD payout of \${$amount}.\n\n" .
-                    "Request ID: {$payoutRequest->id}\n" .
-                    "Available balance: \${$available}\n\n" .
-                    "Log in to the admin panel to review and process this request."
-                ));
+                if (strcasecmp($admin->email, $inbox) !== 0) {
+                    Mail::to($admin->email)->queue($notice);
+                }
             }
         } catch (\Throwable $e) {
             Log::warning('PayoutRequest: admin email failed: ' . $e->getMessage());

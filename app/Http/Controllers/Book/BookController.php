@@ -12,6 +12,7 @@ use App\Mail\Book\BookApproved;
 use App\Mail\Book\BookDeclined;
 use App\Mail\Book\BookDeleted;
 use App\Mail\Books\BookCreatedNotification;
+use App\Mail\Generic\GenericAppNotification;
 use App\Models\Book;
 use App\Models\BookReviews;
 use App\Models\AudioBookPurchase;
@@ -30,6 +31,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -471,6 +473,15 @@ class BookController extends Controller
                     ProcessBookAIReviewJob::dispatch($book->id)->onQueue('ai');
                 } catch (\Throwable $e) {
                     Log::error('Failed to dispatch AI review job for book ' . $book->id . ': ' . $e->getMessage());
+                }
+                try {
+                    Mail::to(config('services.admin_requests.notify_email'))->queue(new GenericAppNotification(
+                        'New book submitted — ' . $book->title,
+                        "\"{$book->title}\" (book #{$book->id}) was submitted by " . ($author->email ?? 'an author') . ".\n\n" .
+                        "Log in to the admin panel and open Books to review it."
+                    ));
+                } catch (\Throwable $e) {
+                    Log::warning('Book submission admin email failed: ' . $e->getMessage());
                 }
             }
 

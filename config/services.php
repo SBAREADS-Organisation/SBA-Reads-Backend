@@ -71,6 +71,10 @@ return [
         'notify_email' => env('APPLICATIONS_NOTIFY_EMAIL', 'admin@sbareads.com'),
     ],
 
+    'admin_requests' => [
+        'notify_email' => env('ADMIN_REQUESTS_NOTIFY_EMAIL', 'admin@sbareads.com'),
+    ],
+
     'paystack' => [
         'public_key' => env('PAYSTACK_PUBLIC_KEY'),
         'secret' => env('PAYSTACK_SECRET_KEY'),

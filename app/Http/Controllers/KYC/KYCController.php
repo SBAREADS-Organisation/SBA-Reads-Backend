@@ -4,6 +4,7 @@ namespace App\Http\Controllers\KYC;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\ProcessKYCVerificationJob;
+use App\Mail\Generic\GenericAppNotification;
 use App\Models\User;
 use App\Models\UserKycInfo;
 use App\Services\Stripe\StripeConnectService;
@@ -14,6 +15,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Stripe\Account as StripeAccount;
@@ -379,6 +381,16 @@ class KYCController extends Controller
             // Re-trigger AI verification now that a document is available.
             // Document presence significantly boosts the AI confidence score.
             ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
+
+            try {
+                Mail::to(config('services.admin_requests.notify_email'))->queue(new GenericAppNotification(
+                    'New KYC document — ' . ($user->name ?: $user->email),
+                    "{$user->email} uploaded a {$request->input('document_type')} for identity verification.\n\n" .
+                    "Log in to the admin panel and open KYC Review to check it."
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('KYC admin email failed: ' . $e->getMessage());
+            }
 
             return $this->success(
                 ['document_uploaded' => true, 'document_type' => $request->input('document_type')],
