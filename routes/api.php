@@ -257,6 +257,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Reader-specific endpoints
     Route::post('books/{id}/start-reading', [BookController::class, 'startReading'])->where('id', '[0-9]+');
     Route::get('books/user/reading-progress', [BookController::class, 'userProgress']);
+    Route::get('books/{id}/reading-state', [\App\Http\Controllers\Book\ReadingStateController::class, 'show'])->where('id', '[0-9]+');
+    Route::post('books/{id}/reading-state', [\App\Http\Controllers\Book\ReadingStateController::class, 'update'])->where('id', '[0-9]+');
     Route::post('books/{id}/reviews', [BookController::class, 'postReview'])->where('id', '[0-9]+');
     Route::get('books/bookmarks/all', [BookController::class, 'getAllBookmarks']);
     Route::post('books/{id}/bookmark', [BookController::class, 'bookmark'])->where('id', '[0-9]+');

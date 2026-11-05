@@ -19,6 +19,9 @@ class ReadingProgress extends Model
         'page',
         'bookmarks',
         'session_duration',
+        'page_bookmarks',
+        'notes',
+        'audio_position',
     ];
 
     /**
@@ -31,6 +34,9 @@ class ReadingProgress extends Model
         return [
             'bookmarks' => 'json',
             'session_duration' => 'json',
+            'page_bookmarks' => 'array',
+            'notes' => 'array',
+            'audio_position' => 'array',
         ];
     }
 

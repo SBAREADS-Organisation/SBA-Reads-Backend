@@ -735,18 +735,23 @@ class BookController extends Controller
             ? min(round((intval($validated['page']) / $totalPages) * 100), 100)
             : 0;
 
+        // Only fields that were sent are written, so a page save can't blank what another client stored.
+        $changes = [
+            'progress' => $progress,
+            'page' => $validated['page'] ?? '',
+            'last_accessed' => now(),
+            'last_read_at' => now(),
+        ];
+        if (array_key_exists('bookmarks', $validated)) {
+            $changes['bookmarks'] = json_encode($validated['bookmarks'] ?? []);
+        }
+        if (array_key_exists('session_duration', $validated)) {
+            $changes['session_duration'] = json_encode($validated['session_duration'] ?? []);
+        }
+
         $record = $book->readingProgress()->updateOrCreate(
             ['book_id' => $bookId, 'user_id' => $user->id],
-            [
-                // 'user_id' => $user->id,
-                // 'book_id' => $bookId,
-                'progress' => $progress,
-                'page' => $validated['page'] ?? '',
-                'bookmarks' => json_encode($validated['bookmarks'] ?? []),
-                'session_duration' => json_encode($validated['session_duration'] ?? []),
-                'last_accessed' => now(),
-                'last_read_at' => now(),
-            ]
+            $changes
         );
 
         // Trigger milestone logic
@@ -2128,6 +2133,11 @@ class BookController extends Controller
 
             if (empty($book->audio_url) && empty($book->audio_segments)) {
                 return $this->error('This book does not have an audio version available.', 422);
+            }
+
+            // Same rule the apps show: audio is an add-on to a book the reader owns.
+            if (! app(BookPurchaseService::class)->userOwnsBook($user, $book->id)) {
+                return $this->error('Buy the book first to unlock its audio version.', 422);
             }
 
             $alreadyPurchased = AudioBookPurchase::where('user_id', $user->id)
