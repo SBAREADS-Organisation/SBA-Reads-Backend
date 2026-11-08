@@ -239,6 +239,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('books/{id}/reviews', [BookController::class, 'getReviews'])->where('id', '[0-9]+');
     Route::post('books/{id}/purchase-audio', [BookController::class, 'purchaseAudio'])->name('book.purchase-audio')->where('id', '[0-9]+');
     Route::put('books/{book}', [BookController::class, 'update']);
+    Route::patch('books/{book}', [BookController::class, 'update']);
     // POST + _method=PUT allows multipart file uploads from mobile (PHP ignores
     // $_FILES on PUT requests; method spoofing routes this to update() correctly)
     Route::post('books/{book}/update', [BookController::class, 'update']);
