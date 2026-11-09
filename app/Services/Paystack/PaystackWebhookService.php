@@ -371,7 +371,7 @@ class PaystackWebhookService
         switch ($transaction->purpose_type) {
             case 'digital_book_purchase':
                 $purchase = \App\Models\DigitalBookPurchase::find($transaction->purpose_id);
-                return $purchase && $purchase->status === 'paid';
+                return $purchase && in_array($purchase->status, ['paid', 'preordered'], true);
             case 'audio_book_purchase':
                 $purchase = \App\Models\AudioBookPurchase::find($transaction->purpose_id);
                 return $purchase && $purchase->status === 'paid';
@@ -527,15 +527,21 @@ class PaystackWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
-            $wasAlreadyPaid = $purchase->status === 'paid';
+            $wasAlreadyPaid = in_array($purchase->status, ['paid', 'preordered'], true);
+
+            // Pre-ordered books unlock on their release date (books:release-preorders), not now.
+            $unreleasedIds = $purchase->items
+                ->filter(fn ($item) => $item->book?->isUnreleasedPreorder())
+                ->pluck('book_id')
+                ->all();
 
             if (!$wasAlreadyPaid) {
-                $purchase->update(['status' => 'paid']);
+                $purchase->update(['status' => $unreleasedIds ? 'preordered' : 'paid']);
             }
 
             foreach ($purchase->items as $item) {
                 app(\App\Services\Book\BookPurchaseService::class)
-                    ->addBooksToUserLibrary($user, [$item->book_id]);
+                    ->addBooksToUserLibrary($user, array_diff([$item->book_id], $unreleasedIds));
 
                 $author = $item->book->author;
                 if ($author) {
@@ -596,9 +602,11 @@ class PaystackWebhookService
                 try {
                     $bookTitles = $purchase->items->pluck('book.title')->filter()->values()->toArray();
                     $titleCount = count($bookTitles);
-                    $message    = $titleCount === 1
+                    $message    = $unreleasedIds
+                        ? 'Your pre-order is confirmed. We will add it to your library on its release date.'
+                        : ($titleCount === 1
                         ? "'{$bookTitles[0]}' is now in your library. Enjoy your read!"
-                        : "{$titleCount} books are now in your library. Enjoy your reads!";
+                        : "{$titleCount} books are now in your library. Enjoy your reads!");
                     app(NotificationService::class)->send(
                         $user,
                         'Purchase Confirmed',

@@ -73,6 +73,7 @@ class BookResource extends JsonResource
             'ios_available'  => (bool) ($this->ios_available ?? false),
             'preorder_url'   => $this->preorder_url,
             'is_preorder'    => (bool) ($this->is_preorder ?? false),
+            'is_preordered'  => $this->resolvePreordered(),
             'release_at'     => $this->release_at,
             'ranking'        => $this->ranking,
             'audio_price'    => $this->audio_price ?? 10.00,
@@ -186,6 +187,24 @@ class BookResource extends JsonResource
             $cacheKey = 'owned_book_ids_' . $viewer->id;
             if (! $request->attributes->has($cacheKey)) {
                 $request->attributes->set($cacheKey, app(BookPurchaseService::class)->ownedBookIds($viewer));
+            }
+
+            return in_array((int) $this->id, $request->attributes->get($cacheKey), true);
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function resolvePreordered(): bool
+    {
+        $viewer = $this->viewer();
+        if (! $viewer) return false;
+
+        try {
+            $request = request();
+            $cacheKey = 'preordered_book_ids_' . $viewer->id;
+            if (! $request->attributes->has($cacheKey)) {
+                $request->attributes->set($cacheKey, app(BookPurchaseService::class)->preorderedBookIds($viewer));
             }
 
             return in_array((int) $this->id, $request->attributes->get($cacheKey), true);

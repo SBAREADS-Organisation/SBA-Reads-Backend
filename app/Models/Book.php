@@ -88,6 +88,11 @@ class Book extends Model
     /**
      * What a buyer pays: the discounted price when it is a real discount, otherwise the list price.
      */
+    public function isUnreleasedPreorder(): bool
+    {
+        return $this->is_preorder && $this->release_at && $this->release_at->isFuture();
+    }
+
     public function sellingPrice(): float
     {
         $actual = (float) $this->actual_price;

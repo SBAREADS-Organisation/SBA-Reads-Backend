@@ -219,10 +219,16 @@ class StripeWebhookService
                 ->where('user_id', $user->id)
                 ->findOrFail($purchaseId);
 
-            $wasAlreadyPaid = $purchase->status === 'paid';
+            $wasAlreadyPaid = in_array($purchase->status, ['paid', 'preordered'], true);
+
+            // Pre-ordered books unlock on their release date (books:release-preorders), not now.
+            $unreleasedIds = $purchase->items
+                ->filter(fn ($item) => $item->book?->isUnreleasedPreorder())
+                ->pluck('book_id')
+                ->all();
 
             if (!$wasAlreadyPaid) {
-                $purchase->update(['status' => 'paid']);
+                $purchase->update(['status' => $unreleasedIds ? 'preordered' : 'paid']);
             }
 
             foreach ($purchase->items as $item) {
@@ -232,7 +238,7 @@ class StripeWebhookService
 
                 // addBooksToUserLibrary is idempotent — safe on every retry.
                 app(\App\Services\Book\BookPurchaseService::class)
-                    ->addBooksToUserLibrary($user, [$item->book_id]);
+                    ->addBooksToUserLibrary($user, array_diff([$item->book_id], $unreleasedIds));
 
                 $author = $item->book->author;
                 if ($author) {
@@ -303,9 +309,11 @@ class StripeWebhookService
                 try {
                     $bookTitles = $purchase->items->pluck('book.title')->filter()->values()->toArray();
                     $titleCount = count($bookTitles);
-                    $message    = $titleCount === 1
+                    $message    = $unreleasedIds
+                        ? 'Your pre-order is confirmed. We will add it to your library on its release date.'
+                        : ($titleCount === 1
                         ? "'{$bookTitles[0]}' is now in your library. Enjoy your read!"
-                        : "{$titleCount} books are now in your library. Enjoy your reads!";
+                        : "{$titleCount} books are now in your library. Enjoy your reads!");
                     app(NotificationService::class)->send(
                         $user,
                         'Purchase Confirmed',

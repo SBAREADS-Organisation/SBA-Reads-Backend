@@ -1614,6 +1614,12 @@ class BookController extends Controller
                 return $this->error('You already own the following book(s): ' . $conflictingTitles, 409);
             }
 
+            $alreadyPreorderedIds = array_values(array_intersect($bookIds, $purchaseService->preorderedBookIds($user)));
+            if (! empty($alreadyPreorderedIds)) {
+                $titles = Book::whereIn('id', $alreadyPreorderedIds)->pluck('title')->implode(', ');
+                return $this->error('You have already pre-ordered: ' . $titles, 409);
+            }
+
             $books = Book::whereIn('id', $bookIds)->get();
 
             // A missing price is unfinished data, not a free book.

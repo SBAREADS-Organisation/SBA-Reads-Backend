@@ -62,6 +62,24 @@ class BookPurchaseService
             ->all();
     }
 
+    /**
+     * IDs of books the user has pre-ordered that aren't in their library yet.
+     *
+     * @return array<int, int>
+     */
+    public function preorderedBookIds(User $user): array
+    {
+        return DB::table('digital_book_purchase_items as items')
+            ->join('digital_book_purchases as purchases', 'purchases.id', '=', 'items.digital_book_purchase_id')
+            ->where('purchases.user_id', $user->id)
+            ->where('purchases.status', 'preordered')
+            ->pluck('items.book_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     public function userOwnsBook(User $user, int $bookId): bool
     {
         $allIds = $this->resolveAllLinkedAccountIds($user);
