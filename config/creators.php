@@ -3,6 +3,9 @@
 // SBA Creators: plans and fees for creators selling courses and downloads.
 // Fees are a share of the sale price and already include payment processing.
 return [
+    // Where links in creator and buyer emails point.
+    'website_url' => env('CREATORS_WEBSITE_URL', 'https://sbaread-web-app.vercel.app'),
+
     'trial_days' => 30,
     'trial_plan' => 'pro',
     'plan_days' => 30,

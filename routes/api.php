@@ -349,6 +349,13 @@ Route::prefix('creators')->group(function () {
     });
 });
 
+Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('admin/creators')->controller(\App\Http\Controllers\Creators\AdminCreatorsController::class)->group(function () {
+    Route::get('/', 'overview');
+    Route::get('{id}/products', 'products')->where('id', '[0-9]+');
+    Route::post('{id}/suspend', 'setSuspended')->where('id', '[0-9]+');
+    Route::post('products/{id}/hide', 'hideProduct')->where('id', '[0-9]+');
+});
+
 // Listing, publishing and ISBN applications
 Route::post('applications', [\App\Http\Controllers\ApplicationController::class, 'store'])->middleware('throttle:5,60,applications');
 Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('applications')->group(function () {

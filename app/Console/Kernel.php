@@ -23,6 +23,11 @@ class Kernel extends ConsoleKernel
             ->hourly()
             ->withoutOverlapping()
             ->runInBackground();
+
+        // SBA Creators: warn before a trial or paid plan ends, and confirm when it has.
+        $schedule->command('creators:plan-reminders')
+            ->dailyAt('09:00')
+            ->withoutOverlapping();
     }
 
     protected function commands(): void

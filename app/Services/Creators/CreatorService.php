@@ -69,6 +69,22 @@ class CreatorService
             return $purchase;
         });
 
+        if ($credited) {
+            try {
+                $product = $credited->product;
+                $what = $product->type === 'course' ? 'course' : 'download';
+                Mail::to($credited->buyer->email)->queue(new GenericAppNotification(
+                    "You now have access to \"{$product->title}\"",
+                    "Thank you for getting \"{$product->title}\" from {$credited->store->name}.\n\n"
+                    . ((float) $credited->amount_paid > 0 ? 'You paid ' . $credited->currency . ' ' . number_format((float) $credited->amount_paid, 2) . ".\n\n" : '')
+                    . "Open your {$what} any time from My Courses on SBA Reads:\n"
+                    . rtrim((string) config('creators.website_url'), '/') . "/learn/{$product->id}"
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Creator purchase receipt email failed: ' . $e->getMessage());
+            }
+        }
+
         if ($credited && (float) $credited->price > 0) {
             try {
                 $creator = $credited->store->user;
@@ -96,9 +112,12 @@ class CreatorService
                 return;
             }
 
-            $from = $store->plan === $plan && $store->plan_paid_until && $store->plan_paid_until->isFuture()
-                ? $store->plan_paid_until
-                : now();
+            // Paying for the plan the free trial already gives starts after the trial, so no free days are lost.
+            $from = match (true) {
+                $store->plan === $plan && $store->plan_paid_until?->isFuture() => $store->plan_paid_until,
+                $plan === config('creators.trial_plan') && $store->onTrial() => $store->trial_ends_at,
+                default => now(),
+            };
             $store->update([
                 'plan' => $plan,
                 'plan_paid_until' => $from->copy()->addDays((int) config('creators.plan_days')),
