@@ -47,7 +47,8 @@ class CreatorService
                 return null;
             }
 
-            $purchase->update(['status' => 'paid', 'paid_at' => now()]);
+            $purchase->update(['status' => 'paid', 'paid_at' => now()]
+                + ($purchase->product->isEvent() ? ['ticket_code' => $this->newTicketCode()] : []));
 
             if ((float) $purchase->creator_earning > 0) {
                 Transaction::create([
@@ -72,14 +73,29 @@ class CreatorService
         if ($credited) {
             try {
                 $product = $credited->product;
-                $what = $product->type === 'course' ? 'course' : 'download';
-                Mail::to($credited->buyer->email)->queue(new GenericAppNotification(
-                    "You now have access to \"{$product->title}\"",
-                    "Thank you for getting \"{$product->title}\" from {$credited->store->name}.\n\n"
-                    . ((float) $credited->amount_paid > 0 ? 'You paid ' . $credited->currency . ' ' . number_format((float) $credited->amount_paid, 2) . ".\n\n" : '')
-                    . "Open your {$what} any time from My Courses on SBA Reads:\n"
-                    . rtrim((string) config('creators.website_url'), '/') . "/learn/{$product->id}"
-                ));
+                $link = rtrim((string) config('creators.website_url'), '/') . "/learn/{$product->id}";
+                $paid = (float) $credited->amount_paid > 0 ? 'You paid ' . $credited->currency . ' ' . number_format((float) $credited->amount_paid, 2) . ".\n\n" : '';
+                if ($product->isEvent()) {
+                    $when = $product->starts_at?->copy()->setTimezone($product->timezone ?: 'Africa/Lagos')->format('l j F Y, g:ia T');
+                    Mail::to($credited->buyer->email)->queue(new GenericAppNotification(
+                        "Your ticket for \"{$product->title}\"",
+                        "You're going to \"{$product->title}\" by {$credited->store->name}.\n\n"
+                        . "When: {$when}\n"
+                        . ($product->location ? "Where: {$product->location}\n" : '')
+                        . ($product->online_url ? "Joining link: in your ticket on SBA Reads\n" : '')
+                        . "Ticket code: {$credited->ticket_code}\n\n"
+                        . $paid
+                        . "Show your ticket at the door, or open it here:\n{$link}"
+                    ));
+                } else {
+                    $what = $product->type === 'course' ? 'course' : 'download';
+                    Mail::to($credited->buyer->email)->queue(new GenericAppNotification(
+                        "You now have access to \"{$product->title}\"",
+                        "Thank you for getting \"{$product->title}\" from {$credited->store->name}.\n\n"
+                        . $paid
+                        . "Open your {$what} any time from My Courses on SBA Reads:\n{$link}"
+                    ));
+                }
             } catch (\Throwable $e) {
                 Log::warning('Creator purchase receipt email failed: ' . $e->getMessage());
             }
@@ -99,6 +115,20 @@ class CreatorService
                 Log::warning('Creator sale email failed: ' . $e->getMessage());
             }
         }
+    }
+
+    /** A short code that's easy to read out at the door: no 0/O or 1/I. */
+    private function newTicketCode(): string
+    {
+        $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        do {
+            $code = '';
+            for ($i = 0; $i < 8; $i++) {
+                $code .= $alphabet[random_int(0, strlen($alphabet) - 1)];
+            }
+        } while (CreatorPurchase::where('ticket_code', $code)->exists());
+
+        return $code;
     }
 
     /** Extends a store's paid plan by one period from whichever is later: now, or its current end. */

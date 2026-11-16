@@ -9,7 +9,7 @@ class CreatorPurchase extends Model
 {
     protected $fillable = [
         'product_id', 'store_id', 'buyer_id', 'price', 'fee', 'amount_paid', 'creator_earning',
-        'fee_payer', 'plan', 'currency', 'status', 'paid_at',
+        'fee_payer', 'plan', 'currency', 'status', 'paid_at', 'ticket_code', 'checked_in_at',
     ];
 
     protected function casts(): array
@@ -20,6 +20,7 @@ class CreatorPurchase extends Model
             'amount_paid' => 'decimal:2',
             'creator_earning' => 'decimal:2',
             'paid_at' => 'datetime',
+            'checked_in_at' => 'datetime',
         ];
     }
 

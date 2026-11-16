@@ -44,6 +44,7 @@ class CreatorPresenter
         bool $private = false,
         bool $withLessons = false,
         bool $withFiles = false,
+        bool $withAccess = false,
     ): array {
         $data = [
             'id' => $product->id,
@@ -59,6 +60,23 @@ class CreatorPresenter
             'store' => $product->relationLoaded('store') || $product->store ? $this->store($product->store) : null,
             'lessons_count' => $product->lessons_count ?? $product->lessons()->count(),
         ];
+
+        if ($product->isEvent()) {
+            $data += [
+                'starts_at' => $product->starts_at?->toISOString(),
+                'ends_at' => $product->ends_at?->toISOString(),
+                'timezone' => $product->timezone,
+                'location' => $product->location,
+                'is_online' => (bool) $product->online_url,
+                'capacity' => $product->capacity,
+                'spots_left' => $product->spotsLeft(),
+                'sales_closed' => $product->ticketSalesClosed(),
+            ];
+            // The joining link is for ticket holders and the creator only.
+            if ($private || $withAccess) {
+                $data['online_url'] = $product->online_url;
+            }
+        }
 
         if (! $private) {
             $quote = $this->service->quote($product);

@@ -84,18 +84,36 @@ class CreatorShopController extends Controller
             return $this->error('This is your own product.', 409);
         }
         if ($product->purchasedBy($user)) {
-            return $this->error('You already have this.', 409);
+            return $this->error($product->isEvent() ? 'You already have a ticket.' : 'You already have this.', 409);
+        }
+        if ($product->ticketSalesClosed()) {
+            return $this->error('This event has already taken place.', 422);
+        }
+        if ($product->spotsLeft() === 0) {
+            return $this->error('Sorry, this event is sold out.', 422);
         }
 
         $quote = $this->service->quote($product);
 
         if ($product->isFree()) {
-            $purchase = CreatorPurchase::create([
-                'product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id,
-                'price' => 0, 'fee' => 0, 'amount_paid' => 0, 'creator_earning' => 0,
-                'fee_payer' => $quote['fee_payer'], 'plan' => $quote['plan'], 'currency' => $product->currency, 'status' => 'pending',
-            ]);
-            $this->service->fulfilPurchase($purchase);
+            // The product row stays locked until the ticket is saved, so two people can't take the last place.
+            $soldOut = DB::transaction(function () use ($product, $user, $quote) {
+                CreatorProduct::whereKey($product->id)->lockForUpdate()->first();
+                if ($product->spotsLeft() === 0) {
+                    return true;
+                }
+                $purchase = CreatorPurchase::create([
+                    'product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id,
+                    'price' => 0, 'fee' => 0, 'amount_paid' => 0, 'creator_earning' => 0,
+                    'fee_payer' => $quote['fee_payer'], 'plan' => $quote['plan'], 'currency' => $product->currency, 'status' => 'pending',
+                ]);
+                $this->service->fulfilPurchase($purchase);
+
+                return false;
+            });
+            if ($soldOut) {
+                return $this->error('Sorry, this event is sold out.', 422);
+            }
 
             return $this->success(['owned' => true], 'Added to your library.', 201);
         }
@@ -173,6 +191,17 @@ class CreatorShopController extends Controller
         $hasAccess = $product && ($product->ownedBy($user) || $product->purchasedBy($user));
         if (! $product || (! $hasAccess && $product->status !== 'published')) {
             return $this->error('Product not found.', 404);
+        }
+
+        if ($product->isEvent()) {
+            $ticket = $hasAccess ? $product->purchases()->where('buyer_id', $user->id)->where('status', 'paid')->first() : null;
+
+            return $this->success([
+                'product' => $this->presenter->product($product, withAccess: $hasAccess),
+                'has_access' => $hasAccess,
+                'ticket' => $ticket ? ['code' => $ticket->ticket_code, 'checked_in_at' => $ticket->checked_in_at?->toISOString()] : null,
+                'lessons' => [],
+            ], 'Ticket retrieved.');
         }
 
         $progress = DB::table('creator_lesson_progress')->where('user_id', $user->id)

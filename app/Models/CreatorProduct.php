@@ -8,13 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CreatorProduct extends Model
 {
-    public const TYPES = ['course', 'download'];
+    public const TYPES = ['course', 'download', 'event'];
 
     public const STATUSES = ['draft', 'published', 'hidden'];
 
     protected $fillable = [
         'store_id', 'user_id', 'type', 'title', 'slug', 'summary', 'description',
         'cover_url', 'price', 'currency', 'status', 'published_at',
+        'starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity',
     ];
 
     protected function casts(): array
@@ -22,6 +23,9 @@ class CreatorProduct extends Model
         return [
             'price' => 'decimal:2',
             'published_at' => 'datetime',
+            'starts_at' => 'datetime',
+            'ends_at' => 'datetime',
+            'capacity' => 'integer',
         ];
     }
 
@@ -45,6 +49,11 @@ class CreatorProduct extends Model
         return (float) $this->price <= 0;
     }
 
+    public function isEvent(): bool
+    {
+        return $this->type === 'event';
+    }
+
     public function ownedBy(?User $user): bool
     {
         return $user && (int) $this->user_id === (int) $user->id;
@@ -53,5 +62,20 @@ class CreatorProduct extends Model
     public function purchasedBy(?User $user): bool
     {
         return $user && $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid')->exists();
+    }
+
+    /** Tickets still available, or null when the event has no limit. */
+    public function spotsLeft(): ?int
+    {
+        if (! $this->isEvent() || ! $this->capacity) {
+            return null;
+        }
+
+        return max(0, $this->capacity - $this->purchases()->where('status', 'paid')->count());
+    }
+
+    public function ticketSalesClosed(): bool
+    {
+        return $this->isEvent() && (($this->ends_at ?? $this->starts_at)?->isPast() ?? false);
     }
 }

@@ -204,8 +204,17 @@ class CreatorStudioController extends Controller
                 }
             }],
             'cover' => 'sometimes|image|mimes:jpg,jpeg,png,webp|max:5120',
+            // Events
+            'starts_at' => 'sometimes|nullable|date',
+            'ends_at' => 'sometimes|nullable|date|after_or_equal:starts_at',
+            'timezone' => 'sometimes|nullable|timezone',
+            'location' => 'sometimes|nullable|string|max:255',
+            'online_url' => 'sometimes|nullable|url|max:2048',
+            'capacity' => 'sometimes|nullable|integer|min:1|max:1000000',
         ];
     }
+
+    private const EVENT_FIELDS = ['starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity'];
 
     public function createProduct(Request $request): JsonResponse
     {
@@ -229,7 +238,7 @@ class CreatorStudioController extends Controller
             'price' => $request->input('price'),
             'currency' => 'NGN',
             'status' => 'draft',
-        ]);
+        ] + ($request->input('type') === 'event' ? $request->only(self::EVENT_FIELDS) : []));
         if ($request->hasFile('cover') && ($error = $this->saveCover($request, $product))) {
             return $error;
         }
@@ -260,6 +269,12 @@ class CreatorStudioController extends Controller
         }
 
         $changes = $request->only(['title', 'summary', 'description', 'price']);
+        if ($product->isEvent()) {
+            $changes += $request->only(self::EVENT_FIELDS);
+            if (isset($changes['capacity']) && $changes['capacity'] < ($sold = $product->purchases()->where('status', 'paid')->count())) {
+                return $this->error("{$sold} tickets are already sold, so the limit can't be lower than that.", 422);
+            }
+        }
         // A product with buyers keeps its type, so what people paid for doesn't change shape.
         if ($request->filled('type') && ! $product->purchases()->exists()) {
             $changes['type'] = $request->input('type');
@@ -290,6 +305,17 @@ class CreatorStudioController extends Controller
         }
         if ($price > 0 && $request->user()->kyc_status !== 'verified') {
             return 'Verify your identity before selling paid products, so we can pay you. Free products can be published now.';
+        }
+        if ($product->isEvent()) {
+            $startsAt = $request->filled('starts_at') ? \Illuminate\Support\Carbon::parse($request->input('starts_at')) : $product->starts_at;
+            if (! $startsAt || $startsAt->isPast()) {
+                return 'Set a date and time in the future before publishing.';
+            }
+            if (! ($request->input('location') ?? $product->location) && ! ($request->input('online_url') ?? $product->online_url)) {
+                return 'Add where it happens: a venue, an online link, or both.';
+            }
+
+            return null;
         }
         if (! $product->lessons()->exists()) {
             return $product->type === 'course' ? 'Add at least one lesson before publishing.' : 'Upload the file buyers will download before publishing.';
@@ -471,6 +497,49 @@ class CreatorStudioController extends Controller
         }
 
         return $this->success(null, 'Lessons reordered.');
+    }
+
+    public function attendees(Request $request, int $id): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        if (! $product || ! $product->isEvent()) {
+            return $this->error('Event not found.', 404);
+        }
+        $tickets = $product->purchases()->with('buyer:id,name,email')->where('status', 'paid')->orderBy('paid_at')->get()
+            ->map(fn (CreatorPurchase $ticket) => [
+                'id' => $ticket->id,
+                'name' => $ticket->buyer?->name ?: 'Guest',
+                'email' => $ticket->buyer?->email,
+                'code' => $ticket->ticket_code,
+                'checked_in_at' => $ticket->checked_in_at?->toISOString(),
+            ]);
+
+        return $this->success([
+            'tickets' => $tickets,
+            'sold' => $tickets->count(),
+            'checked_in' => $tickets->whereNotNull('checked_in_at')->count(),
+            'capacity' => $product->capacity,
+        ], 'Attendees retrieved.');
+    }
+
+    /** Checks a ticket holder in at the door by their ticket code. */
+    public function checkIn(Request $request, int $id): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        if (! $product || ! $product->isEvent()) {
+            return $this->error('Event not found.', 404);
+        }
+        $code = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) $request->input('code')));
+        $ticket = $product->purchases()->with('buyer:id,name')->where('status', 'paid')->where('ticket_code', $code)->first();
+        if (! $ticket) {
+            return $this->error('No ticket for this event has that code.', 404);
+        }
+        if ($ticket->checked_in_at) {
+            return $this->error(($ticket->buyer?->name ?: 'This guest') . ' was already checked in at ' . $ticket->checked_in_at->format('g:ia') . '.', 409);
+        }
+        $ticket->update(['checked_in_at' => now()]);
+
+        return $this->success(['name' => $ticket->buyer?->name ?: 'Guest'], 'Checked in.');
     }
 
     public function sales(Request $request): JsonResponse
