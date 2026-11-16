@@ -307,11 +307,13 @@ class CreatorStudioController extends Controller
             return 'Verify your identity before selling paid products, so we can pay you. Free products can be published now.';
         }
         if ($product->isEvent()) {
-            $startsAt = $request->filled('starts_at') ? \Illuminate\Support\Carbon::parse($request->input('starts_at')) : $product->starts_at;
+            // What this save will leave on the event, so clearing a field and publishing at once is checked properly.
+            $value = fn (string $field) => $request->exists($field) ? $request->input($field) : $product->{$field};
+            $startsAt = $value('starts_at') ? \Illuminate\Support\Carbon::parse($value('starts_at')) : null;
             if (! $startsAt || $startsAt->isPast()) {
                 return 'Set a date and time in the future before publishing.';
             }
-            if (! ($request->input('location') ?? $product->location) && ! ($request->input('online_url') ?? $product->online_url)) {
+            if (! $value('location') && ! $value('online_url')) {
                 return 'Add where it happens: a venue, an online link, or both.';
             }
 
