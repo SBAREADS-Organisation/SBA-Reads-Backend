@@ -378,6 +378,10 @@ class PaystackWebhookService
             case 'order':
                 $order = \App\Models\Order::find($transaction->purpose_id);
                 return $order && $order->status === 'paid';
+            case 'creator_purchase':
+                return \App\Models\CreatorPurchase::whereKey($transaction->purpose_id)->where('status', 'paid')->exists();
+            case 'creator_plan':
+                return (bool) ($transaction->meta_data['plan_applied'] ?? false);
             default:
                 return true;
         }
@@ -402,6 +406,20 @@ class PaystackWebhookService
 
                 case 'order':
                     $this->processSuccessfulOrder($transaction, $user);
+                    break;
+
+                case 'creator_purchase':
+                    if ($purchase = \App\Models\CreatorPurchase::find($transaction->purpose_id)) {
+                        app(\App\Services\Creators\CreatorService::class)->fulfilPurchase($purchase);
+                    }
+                    break;
+
+                case 'creator_plan':
+                    $store = \App\Models\CreatorStore::find($transaction->purpose_id);
+                    $plan = $transaction->meta_data['plan'] ?? null;
+                    if ($store && isset(config('creators.plans')[$plan])) {
+                        app(\App\Services\Creators\CreatorService::class)->fulfilPlan($store, $plan, $transaction->reference);
+                    }
                     break;
 
                 default:

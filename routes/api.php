@@ -316,6 +316,39 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('ac
     Route::patch('/{id}', [\App\Http\Controllers\AccountDeletionController::class, 'update'])->where('id', '[0-9]+');
 });
 
+// SBA Creators: anyone can sell courses and downloads from their own store.
+Route::prefix('creators')->group(function () {
+    Route::get('plans', [\App\Http\Controllers\Creators\CreatorStudioController::class, 'plans']);
+    Route::get('products', [\App\Http\Controllers\Creators\CreatorShopController::class, 'index']);
+    Route::get('stores/{slug}', [\App\Http\Controllers\Creators\CreatorShopController::class, 'store']);
+    Route::get('stores/{slug}/products/{productSlug}', [\App\Http\Controllers\Creators\CreatorShopController::class, 'product']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        Route::post('products/{id}/buy', [\App\Http\Controllers\Creators\CreatorShopController::class, 'buy'])->where('id', '[0-9]+');
+        Route::get('library', [\App\Http\Controllers\Creators\CreatorShopController::class, 'library']);
+        Route::get('products/{id}/content', [\App\Http\Controllers\Creators\CreatorShopController::class, 'content'])->where('id', '[0-9]+');
+        Route::post('lessons/{lessonId}/progress', [\App\Http\Controllers\Creators\CreatorShopController::class, 'progress'])->where('lessonId', '[0-9]+');
+
+        Route::prefix('studio')->controller(\App\Http\Controllers\Creators\CreatorStudioController::class)->group(function () {
+            Route::get('store', 'show');
+            Route::post('store', 'store');
+            Route::post('store/update', 'update');
+            Route::post('store/plan', 'buyPlan');
+            Route::get('sales', 'sales');
+            Route::get('products', 'products');
+            Route::post('products', 'createProduct');
+            Route::get('products/{id}', 'showProduct')->where('id', '[0-9]+');
+            Route::post('products/{id}', 'updateProduct')->where('id', '[0-9]+');
+            Route::delete('products/{id}', 'deleteProduct')->where('id', '[0-9]+');
+            Route::post('products/{id}/upload-url', 'uploadUrl')->where('id', '[0-9]+');
+            Route::post('products/{id}/lessons', 'createLesson')->where('id', '[0-9]+');
+            Route::post('products/{id}/lessons/order', 'reorderLessons')->where('id', '[0-9]+');
+            Route::post('products/{id}/lessons/{lessonId}', 'updateLesson')->where(['id' => '[0-9]+', 'lessonId' => '[0-9]+']);
+            Route::delete('products/{id}/lessons/{lessonId}', 'deleteLesson')->where(['id' => '[0-9]+', 'lessonId' => '[0-9]+']);
+        });
+    });
+});
+
 // Listing, publishing and ISBN applications
 Route::post('applications', [\App\Http\Controllers\ApplicationController::class, 'store'])->middleware('throttle:5,60,applications');
 Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('applications')->group(function () {

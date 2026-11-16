@@ -165,6 +165,7 @@ class CloudinaryMediaUploadService
             'voice_samples'  => 'users/voice-samples/'.date('Y/m/d'),
             'voice_preview'  => 'users/voice-previews/'.date('Y/m/d'),
             'book_audio'     => 'books/audio/'.date('Y/m/d'),
+            'creator_cover'  => 'creators/covers/'.date('Y/m/d'),
             default => 'general/'.date('Y/m/d')
         };
     }
