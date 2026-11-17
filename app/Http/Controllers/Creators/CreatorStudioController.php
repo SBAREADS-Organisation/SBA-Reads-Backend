@@ -95,10 +95,10 @@ class CreatorStudioController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:120',
-            'slug' => 'nullable|string|max:60|regex:/^[a-z0-9-]+$/|unique:creator_stores,slug',
+            'slug' => 'nullable|string|max:60|regex:/^[a-z0-9-]+$/|not_in:unsubscribe|unique:creator_stores,slug',
             'bio' => 'nullable|string|max:2000',
             'fee_payer' => 'nullable|in:creator,buyer',
-        ], ['slug.regex' => 'Your store link can only use lowercase letters, numbers and dashes.', 'slug.unique' => 'That store link is taken. Please choose another.']);
+        ], ['slug.regex' => 'Your store link can only use lowercase letters, numbers and dashes.', 'slug.unique' => 'That store link is taken. Please choose another.', 'slug.not_in' => 'That store link is taken. Please choose another.']);
         if ($validator->fails()) {
             return $this->validationError($validator);
         }
@@ -106,7 +106,7 @@ class CreatorStudioController extends Controller
         $store = CreatorStore::create([
             'user_id' => $user->id,
             'name' => $request->input('name'),
-            'slug' => $request->input('slug') ?: $this->uniqueSlug($request->input('name'), fn ($s) => CreatorStore::where('slug', $s)->exists()),
+            'slug' => $request->input('slug') ?: $this->uniqueSlug($request->input('name'), fn ($s) => $s === 'unsubscribe' || CreatorStore::where('slug', $s)->exists()),
             'bio' => $request->input('bio'),
             'fee_payer' => $request->input('fee_payer', 'creator'),
             'plan' => 'starter',
@@ -125,11 +125,11 @@ class CreatorStudioController extends Controller
 
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|required|string|max:120',
-            'slug' => ['sometimes', 'required', 'string', 'max:60', 'regex:/^[a-z0-9-]+$/', Rule::unique('creator_stores', 'slug')->ignore($store->id)],
+            'slug' => ['sometimes', 'required', 'string', 'max:60', 'regex:/^[a-z0-9-]+$/', 'not_in:unsubscribe', Rule::unique('creator_stores', 'slug')->ignore($store->id)],
             'bio' => 'sometimes|nullable|string|max:2000',
             'fee_payer' => 'sometimes|in:creator,buyer',
             'logo' => 'sometimes|image|mimes:jpg,jpeg,png,webp|max:5120',
-        ], ['slug.regex' => 'Your store link can only use lowercase letters, numbers and dashes.', 'slug.unique' => 'That store link is taken. Please choose another.']);
+        ], ['slug.regex' => 'Your store link can only use lowercase letters, numbers and dashes.', 'slug.unique' => 'That store link is taken. Please choose another.', 'slug.not_in' => 'That store link is taken. Please choose another.']);
         if ($validator->fails()) {
             return $this->validationError($validator);
         }
