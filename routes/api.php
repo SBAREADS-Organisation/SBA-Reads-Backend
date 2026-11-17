@@ -328,6 +328,7 @@ Route::prefix('creators')->group(function () {
         Route::get('library', [\App\Http\Controllers\Creators\CreatorShopController::class, 'library']);
         Route::get('products/{id}/content', [\App\Http\Controllers\Creators\CreatorShopController::class, 'content'])->where('id', '[0-9]+');
         Route::post('lessons/{lessonId}/progress', [\App\Http\Controllers\Creators\CreatorShopController::class, 'progress'])->where('lessonId', '[0-9]+');
+        Route::post('bookings/{purchaseId}/book', [\App\Http\Controllers\Creators\CreatorShopController::class, 'book'])->where('purchaseId', '[0-9]+');
 
         Route::prefix('studio')->controller(\App\Http\Controllers\Creators\CreatorStudioController::class)->group(function () {
             Route::get('store', 'show');
@@ -343,6 +344,10 @@ Route::prefix('creators')->group(function () {
             Route::post('products/{id}/upload-url', 'uploadUrl')->where('id', '[0-9]+');
             Route::get('products/{id}/attendees', 'attendees')->where('id', '[0-9]+');
             Route::post('products/{id}/check-in', 'checkIn')->where('id', '[0-9]+');
+            Route::get('products/{id}/slots', 'slots')->where('id', '[0-9]+');
+            Route::post('products/{id}/slots', 'addSlots')->where('id', '[0-9]+');
+            Route::delete('products/{id}/slots/{slotId}', 'deleteSlot')->where(['id' => '[0-9]+', 'slotId' => '[0-9]+']);
+            Route::get('products/{id}/members', 'members')->where('id', '[0-9]+');
             Route::post('products/{id}/lessons', 'createLesson')->where('id', '[0-9]+');
             Route::post('products/{id}/lessons/order', 'reorderLessons')->where('id', '[0-9]+');
             Route::post('products/{id}/lessons/{lessonId}', 'updateLesson')->where(['id' => '[0-9]+', 'lessonId' => '[0-9]+']);

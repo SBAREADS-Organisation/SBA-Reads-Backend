@@ -78,6 +78,29 @@ class CreatorPresenter
             }
         }
 
+        if ($product->isCoaching()) {
+            $data += [
+                'duration_minutes' => $product->duration_minutes,
+                'timezone' => $product->timezone,
+                'location' => $product->location,
+                'is_online' => (bool) $product->online_url,
+                // The next free times, for the booking picker.
+                'slots' => $product->slots()->open()->limit(200)->get(['id', 'starts_at'])
+                    ->map(fn ($slot) => ['id' => $slot->id, 'starts_at' => $slot->starts_at->toISOString()])->values(),
+            ];
+            if ($private || $withAccess) {
+                $data['online_url'] = $product->online_url;
+            }
+        }
+
+        if ($product->isMembership()) {
+            $data['period_days'] = (int) config('creators.plan_days');
+            if ($private) {
+                $data['active_members'] = $product->purchases()->where('status', 'paid')->where('access_until', '>', now())
+                    ->distinct('buyer_id')->count('buyer_id');
+            }
+        }
+
         if (! $private) {
             $quote = $this->service->quote($product);
             $data['amount_to_pay'] = $quote['amount_paid'];

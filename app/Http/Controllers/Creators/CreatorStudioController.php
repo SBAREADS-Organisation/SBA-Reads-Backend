@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CreatorLesson;
 use App\Models\CreatorProduct;
 use App\Models\CreatorPurchase;
+use App\Models\CreatorSlot;
 use App\Models\CreatorStore;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\Creators\CreatorPresenter;
@@ -211,10 +212,24 @@ class CreatorStudioController extends Controller
             'location' => 'sometimes|nullable|string|max:255',
             'online_url' => 'sometimes|nullable|url|max:2048',
             'capacity' => 'sometimes|nullable|integer|min:1|max:1000000',
+            // Coaching
+            'duration_minutes' => 'sometimes|nullable|integer|min:10|max:480',
         ];
     }
 
     private const EVENT_FIELDS = ['starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity'];
+
+    private const COACHING_FIELDS = ['duration_minutes', 'timezone', 'location', 'online_url'];
+
+    /** The extra fields each kind of product keeps. */
+    private function typeFields(string $type): array
+    {
+        return match ($type) {
+            'event' => self::EVENT_FIELDS,
+            'coaching' => self::COACHING_FIELDS,
+            default => [],
+        };
+    }
 
     public function createProduct(Request $request): JsonResponse
     {
@@ -238,7 +253,8 @@ class CreatorStudioController extends Controller
             'price' => $request->input('price'),
             'currency' => 'NGN',
             'status' => 'draft',
-        ] + ($request->input('type') === 'event' ? $request->only(self::EVENT_FIELDS) : []));
+        ] + $request->only($this->typeFields($request->input('type')))
+          + ($request->input('type') === 'coaching' && ! $request->filled('duration_minutes') ? ['duration_minutes' => 60] : []));
         if ($request->hasFile('cover') && ($error = $this->saveCover($request, $product))) {
             return $error;
         }
@@ -269,8 +285,8 @@ class CreatorStudioController extends Controller
         }
 
         $changes = $request->only(['title', 'summary', 'description', 'price']);
+        $changes += $request->only($this->typeFields($product->type));
         if ($product->isEvent()) {
-            $changes += $request->only(self::EVENT_FIELDS);
             if (isset($changes['capacity']) && $changes['capacity'] < ($sold = $product->purchases()->where('status', 'paid')->count())) {
                 return $this->error("{$sold} tickets are already sold, so the limit can't be lower than that.", 422);
             }
@@ -319,8 +335,29 @@ class CreatorStudioController extends Controller
 
             return null;
         }
+        if ($product->isCoaching()) {
+            $value = fn (string $field) => $request->exists($field) ? $request->input($field) : $product->{$field};
+            if (! $value('duration_minutes')) {
+                return 'Set how long each session lasts before publishing.';
+            }
+            if (! $value('location') && ! $value('online_url')) {
+                return 'Add where sessions happen: a meeting link, a place, or both.';
+            }
+            if (! $product->slots()->open()->exists()) {
+                return 'Add at least one time you are free before publishing.';
+            }
+
+            return null;
+        }
+        if ($product->isMembership() && $price <= 0) {
+            return 'Set a monthly price before publishing a membership.';
+        }
         if (! $product->lessons()->exists()) {
-            return $product->type === 'course' ? 'Add at least one lesson before publishing.' : 'Upload the file buyers will download before publishing.';
+            return match ($product->type) {
+                'course' => 'Add at least one lesson before publishing.',
+                'membership' => 'Add your first post for members before publishing.',
+                default => 'Upload the file buyers will download before publishing.',
+            };
         }
 
         return null;
@@ -474,7 +511,9 @@ class CreatorStudioController extends Controller
             return $this->error('Lesson not found.', 404);
         }
         if ($product->status === 'published' && $product->lessons()->count() === 1) {
-            return $this->error('A published product needs at least one lesson. Add another first, or unpublish the product.', 422);
+            return $this->error($product->isMembership()
+                ? 'A published membership needs at least one post. Add another first, or unpublish it.'
+                : 'A published product needs at least one lesson. Add another first, or unpublish the product.', 422);
         }
         $key = $lesson->file_key;
         $lesson->delete();
@@ -542,6 +581,102 @@ class CreatorStudioController extends Controller
         $ticket->update(['checked_in_at' => now()]);
 
         return $this->success(['name' => $ticket->buyer?->name ?: 'Guest'], 'Checked in.');
+    }
+
+    /** A coach's times: free, held while someone pays, or booked (with who booked). */
+    public function slots(Request $request, int $id): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        if (! $product || ! $product->isCoaching()) {
+            return $this->error('Coaching product not found.', 404);
+        }
+        $slots = $product->slots()->with('purchase.buyer:id,name,email')->where('starts_at', '>', now()->subDays(30))->get()
+            ->map(fn (CreatorSlot $slot) => [
+                'id' => $slot->id,
+                'starts_at' => $slot->starts_at->toISOString(),
+                'status' => $slot->booked_at ? 'booked' : ($slot->held_until?->isFuture() ? 'held' : ($slot->starts_at->isPast() ? 'past' : 'open')),
+                'name' => $slot->booked_at ? ($slot->purchase?->buyer?->name ?: 'A buyer') : null,
+                'email' => $slot->booked_at ? $slot->purchase?->buyer?->email : null,
+            ]);
+        // Paid sessions whose time went to someone else while the payment finished.
+        $waiting = $product->purchases()->with('buyer:id,name,email')->where('status', 'paid')->whereNull('slot_id')->get()
+            ->map(fn (CreatorPurchase $p) => ['name' => $p->buyer?->name ?: 'A buyer', 'email' => $p->buyer?->email]);
+
+        return $this->success(['slots' => $slots, 'waiting' => $waiting], 'Times retrieved.');
+    }
+
+    /** Adds one or more times the coach is free. */
+    public function addSlots(Request $request, int $id): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        if (! $product || ! $product->isCoaching()) {
+            return $this->error('Coaching product not found.', 404);
+        }
+        $validator = Validator::make($request->all(), [
+            'starts_at' => 'required|array|min:1|max:60',
+            'starts_at.*' => 'required|date|after:now',
+        ], ['starts_at.*.after' => 'Times must be in the future.']);
+        if ($validator->fails()) {
+            return $this->validationError($validator);
+        }
+        if ($product->slots()->where('starts_at', '>', now())->count() + count($request->input('starts_at')) > 500) {
+            return $this->error('You can have up to 500 upcoming times. Remove some old ones first.', 422);
+        }
+
+        $added = 0;
+        foreach (array_unique($request->input('starts_at')) as $time) {
+            $at = \Illuminate\Support\Carbon::parse($time)->utc()->startOfMinute();
+            if (! $product->slots()->where('starts_at', $at)->exists()) {
+                $product->slots()->create(['starts_at' => $at]);
+                $added++;
+            }
+        }
+
+        return $this->success(['added' => $added], $added === 1 ? 'Time added.' : "{$added} times added.", 201);
+    }
+
+    public function deleteSlot(Request $request, int $id, int $slotId): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        $slot = $product?->slots()->whereKey($slotId)->first();
+        if (! $slot) {
+            return $this->error('Time not found.', 404);
+        }
+        if ($slot->booked_at) {
+            return $this->error('Someone has booked this time. Contact them to rearrange before removing it.', 409);
+        }
+        if ($slot->held_until?->isFuture()) {
+            return $this->error('Someone is paying for this time right now. Try again in a few minutes.', 409);
+        }
+        $slot->delete();
+
+        return $this->success(null, 'Time removed.');
+    }
+
+    /** People who have joined a membership, and until when. */
+    public function members(Request $request, int $id): JsonResponse
+    {
+        $product = $this->myProduct($request, $id);
+        if (! $product || ! $product->isMembership()) {
+            return $this->error('Membership not found.', 404);
+        }
+        $members = $product->purchases()->with('buyer:id,name,email')->where('status', 'paid')
+            ->selectRaw('buyer_id, max(access_until) as member_until, min(paid_at) as joined_at, count(*) as months')
+            ->groupBy('buyer_id')->get()
+            ->map(fn ($row) => [
+                'name' => $row->buyer?->name ?: 'A member',
+                'email' => $row->buyer?->email,
+                'joined_at' => \Illuminate\Support\Carbon::parse($row->joined_at)->toISOString(),
+                'member_until' => \Illuminate\Support\Carbon::parse($row->member_until)->toISOString(),
+                'active' => \Illuminate\Support\Carbon::parse($row->member_until)->isFuture(),
+                'months' => (int) $row->months,
+            ])
+            ->sortByDesc('member_until')->values();
+
+        return $this->success([
+            'members' => $members,
+            'active' => $members->where('active', true)->count(),
+        ], 'Members retrieved.');
     }
 
     public function sales(Request $request): JsonResponse

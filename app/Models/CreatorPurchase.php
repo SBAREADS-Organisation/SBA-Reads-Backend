@@ -10,6 +10,7 @@ class CreatorPurchase extends Model
     protected $fillable = [
         'product_id', 'store_id', 'buyer_id', 'price', 'fee', 'amount_paid', 'creator_earning',
         'fee_payer', 'plan', 'currency', 'status', 'paid_at', 'ticket_code', 'checked_in_at',
+        'slot_id', 'access_until', 'renew_reminded_at', 'ended_notified_at',
     ];
 
     protected function casts(): array
@@ -21,7 +22,15 @@ class CreatorPurchase extends Model
             'creator_earning' => 'decimal:2',
             'paid_at' => 'datetime',
             'checked_in_at' => 'datetime',
+            'access_until' => 'datetime',
+            'renew_reminded_at' => 'datetime',
+            'ended_notified_at' => 'datetime',
         ];
+    }
+
+    public function slot(): BelongsTo
+    {
+        return $this->belongsTo(CreatorSlot::class, 'slot_id');
     }
 
     public function product(): BelongsTo

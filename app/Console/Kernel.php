@@ -28,6 +28,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('creators:plan-reminders')
             ->dailyAt('09:00')
             ->withoutOverlapping();
+
+        // SBA Creators memberships don't renew by themselves: remind members before and after they end.
+        $schedule->command('creators:membership-reminders')
+            ->dailyAt('09:15')
+            ->withoutOverlapping();
     }
 
     protected function commands(): void

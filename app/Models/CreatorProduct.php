@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CreatorProduct extends Model
 {
-    public const TYPES = ['course', 'download', 'event'];
+    public const TYPES = ['course', 'download', 'event', 'coaching', 'membership'];
 
     public const STATUSES = ['draft', 'published', 'hidden'];
 
     protected $fillable = [
         'store_id', 'user_id', 'type', 'title', 'slug', 'summary', 'description',
         'cover_url', 'price', 'currency', 'status', 'published_at',
-        'starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity',
+        'starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity', 'duration_minutes',
     ];
 
     protected function casts(): array
@@ -26,6 +26,7 @@ class CreatorProduct extends Model
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
             'capacity' => 'integer',
+            'duration_minutes' => 'integer',
         ];
     }
 
@@ -44,6 +45,11 @@ class CreatorProduct extends Model
         return $this->hasMany(CreatorPurchase::class, 'product_id');
     }
 
+    public function slots(): HasMany
+    {
+        return $this->hasMany(CreatorSlot::class, 'product_id')->orderBy('starts_at');
+    }
+
     public function isFree(): bool
     {
         return (float) $this->price <= 0;
@@ -54,14 +60,49 @@ class CreatorProduct extends Model
         return $this->type === 'event';
     }
 
+    public function isCoaching(): bool
+    {
+        return $this->type === 'coaching';
+    }
+
+    public function isMembership(): bool
+    {
+        return $this->type === 'membership';
+    }
+
+    /** Products bought once and kept. Coaching can be booked again and memberships renewed. */
+    public function isOneOff(): bool
+    {
+        return ! $this->isCoaching() && ! $this->isMembership();
+    }
+
     public function ownedBy(?User $user): bool
     {
         return $user && (int) $this->user_id === (int) $user->id;
     }
 
+    /** Whether the person has access now. A membership only counts while it is paid up. */
     public function purchasedBy(?User $user): bool
     {
-        return $user && $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid')->exists();
+        if (! $user) {
+            return false;
+        }
+        $paid = $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid');
+
+        return $this->isMembership()
+            ? $paid->where('access_until', '>', now())->exists()
+            : $paid->exists();
+    }
+
+    /** When the person's membership runs out, if they have ever joined. */
+    public function memberUntil(?User $user): ?\Illuminate\Support\Carbon
+    {
+        if (! $user || ! $this->isMembership()) {
+            return null;
+        }
+        $until = $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid')->max('access_until');
+
+        return $until ? \Illuminate\Support\Carbon::parse($until) : null;
     }
 
     /** Tickets still available, or null when the event has no limit. */

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\CreatorLesson;
 use App\Models\CreatorProduct;
 use App\Models\CreatorPurchase;
+use App\Models\CreatorSlot;
 use App\Models\CreatorStore;
 use App\Services\Creators\CreatorPresenter;
 use App\Services\Creators\CreatorService;
@@ -14,9 +15,12 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/** Browsing, buying and taking SBA Creators courses and downloads. */
+/** Browsing, buying and using SBA Creators products: courses, downloads, events, coaching and memberships. */
 class CreatorShopController extends Controller
 {
+    /** How long a coaching time is kept for someone while they pay. */
+    private const HOLD_MINUTES = 30;
+
     public function __construct(private CreatorPresenter $presenter, private CreatorService $service)
     {
     }
@@ -83,7 +87,7 @@ class CreatorShopController extends Controller
         if ($product->ownedBy($user)) {
             return $this->error('This is your own product.', 409);
         }
-        if ($product->purchasedBy($user)) {
+        if ($product->isOneOff() && $product->purchasedBy($user)) {
             return $this->error($product->isEvent() ? 'You already have a ticket.' : 'You already have this.', 409);
         }
         if ($product->ticketSalesClosed()) {
@@ -92,34 +96,49 @@ class CreatorShopController extends Controller
         if ($product->spotsLeft() === 0) {
             return $this->error('Sorry, this event is sold out.', 422);
         }
+        $slot = null;
+        if ($product->isCoaching()) {
+            $slot = CreatorSlot::where('product_id', $product->id)->whereKey($request->integer('slot_id'))->first();
+            if (! $slot) {
+                return $this->error('Choose a time for your session.', 422);
+            }
+            if (! $slot->isOpenFor($this->pendingPurchase($product, $user))) {
+                return $this->error('That time has just been taken. Please choose another.', 409);
+            }
+        }
 
         $quote = $this->service->quote($product);
 
         if ($product->isFree()) {
-            // The product row stays locked until the ticket is saved, so two people can't take the last place.
-            $soldOut = DB::transaction(function () use ($product, $user, $quote) {
+            // The product row stays locked until the purchase is saved, so two people can't take the last place or the same time.
+            $refusal = DB::transaction(function () use ($product, $user, $quote, $slot) {
                 CreatorProduct::whereKey($product->id)->lockForUpdate()->first();
                 if ($product->spotsLeft() === 0) {
-                    return true;
+                    return 'Sorry, this event is sold out.';
+                }
+                if ($slot && ! CreatorSlot::whereKey($slot->id)->lockForUpdate()->first()->isOpenFor()) {
+                    return 'That time has just been taken. Please choose another.';
                 }
                 $purchase = CreatorPurchase::create([
                     'product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id,
-                    'price' => 0, 'fee' => 0, 'amount_paid' => 0, 'creator_earning' => 0,
+                    'price' => 0, 'fee' => 0, 'amount_paid' => 0, 'creator_earning' => 0, 'slot_id' => $slot?->id,
                     'fee_payer' => $quote['fee_payer'], 'plan' => $quote['plan'], 'currency' => $product->currency, 'status' => 'pending',
                 ]);
                 $this->service->fulfilPurchase($purchase);
 
-                return false;
+                return null;
             });
-            if ($soldOut) {
-                return $this->error('Sorry, this event is sold out.', 422);
+            if ($refusal) {
+                return $this->error($refusal, $slot ? 409 : 422);
             }
 
             return $this->success(['owned' => true], 'Added to your library.', 201);
         }
 
         try {
-            return $this->startPayment($user, $product, $quote);
+            return $this->startPayment($user, $product, $quote, $slot);
+        } catch (SlotTaken) {
+            return $this->error('That time has just been taken. Please choose another.', 409);
         } catch (\Throwable $e) {
             report($e);
 
@@ -127,22 +146,38 @@ class CreatorShopController extends Controller
         }
     }
 
-    private function startPayment($user, CreatorProduct $product, array $quote): JsonResponse
+    private function pendingPurchase(CreatorProduct $product, $user): ?CreatorPurchase
     {
-        return DB::transaction(function () use ($user, $product, $quote) {
+        return CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)->where('status', 'pending')->first();
+    }
+
+    private function startPayment($user, CreatorProduct $product, array $quote, ?CreatorSlot $slot): JsonResponse
+    {
+        return DB::transaction(function () use ($user, $product, $quote, $slot) {
             // Reuse an unpaid attempt so retries don't pile up records.
-            $purchase = CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)->where('status', 'pending')->first()
+            $purchase = $this->pendingPurchase($product, $user)
                 ?? new CreatorPurchase(['product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id, 'status' => 'pending']);
             $purchase->fill([
                 'price' => $quote['price'], 'fee' => $quote['fee'], 'amount_paid' => $quote['amount_paid'],
                 'creator_earning' => $quote['creator_earning'], 'fee_payer' => $quote['fee_payer'],
-                'plan' => $quote['plan'], 'currency' => $product->currency,
+                'plan' => $quote['plan'], 'currency' => $product->currency, 'slot_id' => $slot?->id,
             ])->save();
+
+            if ($slot) {
+                // Keep this time for the buyer while they pay, and let go of any other time they were holding.
+                $locked = CreatorSlot::whereKey($slot->id)->lockForUpdate()->first();
+                if (! $locked->isOpenFor($purchase)) {
+                    throw new SlotTaken();
+                }
+                CreatorSlot::where('purchase_id', $purchase->id)->whereNull('booked_at')->whereKeyNot($slot->id)
+                    ->update(['purchase_id' => null, 'held_until' => null]);
+                $locked->update(['purchase_id' => $purchase->id, 'held_until' => now()->addMinutes(self::HOLD_MINUTES)]);
+            }
 
             $transaction = app(PaymentService::class)->createPayment([
                 'amount' => $quote['amount_paid'],
                 'currency' => $product->currency,
-                'description' => 'SBA Creators: ' . $product->title,
+                'description' => 'SBA Creators: ' . $product->title . ($product->isMembership() ? ' (1 month)' : ''),
                 'purpose' => 'creator_purchase',
                 'purpose_id' => $purchase->id,
                 'meta_data' => ['product_id' => $product->id, 'purchase_id' => $purchase->id],
@@ -161,29 +196,40 @@ class CreatorShopController extends Controller
         });
     }
 
-    /** Everything the signed-in person has bought or claimed. */
+    /** Everything the signed-in person has bought, joined or booked. */
     public function library(Request $request): JsonResponse
     {
+        $user = $request->user();
         $products = CreatorProduct::with('store')->withCount('lessons')
-            ->whereHas('purchases', fn ($q) => $q->where('buyer_id', $request->user()->id)->where('status', 'paid'))
+            ->whereHas('purchases', fn ($q) => $q->where('buyer_id', $user->id)->where('status', 'paid'))
             ->get();
 
         $done = DB::table('creator_lesson_progress')
             ->join('creator_lessons', 'creator_lessons.id', '=', 'creator_lesson_progress.lesson_id')
-            ->where('creator_lesson_progress.user_id', $request->user()->id)
+            ->where('creator_lesson_progress.user_id', $user->id)
             ->whereNotNull('completed_at')
             ->selectRaw('creator_lessons.product_id, count(*) as done')
             ->groupBy('creator_lessons.product_id')
             ->pluck('done', 'product_id');
 
         return $this->success([
-            'products' => $products->map(fn ($p) => $this->presenter->product($p) + [
-                'completed_lessons' => (int) ($done[$p->id] ?? 0),
-            ])->values(),
+            'products' => $products->map(function (CreatorProduct $p) use ($done, $user) {
+                $extra = ['completed_lessons' => (int) ($done[$p->id] ?? 0)];
+                if ($p->isMembership()) {
+                    $extra['member_until'] = $p->memberUntil($user)?->toISOString();
+                }
+                if ($p->isCoaching()) {
+                    $next = CreatorSlot::whereIn('purchase_id', $p->purchases()->where('buyer_id', $user->id)->where('status', 'paid')->pluck('id'))
+                        ->whereNotNull('booked_at')->where('starts_at', '>', now()->subHours(3))->min('starts_at');
+                    $extra['next_session'] = $next ? \Illuminate\Support\Carbon::parse($next)->toISOString() : null;
+                }
+
+                return $this->presenter->product($p) + $extra;
+            })->values(),
         ], 'Library retrieved.');
     }
 
-    /** Lessons with their content. Buyers and the creator see everything; anyone sees preview lessons. */
+    /** What the person gets: lessons, a ticket, their bookings, or the members' area. */
     public function content(Request $request, int $id): JsonResponse
     {
         $product = CreatorProduct::with(['store', 'lessons'])->find($id);
@@ -204,6 +250,23 @@ class CreatorShopController extends Controller
             ], 'Ticket retrieved.');
         }
 
+        if ($product->isCoaching()) {
+            $bookings = $product->purchases()->with('slot')->where('buyer_id', $user->id)->where('status', 'paid')->latest('paid_at')->get()
+                ->map(fn (CreatorPurchase $p) => [
+                    'id' => $p->id,
+                    'starts_at' => $p->slot?->starts_at?->toISOString(),
+                    'paid_at' => $p->paid_at?->toISOString(),
+                ])
+                ->sortBy(fn ($b) => $b['starts_at'] ?? '0')->values();
+
+            return $this->success([
+                'product' => $this->presenter->product($product, withAccess: $hasAccess),
+                'has_access' => $hasAccess,
+                'bookings' => $bookings,
+                'lessons' => [],
+            ], 'Bookings retrieved.');
+        }
+
         $progress = DB::table('creator_lesson_progress')->where('user_id', $user->id)
             ->whereIn('lesson_id', $product->lessons->pluck('id'))
             ->get()->keyBy('lesson_id');
@@ -211,6 +274,7 @@ class CreatorShopController extends Controller
         return $this->success([
             'product' => $this->presenter->product($product),
             'has_access' => $hasAccess,
+            'member_until' => $product->memberUntil($user)?->toISOString(),
             'lessons' => $product->lessons->map(function (CreatorLesson $lesson) use ($hasAccess, $progress) {
                 $row = $progress[$lesson->id] ?? null;
 
@@ -220,6 +284,20 @@ class CreatorShopController extends Controller
                 ];
             })->values(),
         ], 'Content retrieved.');
+    }
+
+    /** Chooses a time for a paid coaching session that doesn't have one yet. */
+    public function book(Request $request, int $purchaseId): JsonResponse
+    {
+        $purchase = CreatorPurchase::with('product')->where('buyer_id', $request->user()->id)->where('status', 'paid')->find($purchaseId);
+        if (! $purchase || ! $purchase->product->isCoaching()) {
+            return $this->error('Booking not found.', 404);
+        }
+        if ($reason = $this->service->bookSlot($purchase, $request->integer('slot_id'))) {
+            return $this->error($reason, 409);
+        }
+
+        return $this->success(null, 'Your session is booked.');
     }
 
     public function progress(Request $request, int $lessonId): JsonResponse
@@ -245,4 +323,9 @@ class CreatorShopController extends Controller
 
         return $this->success(null, 'Progress saved.');
     }
+}
+
+/** Thrown when a coaching time is taken between choosing it and paying. */
+class SlotTaken extends \RuntimeException
+{
 }
