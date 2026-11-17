@@ -322,6 +322,9 @@ Route::prefix('creators')->group(function () {
     Route::get('products', [\App\Http\Controllers\Creators\CreatorShopController::class, 'index']);
     Route::get('stores/{slug}', [\App\Http\Controllers\Creators\CreatorShopController::class, 'store']);
     Route::get('stores/{slug}/products/{productSlug}', [\App\Http\Controllers\Creators\CreatorShopController::class, 'product']);
+    Route::get('products/{id}/quote', [\App\Http\Controllers\Creators\CreatorShopController::class, 'quote'])->where('id', '[0-9]+')->middleware('throttle:30,1');
+    Route::post('stores/{slug}/subscribe', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'subscribe'])->middleware('throttle:5,1');
+    Route::post('unsubscribe/{token}', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'unsubscribe'])->middleware('throttle:20,1');
 
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('products/{id}/buy', [\App\Http\Controllers\Creators\CreatorShopController::class, 'buy'])->where('id', '[0-9]+');
@@ -329,6 +332,20 @@ Route::prefix('creators')->group(function () {
         Route::get('products/{id}/content', [\App\Http\Controllers\Creators\CreatorShopController::class, 'content'])->where('id', '[0-9]+');
         Route::post('lessons/{lessonId}/progress', [\App\Http\Controllers\Creators\CreatorShopController::class, 'progress'])->where('lessonId', '[0-9]+');
         Route::post('bookings/{purchaseId}/book', [\App\Http\Controllers\Creators\CreatorShopController::class, 'book'])->where('purchaseId', '[0-9]+');
+        Route::post('stores/{slug}/affiliate', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'joinAffiliate']);
+        Route::get('affiliate', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'myAffiliates']);
+
+        Route::prefix('studio')->controller(\App\Http\Controllers\Creators\CreatorMarketingController::class)->group(function () {
+            Route::get('discounts', 'discounts');
+            Route::post('discounts', 'createDiscount');
+            Route::post('discounts/{id}', 'updateDiscount')->where('id', '[0-9]+');
+            Route::delete('discounts/{id}', 'deleteDiscount')->where('id', '[0-9]+');
+            Route::get('affiliates', 'affiliates');
+            Route::post('affiliates/settings', 'affiliateSettings');
+            Route::get('subscribers', 'subscribers');
+            Route::get('subscribers/export', 'exportSubscribers');
+            Route::post('broadcasts', 'broadcast')->middleware('throttle:5,1');
+        });
 
         Route::prefix('studio')->controller(\App\Http\Controllers\Creators\CreatorStudioController::class)->group(function () {
             Route::get('store', 'show');

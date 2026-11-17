@@ -10,7 +10,7 @@ class CreatorStore extends Model
 {
     protected $fillable = [
         'user_id', 'name', 'slug', 'bio', 'logo_url', 'fee_payer',
-        'plan', 'plan_paid_until', 'trial_ends_at', 'suspended',
+        'plan', 'plan_paid_until', 'trial_ends_at', 'suspended', 'affiliate_rate',
     ];
 
     protected function casts(): array
@@ -19,6 +19,7 @@ class CreatorStore extends Model
             'plan_paid_until' => 'datetime',
             'trial_ends_at' => 'datetime',
             'suspended' => 'boolean',
+            'affiliate_rate' => 'decimal:3',
         ];
     }
 

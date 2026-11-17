@@ -3,10 +3,13 @@
 namespace App\Services\Creators;
 
 use App\Mail\Generic\GenericAppNotification;
+use App\Models\CreatorAffiliate;
+use App\Models\CreatorDiscount;
 use App\Models\CreatorProduct;
 use App\Models\CreatorPurchase;
 use App\Models\CreatorSlot;
 use App\Models\CreatorStore;
+use App\Models\CreatorSubscriber;
 use App\Models\Transaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,23 +24,43 @@ class CreatorService
      * What a buyer pays and what the creator keeps. The fee is a share of the price set by the
      * store's current plan; the store decides whether the buyer pays it on top or it comes out of earnings.
      *
-     * @return array{price: float, fee: float, amount_paid: float, creator_earning: float, fee_payer: string, plan: string}
+     * A discount code comes off the price first; an affiliate's commission comes out of the creator's earning.
+     *
+     * @return array{list_price: float, discount: float, discount_id: ?int, price: float, fee: float, amount_paid: float, creator_earning: float, affiliate_id: ?int, affiliate_earning: float, fee_payer: string, plan: string}
      */
-    public function quote(CreatorProduct $product): array
+    public function quote(CreatorProduct $product, ?CreatorDiscount $discount = null, ?CreatorAffiliate $affiliate = null): array
     {
         $store = $product->store;
-        $price = round((float) $product->price, 2);
+        $listPrice = round((float) $product->price, 2);
+        $off = $discount ? $discount->amountOff($listPrice) : 0.0;
+        $price = round($listPrice - $off, 2);
         $fee = round($price * $store->feeRate($product->currency), 2);
         $buyerPays = $store->fee_payer === 'buyer';
+        $earning = $buyerPays ? $price : round($price - $fee, 2);
+        $commission = $affiliate && $store->affiliate_rate ? round($earning * (float) $store->affiliate_rate, 2) : 0.0;
 
         return [
+            'list_price' => $listPrice,
+            'discount' => $off,
+            'discount_id' => $off > 0 ? $discount->id : null,
             'price' => $price,
             'fee' => $fee,
             'amount_paid' => $buyerPays ? round($price + $fee, 2) : $price,
-            'creator_earning' => $buyerPays ? $price : round($price - $fee, 2),
+            'creator_earning' => round($earning - $commission, 2),
+            'affiliate_id' => $commission > 0 ? $affiliate->id : null,
+            'affiliate_earning' => $commission,
             'fee_payer' => $store->fee_payer,
             'plan' => $store->activePlan(),
         ];
+    }
+
+    /** The purchase fields a quote fills in. */
+    public static function purchaseFields(array $quote): array
+    {
+        return array_intersect_key($quote, array_flip([
+            'price', 'fee', 'amount_paid', 'creator_earning', 'fee_payer', 'plan',
+            'discount', 'discount_id', 'affiliate_id', 'affiliate_earning',
+        ]));
     }
 
     /** Marks a purchase paid and credits the creator's wallet. Safe to call more than once. */
@@ -89,11 +112,54 @@ class CreatorService
                 ]);
             }
 
+            // The affiliate who sent the buyer gets their share straight into their wallet.
+            $affiliate = $purchase->affiliate_id ? CreatorAffiliate::find($purchase->affiliate_id) : null;
+            if ($affiliate && (float) $purchase->affiliate_earning > 0) {
+                Transaction::create([
+                    'id' => (string) Str::uuid(),
+                    'user_id' => $affiliate->user_id,
+                    'reference' => uniqid('cra_'),
+                    'status' => 'succeeded',
+                    'currency' => $purchase->currency,
+                    'amount' => $purchase->affiliate_earning,
+                    'payment_provider' => 'app',
+                    'description' => 'SBA Creators affiliate commission: ' . $product->title,
+                    'type' => 'payout',
+                    'direction' => 'credit',
+                    'purpose_type' => 'creator_affiliate',
+                    'purpose_id' => $purchase->id,
+                ]);
+            }
+            if ($purchase->discount_id) {
+                CreatorDiscount::whereKey($purchase->discount_id)->increment('uses');
+            }
+
             return $purchase->fresh(['product', 'store', 'buyer', 'slot']);
         });
 
         if (! $credited) {
             return;
+        }
+
+        // Buyers join the store's email list; every email they get has an unsubscribe link.
+        try {
+            CreatorSubscriber::add($credited->store_id, $credited->buyer->email, $credited->buyer->name, 'buyer');
+        } catch (\Throwable $e) {
+            Log::warning('Adding buyer to creator list failed: ' . $e->getMessage());
+        }
+
+        if ($credited->affiliate_id && (float) $credited->affiliate_earning > 0) {
+            try {
+                $affiliate = CreatorAffiliate::with('user')->find($credited->affiliate_id);
+                Mail::to($affiliate->user->email)->queue(new GenericAppNotification(
+                    'You earned an affiliate commission',
+                    "Someone bought \"{$credited->product->title}\" from {$credited->store->name} through your link.\n\n"
+                    . 'You earned ' . $credited->currency . ' ' . number_format((float) $credited->affiliate_earning, 2)
+                    . ", which has been added to your SBA Reads wallet."
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Affiliate commission email failed: ' . $e->getMessage());
+            }
         }
 
         try {

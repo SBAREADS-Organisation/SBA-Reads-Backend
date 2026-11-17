@@ -11,6 +11,7 @@ class CreatorPurchase extends Model
         'product_id', 'store_id', 'buyer_id', 'price', 'fee', 'amount_paid', 'creator_earning',
         'fee_payer', 'plan', 'currency', 'status', 'paid_at', 'ticket_code', 'checked_in_at',
         'slot_id', 'access_until', 'renew_reminded_at', 'ended_notified_at',
+        'discount_id', 'discount', 'affiliate_id', 'affiliate_earning',
     ];
 
     protected function casts(): array
@@ -23,6 +24,8 @@ class CreatorPurchase extends Model
             'paid_at' => 'datetime',
             'checked_in_at' => 'datetime',
             'access_until' => 'datetime',
+            'discount' => 'decimal:2',
+            'affiliate_earning' => 'decimal:2',
             'renew_reminded_at' => 'datetime',
             'ended_notified_at' => 'datetime',
         ];

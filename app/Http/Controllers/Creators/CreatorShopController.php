@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Creators;
 
 use App\Http\Controllers\Controller;
+use App\Models\CreatorAffiliate;
+use App\Models\CreatorDiscount;
 use App\Models\CreatorLesson;
 use App\Models\CreatorProduct;
 use App\Models\CreatorPurchase;
@@ -107,9 +109,14 @@ class CreatorShopController extends Controller
             }
         }
 
-        $quote = $this->service->quote($product);
+        [$discount, $affiliate, $problem] = $this->extras($request, $product, $user);
+        if ($problem) {
+            return $this->error($problem, 422);
+        }
+        $quote = $this->service->quote($product, $discount, $affiliate);
 
-        if ($product->isFree()) {
+        // Free, or made free by a 100% discount code.
+        if ($quote['price'] <= 0) {
             // The product row stays locked until the purchase is saved, so two people can't take the last place or the same time.
             $refusal = DB::transaction(function () use ($product, $user, $quote, $slot) {
                 CreatorProduct::whereKey($product->id)->lockForUpdate()->first();
@@ -121,9 +128,8 @@ class CreatorShopController extends Controller
                 }
                 $purchase = CreatorPurchase::create([
                     'product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id,
-                    'price' => 0, 'fee' => 0, 'amount_paid' => 0, 'creator_earning' => 0, 'slot_id' => $slot?->id,
-                    'fee_payer' => $quote['fee_payer'], 'plan' => $quote['plan'], 'currency' => $product->currency, 'status' => 'pending',
-                ]);
+                    'slot_id' => $slot?->id, 'currency' => $product->currency, 'status' => 'pending',
+                ] + CreatorService::purchaseFields($quote));
                 $this->service->fulfilPurchase($purchase);
 
                 return null;
@@ -146,6 +152,59 @@ class CreatorShopController extends Controller
         }
     }
 
+    /**
+     * The discount code and affiliate a purchase uses: [discount, affiliate, problem].
+     * A code that doesn't work is reported; a referral that doesn't apply is quietly ignored.
+     */
+    private function extras(Request $request, CreatorProduct $product, $user): array
+    {
+        $discount = null;
+        if ($request->filled('code')) {
+            $discount = CreatorDiscount::where('store_id', $product->store_id)
+                ->where('code', strtoupper(trim((string) $request->input('code'))))->first();
+            if (! $discount) {
+                return [null, null, 'That discount code is not valid.'];
+            }
+            if ($problem = $discount->problemFor($product)) {
+                return [null, null, $problem];
+            }
+        }
+
+        $affiliate = null;
+        if ($request->filled('ref') && $product->store->affiliate_rate) {
+            $affiliate = CreatorAffiliate::where('store_id', $product->store_id)
+                ->where('code', strtoupper(trim((string) $request->input('ref'))))->first();
+            // Nobody earns commission on their own purchase.
+            if ($affiliate && $user && (int) $affiliate->user_id === (int) $user->id) {
+                $affiliate = null;
+            }
+        }
+
+        return [$discount, $affiliate, null];
+    }
+
+    /** The price after a discount code, so buyers see it before paying. */
+    public function quote(Request $request, int $id): JsonResponse
+    {
+        $product = $this->visible()->whereKey($id)->first();
+        if (! $product) {
+            return $this->error('This product is not available.', 404);
+        }
+        [$discount, $affiliate, $problem] = $this->extras($request, $product, $request->user('sanctum'));
+        if ($problem) {
+            return $this->error($problem, 422);
+        }
+        $quote = $this->service->quote($product, $discount, $affiliate);
+
+        return $this->success([
+            'list_price' => $quote['list_price'],
+            'discount' => $quote['discount'],
+            'amount_to_pay' => $quote['amount_paid'],
+            'buyer_fee' => $quote['fee_payer'] === 'buyer' ? $quote['fee'] : 0,
+            'code' => $discount?->code,
+        ], $discount ? 'Code applied.' : 'Price retrieved.');
+    }
+
     private function pendingPurchase(CreatorProduct $product, $user): ?CreatorPurchase
     {
         return CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)->where('status', 'pending')->first();
@@ -157,10 +216,8 @@ class CreatorShopController extends Controller
             // Reuse an unpaid attempt so retries don't pile up records.
             $purchase = $this->pendingPurchase($product, $user)
                 ?? new CreatorPurchase(['product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id, 'status' => 'pending']);
-            $purchase->fill([
-                'price' => $quote['price'], 'fee' => $quote['fee'], 'amount_paid' => $quote['amount_paid'],
-                'creator_earning' => $quote['creator_earning'], 'fee_payer' => $quote['fee_payer'],
-                'plan' => $quote['plan'], 'currency' => $product->currency, 'slot_id' => $slot?->id,
+            $purchase->fill(CreatorService::purchaseFields($quote) + [
+                'currency' => $product->currency, 'slot_id' => $slot?->id,
             ])->save();
 
             if ($slot) {

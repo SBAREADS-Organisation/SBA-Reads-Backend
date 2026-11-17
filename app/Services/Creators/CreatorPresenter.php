@@ -21,6 +21,8 @@ class CreatorPresenter
             'slug' => $store->slug,
             'bio' => $store->bio,
             'logo_url' => $store->logo_url,
+            // Share of the creator's earning affiliates get, or null when the store has no affiliate programme.
+            'affiliate_rate' => $store->affiliate_rate !== null ? (float) $store->affiliate_rate : null,
         ];
 
         if ($private) {
