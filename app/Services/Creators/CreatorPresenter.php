@@ -103,6 +103,30 @@ class CreatorPresenter
             }
         }
 
+        // Selling tools: instalments, the checkout add-on, and a bonus SBA ebook.
+        if ($private) {
+            $data += [
+                'instalments_max' => $product->instalments_max,
+                'upsell_product_id' => $product->upsell_product_id,
+                'upsell_price' => $product->upsell_price !== null ? (float) $product->upsell_price : null,
+                'bonus_book_id' => $product->bonus_book_id,
+            ];
+        } else {
+            $data['instalments_max'] = $product->allowsInstalments() ? $product->instalments_max : null;
+            if ($offer = $product->activeUpsell()) {
+                $offerQuote = $this->service->quote($offer, null, null, (float) $product->upsell_price);
+                $data['upsell'] = [
+                    'id' => $offer->id, 'title' => $offer->title, 'type' => $offer->type, 'cover_url' => $offer->cover_url,
+                    'list_price' => (float) $offer->price, 'price' => (float) $product->upsell_price, 'amount_to_pay' => $offerQuote['amount_paid'],
+                ];
+            }
+        }
+        $book = $product->bonus_book_id ? $product->bonusBook : null;
+        if ($book && $book->status === 'approved') {
+            $cover = is_array($book->cover_image) ? ($book->cover_image['public_url'] ?? $book->cover_image['url'] ?? null) : null;
+            $data['bonus_book'] = ['id' => $book->id, 'title' => $book->title, 'cover_url' => $cover];
+        }
+
         if (! $private) {
             $quote = $this->service->quote($product);
             $data['amount_to_pay'] = $quote['amount_paid'];

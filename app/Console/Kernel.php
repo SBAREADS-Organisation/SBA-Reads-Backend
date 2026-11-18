@@ -33,6 +33,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('creators:membership-reminders')
             ->dailyAt('09:15')
             ->withoutOverlapping();
+
+        // SBA Creators: automatic membership renewals and instalments due (each charge is attempted once per due date).
+        $schedule->command('creators:charge-due')
+            ->hourly()
+            ->withoutOverlapping();
     }
 
     protected function commands(): void

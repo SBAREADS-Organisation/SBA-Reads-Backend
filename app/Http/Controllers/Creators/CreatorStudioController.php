@@ -214,6 +214,11 @@ class CreatorStudioController extends Controller
             'capacity' => 'sometimes|nullable|integer|min:1|max:1000000',
             // Coaching
             'duration_minutes' => 'sometimes|nullable|integer|min:10|max:480',
+            // Selling tools
+            'instalments_max' => 'sometimes|nullable|integer|in:2,3,4',
+            'upsell_product_id' => 'sometimes|nullable|integer',
+            'upsell_price' => 'sometimes|nullable|numeric|min:0',
+            'bonus_book_id' => 'sometimes|nullable|integer',
         ];
     }
 
@@ -291,6 +296,9 @@ class CreatorStudioController extends Controller
                 return $this->error("{$sold} tickets are already sold, so the limit can't be lower than that.", 422);
             }
         }
+        if ($problem = $this->sellingTools($request, $product, $changes)) {
+            return $this->error($problem, 422);
+        }
         // A product with buyers keeps its type, so what people paid for doesn't change shape.
         if ($request->filled('type') && ! $product->purchases()->exists()) {
             $changes['type'] = $request->input('type');
@@ -312,6 +320,60 @@ class CreatorStudioController extends Controller
         }
 
         return $this->success(['product' => $this->presenter->product($product->fresh(), true, withLessons: true, withFiles: true)], 'Product saved.');
+    }
+
+    /** Checks and adds instalments, the checkout add-on and the bonus ebook to a product's changes. */
+    private function sellingTools(Request $request, CreatorProduct $product, array &$changes): ?string
+    {
+        if ($request->exists('instalments_max')) {
+            $max = $request->input('instalments_max') ? (int) $request->input('instalments_max') : null;
+            if ($max && $product->type !== 'course') {
+                return 'Only courses can be paid in instalments.';
+            }
+            $price = (float) ($changes['price'] ?? $product->price);
+            if ($max && $price < (float) config('creators.instalment_min_ngn')) {
+                return 'Instalments are for courses priced at ₦' . number_format((float) config('creators.instalment_min_ngn')) . ' or more.';
+            }
+            $changes['instalments_max'] = $max;
+        }
+
+        if ($request->exists('upsell_product_id')) {
+            $offerId = $request->input('upsell_product_id') ? (int) $request->input('upsell_product_id') : null;
+            if ($offerId) {
+                $offer = CreatorProduct::where('store_id', $product->store_id)->find($offerId);
+                if (! $offer || $offer->id === $product->id || ! in_array($offer->type, ['course', 'download'], true)) {
+                    return 'Choose another course or download from your store as the add-on.';
+                }
+                $special = (float) $request->input('upsell_price', $product->upsell_price ?? $offer->price);
+                if ($special < (float) config('creators.min_price_ngn') || $special > (float) $offer->price) {
+                    return 'The add-on price must be between ₦' . config('creators.min_price_ngn') . ' and its normal price of ₦' . number_format((float) $offer->price) . '.';
+                }
+                $changes['upsell_product_id'] = $offer->id;
+                $changes['upsell_price'] = $special;
+            } else {
+                $changes['upsell_product_id'] = null;
+                $changes['upsell_price'] = null;
+            }
+        }
+
+        if ($request->exists('bonus_book_id')) {
+            $bookId = $request->input('bonus_book_id') ? (int) $request->input('bonus_book_id') : null;
+            if ($bookId && ! \App\Models\Book::where('author_id', $request->user()->id)->where('status', 'approved')->whereKey($bookId)->exists()) {
+                return 'Choose one of your own published SBA books.';
+            }
+            $changes['bonus_book_id'] = $bookId;
+        }
+
+        return null;
+    }
+
+    /** The creator's published SBA books, for the "include my ebook" option. */
+    public function books(Request $request): JsonResponse
+    {
+        $books = \App\Models\Book::where('author_id', $request->user()->id)->where('status', 'approved')
+            ->orderBy('title')->get(['id', 'title']);
+
+        return $this->success(['books' => $books], 'Books retrieved.');
     }
 
     private function cannotPublish(Request $request, CreatorProduct $product, float $price): ?string

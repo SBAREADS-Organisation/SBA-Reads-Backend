@@ -382,6 +382,8 @@ class PaystackWebhookService
                 return \App\Models\CreatorPurchase::whereKey($transaction->purpose_id)->where('status', 'paid')->exists();
             case 'creator_plan':
                 return (bool) ($transaction->meta_data['plan_applied'] ?? false);
+            case 'creator_instalment':
+                return (bool) ($transaction->meta_data['instalment_applied'] ?? false);
             default:
                 return true;
         }
@@ -410,8 +412,13 @@ class PaystackWebhookService
 
                 case 'creator_purchase':
                     if ($purchase = \App\Models\CreatorPurchase::find($transaction->purpose_id)) {
-                        app(\App\Services\Creators\CreatorService::class)->fulfilPurchase($purchase);
+                        // The charge data carries the card, kept for automatic renewals and instalments.
+                        app(\App\Services\Creators\CreatorService::class)->fulfilPurchase($purchase, $data);
                     }
+                    break;
+
+                case 'creator_instalment':
+                    app(\App\Services\Creators\CreatorService::class)->fulfilInstalment($transaction);
                     break;
 
                 case 'creator_plan':

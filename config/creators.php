@@ -17,6 +17,12 @@ return [
     ],
 
     'min_price_ngn' => 100,
+
+    // Courses at or above this price can be split into 2-4 monthly payments.
+    'instalment_min_ngn' => 5000,
+    'instalment_days' => 30,
+    // A missed instalment is retried this many times, two days apart, before the course locks.
+    'instalment_max_failures' => 3,
     'max_price_ngn' => 10000000,
 
     // What creators may upload, by lesson or file type.

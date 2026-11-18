@@ -92,6 +92,9 @@ class CreatorShopController extends Controller
         if ($product->isOneOff() && $product->purchasedBy($user)) {
             return $this->error($product->isEvent() ? 'You already have a ticket.' : 'You already have this.', 409);
         }
+        if ($this->missedInstalment($product, $user)) {
+            return $this->error('You have a missed instalment for this course. Pay it from My Courses to unlock it again.', 409);
+        }
         if ($product->ticketSalesClosed()) {
             return $this->error('This event has already taken place.', 422);
         }
@@ -114,6 +117,23 @@ class CreatorShopController extends Controller
             return $this->error($problem, 422);
         }
         $quote = $this->service->quote($product, $discount, $affiliate);
+
+        // Pay in instalments: courses only, at or above the minimum, card or link for the later payments.
+        $instalments = $request->integer('instalments');
+        if ($instalments) {
+            if (! $product->allowsInstalments() || $instalments < 2 || $instalments > $product->instalments_max || $quote['price'] < (float) config('creators.instalment_min_ngn')) {
+                return $this->error('This course can\'t be paid in that many instalments.', 422);
+            }
+            if ($request->boolean('upsell')) {
+                return $this->error('Add-ons can\'t be combined with instalments. Buy the add-on separately.', 422);
+            }
+        }
+
+        // The checkout offer: another product at a special price, paid in the same payment.
+        $upsell = null;
+        if ($request->boolean('upsell') && ($offer = $product->activeUpsell()) && ! $offer->purchasedBy($user) && $quote['price'] > 0) {
+            $upsell = [$offer, $this->service->quote($offer, null, $affiliate, (float) $product->upsell_price)];
+        }
 
         // Free, or made free by a 100% discount code.
         if ($quote['price'] <= 0) {
@@ -142,7 +162,11 @@ class CreatorShopController extends Controller
         }
 
         try {
-            return $this->startPayment($user, $product, $quote, $slot);
+            return $this->startPayment($user, $product, $quote, $slot, [
+                'instalments' => $instalments ?: null,
+                'auto_renew' => $product->isMembership() && $request->boolean('auto_renew'),
+                'upsell' => $upsell,
+            ]);
         } catch (SlotTaken) {
             return $this->error('That time has just been taken. Please choose another.', 409);
         } catch (\Throwable $e) {
@@ -207,18 +231,41 @@ class CreatorShopController extends Controller
 
     private function pendingPurchase(CreatorProduct $product, $user): ?CreatorPurchase
     {
-        return CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)->where('status', 'pending')->first();
+        return CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)
+            ->where('status', 'pending')->whereNull('parent_purchase_id')->first();
     }
 
-    private function startPayment($user, CreatorProduct $product, array $quote, ?CreatorSlot $slot): JsonResponse
+    private function missedInstalment(CreatorProduct $product, $user): ?CreatorPurchase
     {
-        return DB::transaction(function () use ($user, $product, $quote, $slot) {
+        return CreatorPurchase::where('product_id', $product->id)->where('buyer_id', $user->id)
+            ->where('status', 'paid')->where('instalment_status', 'defaulted')->first();
+    }
+
+    private function startPayment($user, CreatorProduct $product, array $quote, ?CreatorSlot $slot, array $options = []): JsonResponse
+    {
+        return DB::transaction(function () use ($user, $product, $quote, $slot, $options) {
             // Reuse an unpaid attempt so retries don't pile up records.
             $purchase = $this->pendingPurchase($product, $user)
                 ?? new CreatorPurchase(['product_id' => $product->id, 'store_id' => $product->store_id, 'buyer_id' => $user->id, 'status' => 'pending']);
             $purchase->fill(CreatorService::purchaseFields($quote) + [
                 'currency' => $product->currency, 'slot_id' => $slot?->id,
+                'instalment_count' => $options['instalments'] ?? null,
+                'auto_renew' => (bool) ($options['auto_renew'] ?? false),
             ])->save();
+
+            // An earlier attempt's add-on is replaced by this attempt's choice.
+            CreatorPurchase::where('parent_purchase_id', $purchase->id)->where('status', 'pending')->delete();
+            $charge = $purchase->isInstalments() ? $purchase->instalmentPart((float) $quote['amount_paid'], 1) : (float) $quote['amount_paid'];
+            $title = $product->title;
+            if (! empty($options['upsell'])) {
+                [$offer, $offerQuote] = $options['upsell'];
+                CreatorPurchase::create([
+                    'product_id' => $offer->id, 'store_id' => $offer->store_id, 'buyer_id' => $user->id, 'status' => 'pending',
+                    'currency' => $offer->currency, 'parent_purchase_id' => $purchase->id,
+                ] + CreatorService::purchaseFields($offerQuote));
+                $charge = round($charge + (float) $offerQuote['amount_paid'], 2);
+                $title .= ' + ' . $offer->title;
+            }
 
             if ($slot) {
                 // Keep this time for the buyer while they pay, and let go of any other time they were holding.
@@ -232,9 +279,10 @@ class CreatorShopController extends Controller
             }
 
             $transaction = app(PaymentService::class)->createPayment([
-                'amount' => $quote['amount_paid'],
+                'amount' => $charge,
                 'currency' => $product->currency,
-                'description' => 'SBA Creators: ' . $product->title . ($product->isMembership() ? ' (1 month)' : ''),
+                'description' => 'SBA Creators: ' . $title . ($product->isMembership() ? ' (1 month)' : '')
+                    . ($purchase->isInstalments() ? " (instalment 1 of {$purchase->instalment_count})" : ''),
                 'purpose' => 'creator_purchase',
                 'purpose_id' => $purchase->id,
                 'meta_data' => ['product_id' => $product->id, 'purchase_id' => $purchase->id],
@@ -247,7 +295,7 @@ class CreatorShopController extends Controller
             return $this->success([
                 'authorization_url' => $transaction->payment_client_secret,
                 'reference' => $transaction->reference,
-                'amount' => $quote['amount_paid'],
+                'amount' => $charge,
                 'currency' => $product->currency,
             ], 'Complete your payment to get access.');
         });
@@ -332,6 +380,8 @@ class CreatorShopController extends Controller
             'product' => $this->presenter->product($product),
             'has_access' => $hasAccess,
             'member_until' => $product->memberUntil($user)?->toISOString(),
+            'renewal' => $this->renewalInfo($product, $user),
+            'instalments' => $this->instalmentInfo($product, $user),
             'lessons' => $product->lessons->map(function (CreatorLesson $lesson) use ($hasAccess, $progress) {
                 $row = $progress[$lesson->id] ?? null;
 
@@ -355,6 +405,79 @@ class CreatorShopController extends Controller
         }
 
         return $this->success(null, 'Your session is booked.');
+    }
+
+    /** A member's automatic renewal setting and the card it uses. */
+    private function renewalInfo(CreatorProduct $product, $user): ?array
+    {
+        if (! $product->isMembership() || ! $user) {
+            return null;
+        }
+        $latest = CreatorPurchase::with('card')->where('product_id', $product->id)->where('buyer_id', $user->id)
+            ->where('status', 'paid')->whereNotNull('access_until')->orderByDesc('access_until')->first();
+
+        return $latest ? [
+            'auto_renew' => (bool) $latest->auto_renew,
+            'card' => $latest->card?->label(),
+            'failed' => (bool) $latest->renewal_failed_at,
+        ] : null;
+    }
+
+    /** Where a buyer paying in instalments is up to, and what's next. */
+    private function instalmentInfo(CreatorProduct $product, $user): ?array
+    {
+        $purchase = $user ? CreatorPurchase::with('card')->where('product_id', $product->id)->where('buyer_id', $user->id)
+            ->where('status', 'paid')->whereNotNull('instalment_count')->latest('paid_at')->first() : null;
+        if (! $purchase || ! $purchase->isInstalments()) {
+            return null;
+        }
+        $next = $purchase->instalments_paid + 1;
+
+        return [
+            'purchase_id' => $purchase->id,
+            'count' => $purchase->instalment_count,
+            'paid' => $purchase->instalments_paid,
+            'status' => $purchase->instalment_status,
+            'next_amount' => $purchase->instalment_status === 'completed' ? null : $purchase->instalmentPart((float) $purchase->amount_paid, $next),
+            'next_due_at' => $purchase->next_instalment_at?->toISOString(),
+            'card' => $purchase->card?->label(),
+        ];
+    }
+
+    /** Pays the next instalment now with Paystack (when it's due, missed, or the buyer wants to pay early). */
+    public function payInstalment(Request $request, int $purchaseId): JsonResponse
+    {
+        $purchase = CreatorPurchase::with(['product', 'buyer'])->where('buyer_id', $request->user()->id)
+            ->where('status', 'paid')->find($purchaseId);
+        if (! $purchase || ! $purchase->isInstalments() || $purchase->instalment_status === 'completed') {
+            return $this->error('There is nothing left to pay on this.', 404);
+        }
+        try {
+            return $this->success($this->service->instalmentPaymentLink($purchase), 'Complete your payment.');
+        } catch (\Throwable $e) {
+            report($e);
+
+            return $this->error('We could not start your payment. Please try again in a moment.', 502);
+        }
+    }
+
+    /** Turns automatic monthly renewal on or off for the buyer's membership. */
+    public function autoRenew(Request $request, int $id): JsonResponse
+    {
+        $request->validate(['enabled' => 'required|boolean']);
+        $latest = CreatorPurchase::with('card')->where('product_id', $id)->where('buyer_id', $request->user()->id)
+            ->where('status', 'paid')->whereNotNull('access_until')->orderByDesc('access_until')->first();
+        if (! $latest) {
+            return $this->error('Membership not found.', 404);
+        }
+        if ($request->boolean('enabled') && ! $latest->card_id) {
+            return $this->error('Renew once with a card and tick "Renew automatically" to turn this on.', 422);
+        }
+        $latest->update(['auto_renew' => $request->boolean('enabled'), 'renewal_failed_at' => null, 'renewal_attempted_at' => null]);
+
+        return $this->success(['auto_renew' => $latest->auto_renew], $latest->auto_renew
+            ? 'Your membership will renew automatically.'
+            : 'Automatic renewal is off. Your membership ends on ' . $latest->access_until->format('j F Y') . '.');
     }
 
     public function progress(Request $request, int $lessonId): JsonResponse

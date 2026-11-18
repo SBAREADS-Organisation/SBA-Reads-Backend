@@ -16,6 +16,7 @@ class CreatorProduct extends Model
         'store_id', 'user_id', 'type', 'title', 'slug', 'summary', 'description',
         'cover_url', 'price', 'currency', 'status', 'published_at',
         'starts_at', 'ends_at', 'timezone', 'location', 'online_url', 'capacity', 'duration_minutes',
+        'instalments_max', 'upsell_product_id', 'upsell_price', 'bonus_book_id',
     ];
 
     protected function casts(): array
@@ -27,6 +28,8 @@ class CreatorProduct extends Model
             'ends_at' => 'datetime',
             'capacity' => 'integer',
             'duration_minutes' => 'integer',
+            'instalments_max' => 'integer',
+            'upsell_price' => 'decimal:2',
         ];
     }
 
@@ -48,6 +51,32 @@ class CreatorProduct extends Model
     public function slots(): HasMany
     {
         return $this->hasMany(CreatorSlot::class, 'product_id')->orderBy('starts_at');
+    }
+
+    public function upsellProduct(): BelongsTo
+    {
+        return $this->belongsTo(CreatorProduct::class, 'upsell_product_id');
+    }
+
+    public function bonusBook(): BelongsTo
+    {
+        return $this->belongsTo(Book::class, 'bonus_book_id');
+    }
+
+    /** The checkout offer, when the other product is still on sale in the same store. */
+    public function activeUpsell(): ?CreatorProduct
+    {
+        $offer = $this->upsell_product_id ? $this->upsellProduct : null;
+
+        return $offer && $offer->status === 'published' && (int) $offer->store_id === (int) $this->store_id && $this->upsell_price !== null
+            ? $offer : null;
+    }
+
+    /** Only courses can be paid in instalments, and only above a minimum price. */
+    public function allowsInstalments(): bool
+    {
+        return $this->type === 'course' && (int) $this->instalments_max >= 2
+            && (float) $this->price >= (float) config('creators.instalment_min_ngn');
     }
 
     public function isFree(): bool
@@ -87,7 +116,9 @@ class CreatorProduct extends Model
         if (! $user) {
             return false;
         }
-        $paid = $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid');
+        // A course whose instalments stopped being paid is locked until the buyer catches up.
+        $paid = $this->purchases()->where('buyer_id', $user->id)->where('status', 'paid')
+            ->where(fn ($q) => $q->whereNull('instalment_status')->orWhere('instalment_status', '!=', 'defaulted'));
 
         return $this->isMembership()
             ? $paid->where('access_until', '>', now())->exists()

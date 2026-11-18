@@ -12,6 +12,8 @@ class CreatorPurchase extends Model
         'fee_payer', 'plan', 'currency', 'status', 'paid_at', 'ticket_code', 'checked_in_at',
         'slot_id', 'access_until', 'renew_reminded_at', 'ended_notified_at',
         'discount_id', 'discount', 'affiliate_id', 'affiliate_earning',
+        'auto_renew', 'card_id', 'renewal_attempted_at', 'renewal_failed_at', 'parent_purchase_id',
+        'instalment_count', 'instalments_paid', 'instalment_status', 'next_instalment_at', 'instalment_failures',
     ];
 
     protected function casts(): array
@@ -28,7 +30,39 @@ class CreatorPurchase extends Model
             'affiliate_earning' => 'decimal:2',
             'renew_reminded_at' => 'datetime',
             'ended_notified_at' => 'datetime',
+            'auto_renew' => 'boolean',
+            'renewal_attempted_at' => 'datetime',
+            'renewal_failed_at' => 'datetime',
+            'next_instalment_at' => 'datetime',
+            'instalment_count' => 'integer',
+            'instalments_paid' => 'integer',
+            'instalment_failures' => 'integer',
         ];
+    }
+
+    public function card(): BelongsTo
+    {
+        return $this->belongsTo(CreatorSavedCard::class, 'card_id');
+    }
+
+    /** Products added at checkout as an upsell, paid for in this purchase's payment. */
+    public function addOns(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CreatorPurchase::class, 'parent_purchase_id');
+    }
+
+    public function isInstalments(): bool
+    {
+        return (int) $this->instalment_count >= 2;
+    }
+
+    /** What instalment number k (1-based) costs; the last one takes any rounding remainder. */
+    public function instalmentPart(float $total, int $k): float
+    {
+        $n = max(1, (int) $this->instalment_count);
+        $each = floor($total / $n * 100) / 100;
+
+        return $k < $n ? $each : round($total - $each * ($n - 1), 2);
     }
 
     public function slot(): BelongsTo

@@ -332,6 +332,8 @@ Route::prefix('creators')->group(function () {
         Route::get('products/{id}/content', [\App\Http\Controllers\Creators\CreatorShopController::class, 'content'])->where('id', '[0-9]+');
         Route::post('lessons/{lessonId}/progress', [\App\Http\Controllers\Creators\CreatorShopController::class, 'progress'])->where('lessonId', '[0-9]+');
         Route::post('bookings/{purchaseId}/book', [\App\Http\Controllers\Creators\CreatorShopController::class, 'book'])->where('purchaseId', '[0-9]+');
+        Route::post('purchases/{purchaseId}/pay-instalment', [\App\Http\Controllers\Creators\CreatorShopController::class, 'payInstalment'])->where('purchaseId', '[0-9]+');
+        Route::post('products/{id}/auto-renew', [\App\Http\Controllers\Creators\CreatorShopController::class, 'autoRenew'])->where('id', '[0-9]+');
         Route::post('stores/{slug}/affiliate', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'joinAffiliate']);
         Route::get('affiliate', [\App\Http\Controllers\Creators\CreatorMarketingController::class, 'myAffiliates']);
 
@@ -365,6 +367,7 @@ Route::prefix('creators')->group(function () {
             Route::post('products/{id}/slots', 'addSlots')->where('id', '[0-9]+');
             Route::delete('products/{id}/slots/{slotId}', 'deleteSlot')->where(['id' => '[0-9]+', 'slotId' => '[0-9]+']);
             Route::get('products/{id}/members', 'members')->where('id', '[0-9]+');
+            Route::get('books', 'books');
             Route::post('products/{id}/lessons', 'createLesson')->where('id', '[0-9]+');
             Route::post('products/{id}/lessons/order', 'reorderLessons')->where('id', '[0-9]+');
             Route::post('products/{id}/lessons/{lessonId}', 'updateLesson')->where(['id' => '[0-9]+', 'lessonId' => '[0-9]+']);

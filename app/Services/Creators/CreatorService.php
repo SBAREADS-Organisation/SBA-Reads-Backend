@@ -7,6 +7,7 @@ use App\Models\CreatorAffiliate;
 use App\Models\CreatorDiscount;
 use App\Models\CreatorProduct;
 use App\Models\CreatorPurchase;
+use App\Models\CreatorSavedCard;
 use App\Models\CreatorSlot;
 use App\Models\CreatorStore;
 use App\Models\CreatorSubscriber;
@@ -28,10 +29,10 @@ class CreatorService
      *
      * @return array{list_price: float, discount: float, discount_id: ?int, price: float, fee: float, amount_paid: float, creator_earning: float, affiliate_id: ?int, affiliate_earning: float, fee_payer: string, plan: string}
      */
-    public function quote(CreatorProduct $product, ?CreatorDiscount $discount = null, ?CreatorAffiliate $affiliate = null): array
+    public function quote(CreatorProduct $product, ?CreatorDiscount $discount = null, ?CreatorAffiliate $affiliate = null, ?float $priceOverride = null): array
     {
         $store = $product->store;
-        $listPrice = round((float) $product->price, 2);
+        $listPrice = round($priceOverride ?? (float) $product->price, 2);
         $off = $discount ? $discount->amountOff($listPrice) : 0.0;
         $price = round($listPrice - $off, 2);
         $fee = round($price * $store->feeRate($product->currency), 2);
@@ -63,10 +64,13 @@ class CreatorService
         ]));
     }
 
-    /** Marks a purchase paid and credits the creator's wallet. Safe to call more than once. */
-    public function fulfilPurchase(CreatorPurchase $purchase): void
+    /**
+     * Marks a purchase paid and credits the creator's wallet. Safe to call more than once.
+     * $paystack is the charge data Paystack sent, used to save the card for renewals and instalments.
+     */
+    public function fulfilPurchase(CreatorPurchase $purchase, array $paystack = []): void
     {
-        $credited = DB::transaction(function () use ($purchase) {
+        $credited = DB::transaction(function () use ($purchase, $paystack) {
             $purchase = CreatorPurchase::whereKey($purchase->id)->lockForUpdate()->first();
             if (! $purchase || $purchase->status === 'paid') {
                 return null;
@@ -93,43 +97,31 @@ class CreatorService
                     $changes['slot_id'] = null;
                 }
             }
+            if ($purchase->isInstalments()) {
+                $changes += [
+                    'instalments_paid' => 1,
+                    'instalment_status' => 'active',
+                    'next_instalment_at' => now()->addDays((int) config('creators.instalment_days')),
+                ];
+            }
+            // Keep the card for automatic renewal or later instalments, when Paystack says it can be charged again.
+            // A card that can't be saved never stops the purchase: the buyer is just asked to pay by link later.
+            if ($purchase->auto_renew || $purchase->isInstalments()) {
+                try {
+                    if ($card = $this->saveCard($purchase->buyer_id, $paystack)) {
+                        $changes['card_id'] = $card->id;
+                    }
+                } catch (\Throwable $e) {
+                    Log::warning('Saving the buyer\'s card failed: ' . $e->getMessage());
+                }
+            }
             $purchase->update($changes);
 
-            if ((float) $purchase->creator_earning > 0) {
-                Transaction::create([
-                    'id' => (string) Str::uuid(),
-                    'user_id' => $purchase->store->user_id,
-                    'reference' => uniqid('crs_'),
-                    'status' => 'succeeded',
-                    'currency' => $purchase->currency,
-                    'amount' => $purchase->creator_earning,
-                    'payment_provider' => 'app',
-                    'description' => 'SBA Creators sale: ' . $product->title,
-                    'type' => 'payout',
-                    'direction' => 'credit',
-                    'purpose_type' => 'creator_sale',
-                    'purpose_id' => $purchase->id,
-                ]);
-            }
+            // Instalment buyers pay a share now; the creator and affiliate are paid that share each time.
+            $creatorShare = $purchase->isInstalments() ? $purchase->instalmentPart((float) $purchase->creator_earning, 1) : (float) $purchase->creator_earning;
+            $affiliateShare = $purchase->isInstalments() ? $purchase->instalmentPart((float) $purchase->affiliate_earning, 1) : (float) $purchase->affiliate_earning;
+            $this->payShares($purchase, $creatorShare, $affiliateShare, 'SBA Creators sale: ' . $product->title);
 
-            // The affiliate who sent the buyer gets their share straight into their wallet.
-            $affiliate = $purchase->affiliate_id ? CreatorAffiliate::find($purchase->affiliate_id) : null;
-            if ($affiliate && (float) $purchase->affiliate_earning > 0) {
-                Transaction::create([
-                    'id' => (string) Str::uuid(),
-                    'user_id' => $affiliate->user_id,
-                    'reference' => uniqid('cra_'),
-                    'status' => 'succeeded',
-                    'currency' => $purchase->currency,
-                    'amount' => $purchase->affiliate_earning,
-                    'payment_provider' => 'app',
-                    'description' => 'SBA Creators affiliate commission: ' . $product->title,
-                    'type' => 'payout',
-                    'direction' => 'credit',
-                    'purpose_type' => 'creator_affiliate',
-                    'purpose_id' => $purchase->id,
-                ]);
-            }
             if ($purchase->discount_id) {
                 CreatorDiscount::whereKey($purchase->discount_id)->increment('uses');
             }
@@ -139,6 +131,21 @@ class CreatorService
 
         if (! $credited) {
             return;
+        }
+
+        // Upsells added at checkout were paid in the same payment.
+        foreach ($credited->addOns()->where('status', 'pending')->get() as $addOn) {
+            $this->fulfilPurchase($addOn);
+        }
+
+        // A creator can include one of their SBA ebooks; it goes into the buyer's SBA library.
+        $book = $credited->product->bonus_book_id ? \App\Models\Book::find($credited->product->bonus_book_id) : null;
+        if ($book && $book->status === 'approved') {
+            try {
+                app(\App\Services\Book\BookPurchaseService::class)->addBooksToUserLibrary($credited->buyer, [$book->id]);
+            } catch (\Throwable $e) {
+                Log::warning('Adding bonus book failed: ' . $e->getMessage());
+            }
         }
 
         // Buyers join the store's email list; every email they get has an unsubscribe link.
@@ -179,8 +186,10 @@ class CreatorService
                     $product->isMembership() => "{$buyer} paid for a month of \"{$product->title}\".",
                     default => "Someone just bought \"{$product->title}\".",
                 };
-                $earned = (float) $credited->creator_earning > 0
-                    ? "\n\nYou earned " . $credited->currency . ' ' . number_format((float) $credited->creator_earning, 2) . ", which has been added to your SBA Reads wallet."
+                $share = $credited->isInstalments() ? $credited->instalmentPart((float) $credited->creator_earning, 1) : (float) $credited->creator_earning;
+                $earned = $share > 0
+                    ? "\n\nYou earned " . $credited->currency . ' ' . number_format($share, 2) . ", which has been added to your SBA Reads wallet."
+                      . ($credited->isInstalments() ? " The buyer is paying in {$credited->instalment_count} monthly instalments; you're paid as each one comes in." : '')
                     : '';
                 Mail::to($credited->store->user->email)->queue(new GenericAppNotification(
                     ($product->isCoaching() ? 'New booking: ' : 'New sale on SBA Creators: ') . $product->title,
@@ -270,10 +279,197 @@ class CreatorService
             default => [
                 "You now have access to \"{$product->title}\"",
                 "Thank you for getting \"{$product->title}\" from {$store}.\n\n"
-                . $paid
+                . ($purchase->isInstalments()
+                    ? 'You paid ' . $purchase->currency . ' ' . number_format($purchase->instalmentPart((float) $purchase->amount_paid, 1), 2)
+                      . ", payment 1 of {$purchase->instalment_count}. The next one, " . $purchase->currency . ' '
+                      . number_format($purchase->instalmentPart((float) $purchase->amount_paid, 2), 2) . ', is due on '
+                      . $purchase->next_instalment_at?->format('j F Y')
+                      . ($purchase->card_id ? ' and will be charged to your card automatically' : '') . ".\n\n"
+                    : $paid)
+                . ($product->bonus_book_id ? "Your bonus ebook is waiting in your SBA Reads library.\n\n" : '')
                 . 'Open your ' . ($product->type === 'course' ? 'course' : 'download') . " any time from My Courses on SBA Reads:\n{$link}",
             ],
         };
+    }
+
+    /** Credits the creator and any affiliate with their part of a payment. */
+    private function payShares(CreatorPurchase $purchase, float $creatorShare, float $affiliateShare, string $description): void
+    {
+        if ($creatorShare > 0) {
+            Transaction::create([
+                'id' => (string) Str::uuid(),
+                'user_id' => $purchase->store->user_id,
+                'reference' => uniqid('crs_'),
+                'status' => 'succeeded',
+                'currency' => $purchase->currency,
+                'amount' => $creatorShare,
+                'payment_provider' => 'app',
+                'description' => $description,
+                'type' => 'payout',
+                'direction' => 'credit',
+                'purpose_type' => 'creator_sale',
+                'purpose_id' => $purchase->id,
+            ]);
+        }
+
+        // The affiliate who sent the buyer gets their share straight into their wallet.
+        $affiliate = $purchase->affiliate_id ? CreatorAffiliate::find($purchase->affiliate_id) : null;
+        if ($affiliate && $affiliateShare > 0) {
+            Transaction::create([
+                'id' => (string) Str::uuid(),
+                'user_id' => $affiliate->user_id,
+                'reference' => uniqid('cra_'),
+                'status' => 'succeeded',
+                'currency' => $purchase->currency,
+                'amount' => $affiliateShare,
+                'payment_provider' => 'app',
+                'description' => 'SBA Creators affiliate commission: ' . $purchase->product->title,
+                'type' => 'payout',
+                'direction' => 'credit',
+                'purpose_type' => 'creator_affiliate',
+                'purpose_id' => $purchase->id,
+            ]);
+        }
+    }
+
+    /** Saves the card from a Paystack charge when it can be charged again; reuses the same card if already saved. */
+    public function saveCard(int $userId, array $paystack): ?CreatorSavedCard
+    {
+        $auth = $paystack['authorization'] ?? null;
+        $email = $paystack['customer']['email'] ?? null;
+        if (! is_array($auth) || empty($auth['authorization_code']) || empty($auth['reusable']) || ($auth['channel'] ?? 'card') !== 'card' || ! $email) {
+            return null;
+        }
+        $existing = ! empty($auth['signature'])
+            ? CreatorSavedCard::where('user_id', $userId)->where('signature', $auth['signature'])->first()
+            : null;
+        $fields = [
+            'authorization_code' => $auth['authorization_code'], 'email' => $email,
+            'last4' => $auth['last4'] ?? null, 'brand' => $auth['card_type'] ?? ($auth['brand'] ?? null),
+            'exp_month' => $auth['exp_month'] ?? null, 'exp_year' => $auth['exp_year'] ?? null,
+        ];
+        if ($existing) {
+            $existing->update($fields);
+
+            return $existing;
+        }
+
+        return CreatorSavedCard::create($fields + ['user_id' => $userId, 'signature' => $auth['signature'] ?? null]);
+    }
+
+    /**
+     * Charges a saved card for a creator payment. The Transaction is created first, so the
+     * charge.success webhook finds it like any other payment; an immediate success is applied now too.
+     */
+    public function chargeSavedCard(CreatorSavedCard $card, CreatorPurchase $purchase, float $amount, string $purpose, int $purposeId, array $meta, string $description): bool
+    {
+        $reference = 'paystack_crc_' . Str::random(20);
+        $transaction = Transaction::create([
+            'id' => (string) Str::uuid(),
+            'user_id' => $purchase->buyer_id,
+            'reference' => $reference,
+            'amount' => $amount,
+            'currency' => $purchase->currency,
+            'payment_provider' => 'paystack',
+            'description' => $description,
+            'purpose_type' => $purpose,
+            'purpose_id' => $purposeId,
+            'meta_data' => $meta,
+            'status' => 'pending',
+            'type' => 'purchase',
+            'direction' => 'debit',
+        ]);
+
+        $result = app(\App\Services\Paystack\PaystackService::class)->chargeAuthorization(
+            $card->email, $amount, $card->authorization_code, $reference,
+            ['purpose' => $purpose, 'purpose_id' => $purposeId], $purchase->currency,
+        );
+        $data = $result['data'] ?? [];
+        if (($result['status'] ?? false) && ($data['status'] ?? null) === 'success') {
+            $transaction->update(['status' => 'succeeded']);
+            $this->applyCharge($transaction->fresh(), $data);
+
+            return true;
+        }
+        // "send_otp" and similar mean the bank wants the buyer present; treat as failed and ask them to pay by link.
+        $transaction->update(['status' => 'failed', 'meta_data' => $meta + ['charge_response' => $data['gateway_response'] ?? ($result['message'] ?? 'declined')]]);
+
+        return false;
+    }
+
+    /** Applies a successful saved-card or link payment, the same way the webhook does. Safe to repeat. */
+    public function applyCharge(Transaction $transaction, array $paystack = []): void
+    {
+        if ($transaction->purpose_type === 'creator_purchase' && ($purchase = CreatorPurchase::find($transaction->purpose_id))) {
+            $this->fulfilPurchase($purchase, $paystack);
+        }
+        if ($transaction->purpose_type === 'creator_instalment') {
+            $this->fulfilInstalment($transaction);
+        }
+    }
+
+    /** Records a later instalment and pays the creator and affiliate their share of it. Safe to repeat. */
+    public function fulfilInstalment(Transaction $transaction): void
+    {
+        $applied = DB::transaction(function () use ($transaction) {
+            $transaction = Transaction::whereKey($transaction->id)->lockForUpdate()->first();
+            $purchase = CreatorPurchase::whereKey($transaction->purpose_id)->lockForUpdate()->first();
+            $number = (int) ($transaction->meta_data['instalment'] ?? 0);
+            if (! $purchase || ($transaction->meta_data['instalment_applied'] ?? false) || $number !== $purchase->instalments_paid + 1) {
+                return null;
+            }
+
+            $done = $number >= $purchase->instalment_count;
+            $purchase->update([
+                'instalments_paid' => $number,
+                'instalment_status' => $done ? 'completed' : 'active',
+                'next_instalment_at' => $done ? null : now()->addDays((int) config('creators.instalment_days')),
+                'instalment_failures' => 0,
+            ]);
+            $this->payShares(
+                $purchase,
+                $purchase->instalmentPart((float) $purchase->creator_earning, $number),
+                $purchase->instalmentPart((float) $purchase->affiliate_earning, $number),
+                "SBA Creators instalment {$number} of {$purchase->instalment_count}: " . $purchase->product->title,
+            );
+            $transaction->update(['meta_data' => array_merge((array) $transaction->meta_data, ['instalment_applied' => true])]);
+
+            return [$purchase->fresh(['product', 'buyer']), $number, $done];
+        });
+
+        if ($applied) {
+            [$purchase, $number, $done] = $applied;
+            try {
+                Mail::to($purchase->buyer->email)->queue(new GenericAppNotification(
+                    $done ? "\"{$purchase->product->title}\" is fully paid" : "Payment {$number} of {$purchase->instalment_count} received",
+                    $done
+                        ? "Thank you. You've paid all {$purchase->instalment_count} instalments for \"{$purchase->product->title}\". It's yours to keep."
+                        : "Thank you. We received payment {$number} of {$purchase->instalment_count} for \"{$purchase->product->title}\".\n\nThe next one is due on " . $purchase->next_instalment_at?->format('j F Y') . '.'
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Instalment receipt email failed: ' . $e->getMessage());
+            }
+        }
+    }
+
+    /** Starts a Paystack payment for the next instalment, for buyers paying by link. */
+    public function instalmentPaymentLink(CreatorPurchase $purchase): array
+    {
+        $number = $purchase->instalments_paid + 1;
+        $amount = $purchase->instalmentPart((float) $purchase->amount_paid, $number);
+        $transaction = app(\App\Services\Payments\PaymentService::class)->createPayment([
+            'amount' => $amount,
+            'currency' => $purchase->currency,
+            'description' => "SBA Creators instalment {$number} of {$purchase->instalment_count}: " . $purchase->product->title,
+            'purpose' => 'creator_instalment',
+            'purpose_id' => $purchase->id,
+            'meta_data' => ['instalment' => $number],
+        ], $purchase->buyer);
+        if ($transaction instanceof \Illuminate\Http\JsonResponse) {
+            throw new \RuntimeException('Payment could not be started.');
+        }
+
+        return ['authorization_url' => $transaction->payment_client_secret, 'amount' => $amount, 'instalment' => $number];
     }
 
     public function link(CreatorProduct $product): string

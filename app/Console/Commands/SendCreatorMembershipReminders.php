@@ -32,6 +32,15 @@ class SendCreatorMembershipReminders extends Command
             ->where($latest);
 
         foreach ($base()->whereNull('renew_reminded_at')->whereBetween('access_until', [now(), now()->addDays(3)])->get() as $purchase) {
+            // Members who chose automatic renewal are told when their card will be charged instead.
+            if ($purchase->auto_renew && $purchase->card) {
+                $sent += $this->send($purchase, 'renew_reminded_at',
+                    "Your membership of \"{$purchase->product->title}\" renews soon",
+                    "Your membership of \"{$purchase->product->title}\" by {$purchase->store->name} renews automatically on "
+                    . $purchase->access_until->copy()->subDay()->format('l j F') . ', using your ' . $purchase->card->label() . ".\n\n"
+                    . "Nothing to do if you'd like to stay. To stop it renewing, turn off automatic renewal here:\n" . $this->link($purchase));
+                continue;
+            }
             $sent += $this->send($purchase, 'renew_reminded_at',
                 "Your membership of \"{$purchase->product->title}\" ends soon",
                 "Your membership of \"{$purchase->product->title}\" by {$purchase->store->name} ends on "
