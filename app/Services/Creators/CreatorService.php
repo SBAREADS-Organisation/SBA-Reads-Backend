@@ -195,9 +195,30 @@ class CreatorService
                     ($product->isCoaching() ? 'New booking: ' : 'New sale on SBA Creators: ') . $product->title,
                     $lines . $earned . "\n\nKeep creating!"
                 ));
+                $this->notify($credited->store->user, $product->isCoaching() ? 'New booking' : 'New sale', $lines . $earned);
             } catch (\Throwable $e) {
                 Log::warning('Creator sale email failed: ' . $e->getMessage());
             }
+        }
+
+        $this->notify($credited->buyer, 'You now have access', "\"{$credited->product->title}\" from {$credited->store->name} is ready in My Courses.");
+        if ($credited->affiliate_id && (float) $credited->affiliate_earning > 0) {
+            $this->notify(CreatorAffiliate::with('user')->find($credited->affiliate_id)?->user, 'You earned a commission',
+                "Someone bought \"{$credited->product->title}\" through your link. " . $credited->currency . ' '
+                . number_format((float) $credited->affiliate_earning, 2) . ' has been added to your wallet.');
+        }
+    }
+
+    /** Puts a notification in the person's bell on the website and app. Never blocks a sale. */
+    private function notify($user, string $title, string $message): void
+    {
+        if (! $user) {
+            return;
+        }
+        try {
+            app(\App\Services\Notification\NotificationService::class)->send($user, $title, $message, ['in-app']);
+        } catch (\Throwable $e) {
+            Log::warning('Creator in-app notification failed: ' . $e->getMessage());
         }
     }
 

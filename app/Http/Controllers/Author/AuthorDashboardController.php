@@ -59,15 +59,19 @@ class AuthorDashboardController extends Controller
 
             // Primary: USD earnings from transactions (same source as the wallet).
             // This keeps stats and wallet consistent for all authors.
+            // Book earnings plus SBA Creators sales and affiliate commissions.
+            $earnings = fn ($q) => $q->where('type', 'earning')
+                ->orWhereIn('purpose_type', ['creator_sale', 'creator_affiliate']);
+
             $usdRevenue = (float) Transaction::where('user_id', $author->id)
-                ->where('type', 'earning')
+                ->where($earnings)
                 ->where('direction', 'credit')
                 ->whereIn('status', ['succeeded', 'iap_pending'])
                 ->whereRaw("UPPER(currency) = 'USD'")
                 ->sum('amount');
 
             $ngnRevenue = (float) Transaction::where('user_id', $author->id)
-                ->where('type', 'earning')
+                ->where($earnings)
                 ->where('direction', 'credit')
                 ->whereIn('status', ['succeeded', 'iap_pending'])
                 ->whereRaw("UPPER(currency) = 'NGN'")

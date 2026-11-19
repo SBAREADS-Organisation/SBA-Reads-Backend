@@ -323,14 +323,44 @@ class BookAIController extends Controller
                     "audio={$b->audio_status}, views={$b->views_count}\n";
             }
 
-            $insights = $this->claude->message(
-                userPrompt: $summary,
-                systemPrompt: "You are an expert publishing analytics advisor. ".
-                    "Analyze this author's data and give exactly 3 numbered insights. ".
-                    "Each insight: one sentence of finding + one sentence of action. Max 30 words each. ".
-                    "Be specific to the numbers. No intros, no conclusions, no generic advice.",
-                maxTokens: 300
-            );
+            // SBA Creators: the author's store products (courses, downloads, events, coaching, memberships) and sales.
+            $creatorProducts = \App\Models\CreatorProduct::where('user_id', $author->id)
+                ->withCount(['purchases as sales_count' => fn ($q) => $q->where('status', 'paid')])
+                ->get(['id', 'title', 'type', 'status', 'price', 'currency']);
+            $creatorEarnings = Transaction::where('user_id', $author->id)
+                ->whereIn('purpose_type', ['creator_sale', 'creator_affiliate'])
+                ->where('direction', 'credit')->where('status', 'succeeded')
+                ->selectRaw('UPPER(currency) as cur, SUM(amount) as total')->groupByRaw('UPPER(currency)')
+                ->pluck('total', 'cur')->all();
+
+            if ($creatorProducts->isNotEmpty()) {
+                $summary .= "\nSBA Creators store products:\n";
+                foreach ($creatorProducts as $p) {
+                    $summary .= "- {$p->type} \"{$p->title}\": {$p->sales_count} sales, status={$p->status}, price={$p->currency} {$p->price}\n";
+                }
+                foreach ($creatorEarnings as $cur => $total) {
+                    $summary .= "SBA Creators earnings: {$cur} ".round((float) $total, 2)."\n";
+                }
+            }
+
+            try {
+                $insights = $this->claude->message(
+                    userPrompt: $summary,
+                    systemPrompt: "You are an expert publishing and online-creator analytics advisor. ".
+                        "Analyze this author's data (books and SBA Creators store products) and give exactly 3 numbered insights. ".
+                        "Each insight: one sentence of finding + one sentence of action. Max 30 words each. ".
+                        "Be specific to the numbers. No intros, no conclusions, no generic advice.",
+                    maxTokens: 300
+                );
+            } catch (\Throwable $e) {
+                Log::warning("BookAI aiInsights AI call failed for author {$author->id}: ".$e->getMessage());
+                $insights = '';
+            }
+
+            // The AI is unreachable: still give the author useful pointers from their own numbers.
+            if (trim($insights) === '') {
+                $insights = $this->basicInsights($books, $creatorProducts, $creatorEarnings, $activeReaders);
+            }
 
             return $this->success([
                 'insights' => $insights,
@@ -352,6 +382,34 @@ class BookAIController extends Controller
     // ─────────────────────────────────────────────
     // Internal helpers
     // ─────────────────────────────────────────────
+
+    /** Three plain pointers built from the author's numbers, for when the AI service can't be reached. */
+    private function basicInsights($books, $creatorProducts, array $creatorEarnings, int $activeReaders): string
+    {
+        $tips = [];
+        $published = $books->where('status', 'approved')->count();
+        $live = $creatorProducts->where('status', 'published');
+        $sold = $creatorProducts->sortByDesc('sales_count')->first();
+
+        if ($sold && $sold->sales_count > 0) {
+            $tips[] = "\"{$sold->title}\" is your best seller with {$sold->sales_count} sale".($sold->sales_count === 1 ? '' : 's').". Share its link on your social pages and with your email list to keep it moving.";
+        } elseif ($live->isNotEmpty()) {
+            $tips[] = "You have {$live->count()} product".($live->count() === 1 ? '' : 's')." live in your store but no sales yet. Share your store link and try a launch discount code.";
+        } else {
+            $tips[] = 'Your SBA Creators store has no live products yet. Publish a course, download or event from Creator Studio to start earning.';
+        }
+
+        if ($creatorEarnings) {
+            $parts = collect($creatorEarnings)->map(fn ($t, $c) => $c.' '.number_format((float) $t, 2))->implode(' and ');
+            $tips[] = "You have earned {$parts} from your store. Add your bank account in Wallet so you can withdraw it.";
+        }
+
+        $tips[] = $published > 0
+            ? "You have {$published} published book".($published === 1 ? '' : 's')." and {$activeReaders} reader".($activeReaders === 1 ? '' : 's').". Turn on affiliates so readers earn for sharing your work."
+            : 'You have no published books yet. Publishing a book adds a second way to earn and brings readers to your store.';
+
+        return collect(array_slice($tips, 0, 3))->map(fn ($t, $i) => ($i + 1).'. '.$t)->implode("\n");
+    }
 
     /**
      * Return the book's stored text or re-extract from the PDF URL.

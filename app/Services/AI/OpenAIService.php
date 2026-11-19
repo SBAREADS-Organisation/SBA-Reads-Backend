@@ -13,8 +13,9 @@ class OpenAIService
 
     public function __construct()
     {
-        $this->apiKey = config('services.openai.api_key', '');
-        $this->model  = config('services.openai.model', 'gpt-4o');
+        // A missing key must not break the app (config returns null when the env var is unset).
+        $this->apiKey = (string) (config('services.openai.api_key') ?? '');
+        $this->model  = (string) (config('services.openai.model') ?: 'gpt-4o');
     }
 
     /**
@@ -23,6 +24,14 @@ class OpenAIService
      */
     public function message(string $userPrompt, string $systemPrompt = '', int $maxTokens = 1024): string
     {
+        // No OpenAI key on this server: use Claude instead when that key is set.
+        if ($this->apiKey === '' && config('services.anthropic.api_key')) {
+            return app(ClaudeService::class)->message($userPrompt, $systemPrompt, $maxTokens);
+        }
+        if ($this->apiKey === '') {
+            throw new \RuntimeException('AI service unavailable. Please try again later.');
+        }
+
         $messages = [];
 
         if ($systemPrompt) {
