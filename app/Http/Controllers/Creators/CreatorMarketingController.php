@@ -318,9 +318,10 @@ class CreatorMarketingController extends Controller
 
         return response()->streamDownload(function () use ($rows) {
             $out = fopen('php://output', 'w');
+            $safe = fn ($v) => is_string($v) && $v !== '' && in_array($v[0], ['=', '+', '-', '@', "\t", "\r"], true) ? "'" . $v : $v;
             fputcsv($out, ['email', 'name', 'source', 'subscribed', 'joined']);
             foreach ($rows as $s) {
-                fputcsv($out, [$s->email, $s->name, $s->source, $s->unsubscribed_at ? 'no' : 'yes', $s->created_at?->toDateString()]);
+                fputcsv($out, array_map($safe, [$s->email, $s->name, $s->source, $s->unsubscribed_at ? 'no' : 'yes', $s->created_at?->toDateString()]));
             }
             fclose($out);
         }, Str::slug($store->name) . '-email-list.csv', ['Content-Type' => 'text/csv']);

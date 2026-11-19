@@ -210,7 +210,7 @@ class CreatorStudioController extends Controller
             'ends_at' => 'sometimes|nullable|date|after_or_equal:starts_at',
             'timezone' => 'sometimes|nullable|timezone',
             'location' => 'sometimes|nullable|string|max:255',
-            'online_url' => 'sometimes|nullable|url|max:2048',
+            'online_url' => 'sometimes|nullable|url:http,https|max:2048',
             'capacity' => 'sometimes|nullable|integer|min:1|max:1000000',
             // Coaching
             'duration_minutes' => 'sometimes|nullable|integer|min:10|max:480',

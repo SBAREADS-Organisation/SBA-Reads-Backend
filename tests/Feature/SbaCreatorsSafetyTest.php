@@ -230,6 +230,37 @@ class SbaCreatorsSafetyTest extends TestCase
     }
 
     #[Test]
+    public function a_payment_for_less_than_the_price_grants_nothing(): void
+    {
+        $course = $this->product('course', 10000);
+        $this->publish($course);
+        Sanctum::actingAs($this->buyer);
+        $this->postJson("/api/creators/products/{$course->id}/buy")->assertOk();
+        $transaction = Transaction::where('purpose_type', 'creator_purchase')->first();
+
+        $service = app(PaystackWebhookService::class);
+        $process = new \ReflectionMethod($service, 'processSuccessfulTransaction');
+        $process->invoke($service, $transaction, ['amount' => 100 * 100, 'currency' => 'NGN']);
+        $this->assertFalse($course->purchasedBy($this->buyer));
+        Mail::assertQueued(GenericAppNotification::class, fn ($m) => $m->hasTo('admin@sbareads.com') && str_contains($m->title, 'less than the price'));
+
+        $process->invoke($service, $transaction, ['amount' => 10000 * 100, 'currency' => 'NGN']);
+        $this->assertTrue($course->purchasedBy($this->buyer));
+    }
+
+    #[Test]
+    public function joining_links_must_be_web_links_and_csv_exports_are_safe(): void
+    {
+        $event = $this->product('event', 0, ['starts_at' => now()->addWeek()->toISOString(), 'location' => 'Lagos']);
+        $this->postJson("/api/creators/studio/products/{$event->id}", ['online_url' => 'javascript:alert(document.cookie)'])->assertStatus(422);
+        $this->postJson("/api/creators/studio/products/{$event->id}", ['online_url' => 'https://meet.google.com/abc-defg-hij'])->assertOk();
+
+        CreatorSubscriber::add($event->store_id, 'fan@example.com', '=HYPERLINK("http://evil.example","click")', 'signup');
+        $csv = $this->get('/api/creators/studio/subscribers/export')->assertOk()->streamedContent();
+        $this->assertStringContainsString("\"'=HYPERLINK", $csv);
+    }
+
+    #[Test]
     public function one_failing_charge_does_not_stop_the_others(): void
     {
         if (! config('app.key')) {

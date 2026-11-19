@@ -390,6 +390,28 @@ class PaystackWebhookService
     }
 
     /**
+     * SBA Creators: Paystack must report at least the amount we asked for, in the same currency.
+     * (Amounts come in kobo; a difference under ₦1 is rounding.) If not, nothing is granted and the team is told.
+     */
+    protected function creatorAmountMatches(Transaction $transaction, array $data): bool
+    {
+        if (! isset($data['amount'])) {
+            return true; // replays that carry no amount were already verified when first received
+        }
+        $paid = ((float) $data['amount']) / 100;
+        $currencyOk = ! isset($data['currency']) || strtoupper((string) $data['currency']) === strtoupper((string) $transaction->currency);
+        if ($currencyOk && $paid >= (float) $transaction->amount - 1) {
+            return true;
+        }
+        \App\Services\Creators\CreatorAlerts::send('A payment came in for less than the price, so nothing was granted', [
+            'reference' => $transaction->reference, 'expected' => $transaction->currency . ' ' . $transaction->amount,
+            'received' => ($data['currency'] ?? '?') . ' ' . $paid, 'purpose' => $transaction->purpose_type, 'purpose_id' => $transaction->purpose_id,
+        ]);
+
+        return false;
+    }
+
+    /**
      * Process successful transaction based on its purpose
      */
     protected function processSuccessfulTransaction(Transaction $transaction, array $data): void
@@ -411,14 +433,18 @@ class PaystackWebhookService
                     break;
 
                 case 'creator_purchase':
+                case 'creator_instalment':
+                    if (! $this->creatorAmountMatches($transaction, $data)) {
+                        break;
+                    }
+                    if ($transaction->purpose_type === 'creator_instalment') {
+                        app(\App\Services\Creators\CreatorService::class)->fulfilInstalment($transaction);
+                        break;
+                    }
                     if ($purchase = \App\Models\CreatorPurchase::find($transaction->purpose_id)) {
                         // The charge data carries the card, kept for automatic renewals and instalments.
                         app(\App\Services\Creators\CreatorService::class)->fulfilPurchase($purchase, $data);
                     }
-                    break;
-
-                case 'creator_instalment':
-                    app(\App\Services\Creators\CreatorService::class)->fulfilInstalment($transaction);
                     break;
 
                 case 'creator_plan':
