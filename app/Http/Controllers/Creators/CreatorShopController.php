@@ -169,6 +169,8 @@ class CreatorShopController extends Controller
             ]);
         } catch (SlotTaken) {
             return $this->error('That time has just been taken. Please choose another.', 409);
+        } catch (TicketsHeld) {
+            return $this->error('The last tickets are being paid for right now. Please try again in a few minutes.', 409);
         } catch (\Throwable $e) {
             report($e);
 
@@ -252,6 +254,19 @@ class CreatorShopController extends Controller
                 'instalment_count' => $options['instalments'] ?? null,
                 'auto_renew' => (bool) ($options['auto_renew'] ?? false),
             ])->save();
+
+            // A limited event keeps a ticket for each person paying, so two people can't pay for the last place.
+            if ($product->isEvent() && $product->capacity) {
+                CreatorProduct::whereKey($product->id)->lockForUpdate()->first();
+                $paid = CreatorPurchase::where('product_id', $product->id)->where('status', 'paid')->count();
+                $beingPaidFor = CreatorPurchase::where('product_id', $product->id)->where('status', 'pending')
+                    ->whereNull('parent_purchase_id')->whereKeyNot($purchase->id)
+                    ->where('updated_at', '>=', now()->subMinutes((int) config('creators.ticket_hold_minutes')))->count();
+                if ($paid + $beingPaidFor >= $product->capacity) {
+                    throw new TicketsHeld();
+                }
+                $purchase->touch(); // starts this buyer's hold now
+            }
 
             // An earlier attempt's add-on is replaced by this attempt's choice.
             CreatorPurchase::where('parent_purchase_id', $purchase->id)->where('status', 'pending')->delete();
@@ -503,6 +518,11 @@ class CreatorShopController extends Controller
 
         return $this->success(null, 'Progress saved.');
     }
+}
+
+/** Thrown when every remaining ticket is held by someone else who is paying. */
+class TicketsHeld extends \RuntimeException
+{
 }
 
 /** Thrown when a coaching time is taken between choosing it and paying. */

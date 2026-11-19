@@ -452,6 +452,83 @@ class CreatorService
         }
     }
 
+    /**
+     * Refunds a purchase: the buyer loses access, the creator's and affiliate's earnings from it are taken back
+     * out of their wallets, and a booked coaching time is freed. With $refundPayment, the money is also
+     * returned to the buyer through Paystack first; if Paystack refuses, nothing is changed.
+     *
+     * @return string|null why it couldn't be done, or null when done
+     */
+    public function refundPurchase(CreatorPurchase $purchase, string $reason, bool $refundPayment): ?string
+    {
+        if ($purchase->status !== 'paid') {
+            return 'Only paid purchases can be refunded.';
+        }
+        $payments = Transaction::where('payment_provider', 'paystack')->where('status', 'succeeded')
+            ->where(fn ($q) => $q->where(fn ($p) => $p->where('purpose_type', 'creator_purchase')->where('purpose_id', $purchase->parent_purchase_id ?? $purchase->id))
+                ->orWhere(fn ($p) => $p->where('purpose_type', 'creator_instalment')->where('purpose_id', $purchase->id)))
+            ->get();
+
+        if ($refundPayment && (float) $purchase->amount_paid > 0) {
+            if ($purchase->parent_purchase_id) {
+                return 'This was an add-on paid together with another product. Refund the main purchase instead.';
+            }
+            if ($payments->isEmpty()) {
+                return 'No Paystack payment was found for this purchase. Refund it in Paystack yourself, then remove access without the Paystack refund.';
+            }
+            $paystack = app(\App\Services\Paystack\PaystackService::class);
+            foreach ($payments as $payment) {
+                $result = $paystack->refund($payment->reference);
+                if (! ($result['status'] ?? false)) {
+                    return 'Paystack did not accept the refund: ' . ($result['message'] ?? 'unknown error') . '. Nothing was changed.';
+                }
+                $payment->update(['status' => 'refunded']);
+            }
+        }
+
+        $refunded = DB::transaction(function () use ($purchase, $reason) {
+            $purchase = CreatorPurchase::whereKey($purchase->id)->lockForUpdate()->first();
+            if ($purchase->status !== 'paid') {
+                return [];
+            }
+            // An add-on bought in the same payment goes with its main purchase.
+            $all = collect([$purchase])->merge($purchase->addOns()->where('status', 'paid')->get());
+            foreach ($all as $item) {
+                $item->update(['status' => 'refunded', 'auto_renew' => false, 'instalment_status' => $item->instalment_status ? 'completed' : null, 'next_instalment_at' => null]);
+                // Earnings only count while "succeeded", so this takes them back out of the wallets.
+                Transaction::whereIn('purpose_type', ['creator_sale', 'creator_affiliate'])->where('purpose_id', $item->id)
+                    ->where('status', 'succeeded')->update(['status' => 'refunded']);
+                CreatorSlot::where('purchase_id', $item->id)->update(['purchase_id' => null, 'booked_at' => null, 'held_until' => null]);
+                if ($item->discount_id) {
+                    CreatorDiscount::whereKey($item->discount_id)->where('uses', '>', 0)->decrement('uses');
+                }
+            }
+
+            return $all->map->fresh(['product', 'buyer', 'store.user'])->all();
+        });
+
+        foreach ($refunded as $item) {
+            try {
+                Mail::to($item->buyer->email)->queue(new GenericAppNotification(
+                    "Refund: \"{$item->product->title}\"",
+                    "Your purchase of \"{$item->product->title}\" from {$item->store->name} has been refunded, so it's no longer in My Courses.\n\n"
+                    . ($reason ? "Reason: {$reason}\n\n" : '')
+                    . 'If you paid by card, the money usually reaches your account within 5 to 10 working days.'
+                ));
+                Mail::to($item->store->user->email)->queue(new GenericAppNotification(
+                    "A sale was refunded: \"{$item->product->title}\"",
+                    "SBA Reads refunded a purchase of \"{$item->product->title}\" by " . ($item->buyer->name ?: 'a buyer') . ".\n\n"
+                    . ($reason ? "Reason: {$reason}\n\n" : '')
+                    . 'The earnings from this sale have been taken out of your wallet balance.'
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Refund email failed: ' . $e->getMessage());
+            }
+        }
+
+        return null;
+    }
+
     /** Starts a Paystack payment for the next instalment, for buyers paying by link. */
     public function instalmentPaymentLink(CreatorPurchase $purchase): array
     {

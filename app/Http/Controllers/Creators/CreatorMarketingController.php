@@ -358,8 +358,10 @@ class CreatorMarketingController extends Controller
         $broadcast = CreatorBroadcast::create([
             'store_id' => $store->id, 'subject' => $request->input('subject'), 'body' => $request->input('body'), 'recipients' => $subscribers->count(),
         ]);
-        foreach ($subscribers as $subscriber) {
-            Mail::to($subscriber->email)->queue(new GenericAppNotification(
+        // Sent in batches over a few minutes so email providers don't throttle or flag the store.
+        $perMinute = max(1, (int) config('creators.broadcast_per_minute'));
+        foreach ($subscribers->values() as $i => $subscriber) {
+            Mail::to($subscriber->email)->later(now()->addMinutes(intdiv($i, $perMinute)), new GenericAppNotification(
                 $request->input('subject'),
                 $request->input('body')
                 . "\n\n—\n{$store->name} on SBA Reads: " . $this->site() . "/creators/{$store->slug}"

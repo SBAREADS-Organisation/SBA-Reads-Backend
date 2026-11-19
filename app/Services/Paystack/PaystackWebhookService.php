@@ -435,6 +435,12 @@ class PaystackWebhookService
             }
         } catch (\Exception $e) {
             Log::error('Error processing successful Paystack transaction: ' . $e->getMessage());
+            if (str_starts_with((string) $transaction->purpose_type, 'creator_')) {
+                \App\Services\Creators\CreatorAlerts::send('A payment was received but could not be applied', [
+                    'reference' => $transaction->reference, 'purpose' => $transaction->purpose_type,
+                    'purpose_id' => $transaction->purpose_id, 'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 

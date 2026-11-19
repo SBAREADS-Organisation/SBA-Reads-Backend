@@ -6,6 +6,15 @@ return [
     // Where links in creator and buyer emails point.
     'website_url' => env('CREATORS_WEBSITE_URL', 'https://sbaread-web-app.vercel.app'),
 
+    // Who is emailed when something needs a person to look (payments that couldn't be applied, failed jobs).
+    'alert_email' => env('CREATORS_ALERT_EMAIL', 'admin@sbareads.com'),
+
+    // Emails to a creator's list go out in batches of this many per minute, so providers don't throttle them.
+    'broadcast_per_minute' => 50,
+
+    // How long a paid ticket is kept for someone while they pay.
+    'ticket_hold_minutes' => 30,
+
     'trial_days' => 30,
     'trial_plan' => 'pro',
     'plan_days' => 30,

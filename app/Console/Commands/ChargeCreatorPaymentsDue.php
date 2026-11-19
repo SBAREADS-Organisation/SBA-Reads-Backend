@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Mail\Generic\GenericAppNotification;
 use App\Models\CreatorPurchase;
+use App\Services\Creators\CreatorAlerts;
 use App\Services\Creators\CreatorService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -61,6 +62,7 @@ class ChargeCreatorPaymentsDue extends Command
             ->get();
 
         foreach ($due as $current) {
+          try {
             $current->update(['renewal_attempted_at' => now()]);
             $product = $current->product;
             if ($product->status !== 'published' || $product->store->suspended || ! $current->card) {
@@ -91,6 +93,11 @@ class ChargeCreatorPaymentsDue extends Command
             $this->email($current, "We couldn't renew your membership of \"{$product->title}\"",
                 "We tried to renew your membership of \"{$product->title}\" with your " . $current->card->label() . ", but the payment didn't go through.\n\n"
                 . 'Your membership ends on ' . $current->access_until->format('l j F') . ". To keep your access, renew here:\n" . $this->link($current));
+          } catch (\Throwable $e) {
+            // One member's problem never stops everyone else's renewal; the team is told.
+            $result['failed']++;
+            CreatorAlerts::send('A membership renewal errored', ['purchase_id' => $current->id, 'error' => $e->getMessage()]);
+          }
         }
 
         return $result;
@@ -107,6 +114,7 @@ class ChargeCreatorPaymentsDue extends Command
         $maxFailures = (int) config('creators.instalment_max_failures');
 
         foreach ($due as $purchase) {
+          try {
             $number = $purchase->instalments_paid + 1;
             $amount = $purchase->instalmentPart((float) $purchase->amount_paid, $number);
             $title = $purchase->product->title;
@@ -132,6 +140,11 @@ class ChargeCreatorPaymentsDue extends Command
                 ($purchase->card ? "We couldn't charge your " . $purchase->card->label() . " for instalment {$number} of {$purchase->instalment_count} ({$amountText}).\n\n" : "Instalment {$number} of {$purchase->instalment_count} ({$amountText}) for \"{$title}\" is due.\n\n")
                 . "Pay it here to keep your access:\n" . $this->link($purchase)
                 . ($purchase->card ? "\n\nWe'll try your card again in two days." : ''));
+          } catch (\Throwable $e) {
+            // One buyer's problem never stops everyone else's charge; the team is told.
+            $result['failed']++;
+            CreatorAlerts::send('An instalment charge errored', ['purchase_id' => $purchase->id, 'error' => $e->getMessage()]);
+          }
         }
 
         return $result;

@@ -118,4 +118,53 @@ class AdminCreatorsController extends Controller
 
         return $this->success(null, 'Product hidden.');
     }
+
+    /** Everyone who bought a product, newest first, for handling refunds and disputes. */
+    public function purchases(Request $request, int $id): JsonResponse
+    {
+        $product = CreatorProduct::find($id);
+        if (! $product) {
+            return $this->error('Product not found.', 404);
+        }
+        $purchases = CreatorPurchase::with('buyer:id,name,email')->where('product_id', $product->id)
+            ->whereIn('status', ['paid', 'refunded'])->latest('paid_at')
+            ->when($request->filled('q'), fn ($q) => $q->whereHas('buyer', fn ($b) => $b->where(fn ($match) => $match
+                ->where('email', 'like', '%' . $request->input('q') . '%')->orWhere('name', 'like', '%' . $request->input('q') . '%'))))
+            ->paginate(50);
+        $purchases->getCollection()->transform(fn (CreatorPurchase $p) => [
+            'id' => $p->id,
+            'buyer' => $p->buyer?->name ?: 'A buyer',
+            'email' => $p->buyer?->email,
+            'amount_paid' => (float) $p->amount_paid,
+            'instalments' => $p->isInstalments() ? "{$p->instalments_paid} of {$p->instalment_count} paid" : null,
+            'add_on' => (bool) $p->parent_purchase_id,
+            'status' => $p->status,
+            'paid_at' => $p->paid_at?->toISOString(),
+        ]);
+
+        return $this->success(['product' => ['id' => $product->id, 'title' => $product->title], 'purchases' => $purchases], 'Purchases retrieved.');
+    }
+
+    /**
+     * Refunds a purchase: removes the buyer's access and takes the earnings back out of the wallets.
+     * With refund_payment, Paystack returns the money to the buyer first; if it refuses, nothing changes.
+     */
+    public function refund(Request $request, int $id, \App\Services\Creators\CreatorService $service): JsonResponse
+    {
+        $validator = Validator::make($request->all(), ['reason' => 'nullable|string|max:500', 'refund_payment' => 'required|boolean']);
+        if ($validator->fails()) {
+            return $this->error($validator->errors()->first(), 422, $validator->errors());
+        }
+        $purchase = CreatorPurchase::find($id);
+        if (! $purchase) {
+            return $this->error('Purchase not found.', 404);
+        }
+        if ($problem = $service->refundPurchase($purchase, (string) $request->input('reason'), $request->boolean('refund_payment'))) {
+            return $this->error($problem, 422);
+        }
+
+        return $this->success(null, $request->boolean('refund_payment')
+            ? 'Refunded through Paystack and access removed. The buyer and creator have been emailed.'
+            : 'Access removed and earnings taken back. Remember to return the money to the buyer yourself.');
+    }
 }

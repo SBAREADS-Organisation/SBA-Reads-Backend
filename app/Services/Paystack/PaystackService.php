@@ -52,6 +52,18 @@ class PaystackService
         }
     }
 
+    /** Refunds a Paystack payment in full, by its reference. */
+    public function refund(string $reference): array
+    {
+        try {
+            $response = Http::withToken($this->secretKey)->post($this->baseUrl . '/refund', ['transaction' => $reference]);
+
+            return $response->json() ?? ['status' => false, 'message' => 'Empty response from Paystack'];
+        } catch (\Throwable $e) {
+            return ['status' => false, 'message' => 'Error refunding: ' . $e->getMessage()];
+        }
+    }
+
     /**
      * Verify a Paystack payment
      */

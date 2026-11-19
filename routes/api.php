@@ -381,6 +381,8 @@ Route::middleware(['auth:sanctum', 'role:admin,superadmin,manager'])->prefix('ad
     Route::get('{id}/products', 'products')->where('id', '[0-9]+');
     Route::post('{id}/suspend', 'setSuspended')->where('id', '[0-9]+');
     Route::post('products/{id}/hide', 'hideProduct')->where('id', '[0-9]+');
+    Route::get('products/{id}/purchases', 'purchases')->where('id', '[0-9]+');
+    Route::post('purchases/{id}/refund', 'refund')->where('id', '[0-9]+');
 });
 
 // Listing, publishing and ISBN applications
