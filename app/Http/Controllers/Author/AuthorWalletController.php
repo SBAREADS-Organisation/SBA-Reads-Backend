@@ -214,19 +214,26 @@ class AuthorWalletController extends Controller
         }
 
         // ── No payout method set yet ─────────────────────────────────────────
-        $lifetimeAny = (float) Transaction::where('user_id', $author->id)
+        // Naira and dollar earnings are counted separately so each is shown in its own currency
+        // (naira sales such as SBA Creators were previously labelled as dollars here).
+        $earned = fn (array $currencies) => (float) Transaction::where('user_id', $author->id)
             ->where('direction', 'credit')
             ->where('status', 'succeeded')
+            ->whereIn('currency', $currencies)
             ->sum('amount');
+        $lifetimeNGN = $earned(['NGN', 'ngn']);
+        $lifetimeUSD = $earned(['USD', 'usd']);
+        $currency    = $lifetimeNGN > 0 || $lifetimeUSD <= 0 ? 'NGN' : 'USD';
+        $amount      = $currency === 'NGN' ? $lifetimeNGN : $lifetimeUSD;
 
         return $this->success([
             'payout_method'    => null,
-            'available'        => ['amount' => $lifetimeAny, 'currency' => 'USD'],
+            'available'        => ['amount' => round($amount, 2), 'currency' => $currency],
             'pending_iap'      => ['amount' => $iapPending, 'currency' => 'USD'],
-            'lifetime_earned'  => ['amount' => $lifetimeAny, 'currency' => 'USD'],
+            'lifetime_earned'  => ['amount' => round($amount, 2), 'currency' => $currency],
             'stripe_account_id'=> null,
             'can_withdraw'     => false,
-            'withdraw_note'    => 'Set up a payout method to withdraw your earnings.',
+            'withdraw_note'    => 'Add your bank account to withdraw your earnings.',
         ], 'Wallet balance retrieved.');
     }
 
