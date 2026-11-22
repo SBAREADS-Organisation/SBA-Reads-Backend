@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\KYC;
 
@@ -108,7 +108,7 @@ class KYCController extends Controller
                 $messages = [
                     'verified'       => 'KYC already verified.',
                     'pending_manual' => 'KYC is pending admin review.',
-                    'in-review'      => 'Your identity is currently being reviewed — we\'ll notify you when complete.',
+                    'in-review'      => 'Your identity is currently being reviewed â€” we\'ll notify you when complete.',
                 ];
                 return $this->success(
                     ['account_id' => $user->kyc_account_id, 'status' => $user->kyc_status],
@@ -125,7 +125,7 @@ class KYCController extends Controller
                 $request->input('dob.day')
             )->toDateString();
 
-            // Capture previous country BEFORE updating kycInfo — used below to detect
+            // Capture previous country BEFORE updating kycInfo â€” used below to detect
             // country changes for Stripe accounts (Stripe doesn't allow country changes).
             $previousKycCountry = optional($user->kycInfo)->country;
 
@@ -146,7 +146,7 @@ class KYCController extends Controller
                 ]
             );
 
-            // ── Manual KYC path: Nigeria + other non-Stripe countries ─────────────
+            // â”€â”€ Manual KYC path: Nigeria + other non-Stripe countries â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             if (! $useStripe) {
                 $firstName = $request->input('first_name');
                 $lastName  = $request->input('last_name');
@@ -159,7 +159,7 @@ class KYCController extends Controller
                     'name'             => trim("{$firstName} {$lastName}"),
                 ]);
 
-                // Dispatch AI verification — it will auto-approve or flag for manual review
+                // Dispatch AI verification â€” it will auto-approve or flag for manual review
                 try {
                     ProcessKYCVerificationJob::dispatch($user->id)->onQueue('ai');
                 } catch (\Throwable $e) {
@@ -168,12 +168,12 @@ class KYCController extends Controller
 
                 return $this->success(
                     ['status' => 'pending_manual'],
-                    'Your details have been submitted. We are verifying your identity — you will be notified shortly.',
+                    'Your details have been submitted. We are verifying your identity â€” you will be notified shortly.',
                     200
                 );
             }
 
-            // ── Stripe KYC path: US, UK, CA, AU, EU ──────────────────────────────
+            // â”€â”€ Stripe KYC path: US, UK, CA, AU, EU â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
             // Stripe doesn't allow changing a connected account's country after creation.
             // If the user previously submitted with a different country, create a new account.
             // $previousKycCountry was read before updateOrCreate overwrote it above.
@@ -300,7 +300,7 @@ class KYCController extends Controller
                 'user_id' => $user->id,
                 'error'   => $th->getMessage(),
             ]);
-            return $this->error('Error uploading document. Please try again.', 500, $th->getMessage(), $th);
+            return $this->error('Error uploading document. Please try again.', 500, $th->getMessage());
         } finally {
             if ($frontFilePath) \Illuminate\Support\Facades\Storage::delete($frontFilePath);
             if ($backFilePath)  \Illuminate\Support\Facades\Storage::delete($backFilePath);
@@ -384,7 +384,7 @@ class KYCController extends Controller
 
             try {
                 Mail::to(config('services.admin_requests.notify_email'))->queue(new GenericAppNotification(
-                    'New KYC document — ' . ($user->name ?: $user->email),
+                    'New KYC document â€” ' . ($user->name ?: $user->email),
                     "{$user->email} uploaded a {$request->input('document_type')} for identity verification.\n\n" .
                     "Log in to the admin panel and open KYC Review to check it."
                 ));
@@ -394,7 +394,7 @@ class KYCController extends Controller
 
             return $this->success(
                 ['document_uploaded' => true, 'document_type' => $request->input('document_type')],
-                'Document uploaded. We are re-verifying your identity — you will be notified shortly.',
+                'Document uploaded. We are re-verifying your identity â€” you will be notified shortly.',
                 200
             );
         } catch (\Throwable $th) {

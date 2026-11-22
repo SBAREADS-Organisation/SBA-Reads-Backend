@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Transaction;
 
@@ -40,7 +40,7 @@ class TransactionsController extends Controller
 
             return $this->service->verifyTransaction($request->all());
         } catch (\Throwable $th) {
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 
@@ -87,10 +87,10 @@ class TransactionsController extends Controller
         } catch (\Throwable $th) {
             // Handle database errors or other exceptions
             if ($th instanceof \Illuminate\Database\QueryException) {
-                return $this->error('Database error: ' . $th->getMessage(), 500, null, $th);
+                return $this->error('Database error: ' . $th->getMessage(), 500, null);
             }
 
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 
@@ -108,8 +108,8 @@ class TransactionsController extends Controller
                 });
             }
 
-            // Apply date range filter — end_date is made inclusive of the full day
-            // so "2026-06-07" covers 00:00:00–23:59:59 rather than just midnight.
+            // Apply date range filter â€” end_date is made inclusive of the full day
+            // so "2026-06-07" covers 00:00:00â€“23:59:59 rather than just midnight.
             if ($request->filled('start_date') && $request->filled('end_date')) {
                 $query->whereBetween('created_at', [
                     $request->start_date . ' 00:00:00',
@@ -137,7 +137,7 @@ class TransactionsController extends Controller
 
             return $this->success($transactions, 'Transactions retrieved successfully');
         } catch (\Throwable $th) {
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 
@@ -152,7 +152,7 @@ class TransactionsController extends Controller
 
             return $this->success($transaction, 'Transaction retrieved successfully');
         } catch (\Throwable $th) {
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 
@@ -213,7 +213,7 @@ class TransactionsController extends Controller
             $txn->book_names = [];
             $txn->in_library = null;
 
-            // Payout/credit rows belong to the author, not the reader — skip library check
+            // Payout/credit rows belong to the author, not the reader â€” skip library check
             $isPurchaseRow = ($txn->direction ?? '') !== 'credit' && ($txn->type ?? '') !== 'payout';
 
             if ($txn->purpose_type === 'digital_book_purchase' && $txn->purpose_id) {
@@ -315,7 +315,7 @@ class TransactionsController extends Controller
 
             return $this->success($transactions, 'Author transactions retrieved successfully');
         } catch (\Throwable $th) {
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 }

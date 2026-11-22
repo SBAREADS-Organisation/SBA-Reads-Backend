@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Services\Address;
 
@@ -42,7 +42,7 @@ class AddressService
         } catch (\Throwable $th) {
             DB::rollBack();
 
-            return $this->error('Failed to create address: '.$th->getMessage(), 500, null, $th);
+            return $this->error('Failed to create address: '.$th->getMessage(), 500, null);
         }
     }
 
@@ -74,7 +74,7 @@ class AddressService
 
             return $this->success($addresses, 'Addresses retrieved successfully.');
         } catch (\Throwable $th) {
-            return $this->error('Failed to retrieve addresses: '.$th->getMessage(), 500, null, $th);
+            return $this->error('Failed to retrieve addresses: '.$th->getMessage(), 500, null);
         }
     }
 }

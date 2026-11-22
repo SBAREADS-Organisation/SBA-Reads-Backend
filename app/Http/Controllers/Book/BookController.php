@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Book;
 
@@ -200,7 +200,7 @@ class BookController extends Controller
             });
         }
 
-        // Sorting — qualify with table name to avoid ambiguity when a join is present (e.g. trending classification)
+        // Sorting â€” qualify with table name to avoid ambiguity when a join is present (e.g. trending classification)
         $sortBy = $request->input('sort_by', 'created_at');
         $sortDir = $request->input('sort_dir', 'desc');
         if (! str_contains($sortBy, '.')) {
@@ -360,7 +360,7 @@ class BookController extends Controller
             // Flysystem returns ['url' => '...', 'headers' => [...]] for S3.
             // Older versions may return a plain string. Normalise either to a URL string.
             $uploadUrl     = is_array($result) ? ($result['url'] ?? '') : (string) $result;
-            // Strip the Host header — the HTTP client sets it automatically from the URL.
+            // Strip the Host header â€” the HTTP client sets it automatically from the URL.
             $rawHeaders    = is_array($result) ? ($result['headers'] ?? []) : [];
             $uploadHeaders = array_filter(
                 $rawHeaders,
@@ -466,7 +466,7 @@ class BookController extends Controller
                         'author_id' => $book->author_id,
                     ]);
                 }
-                // Queue AI review — must never block the book creation response.
+                // Queue AI review â€” must never block the book creation response.
                 // If QUEUE_CONNECTION=sync the job runs inline; a Claude API failure
                 // or queue driver misconfiguration must not roll back the author's upload.
                 try {
@@ -476,7 +476,7 @@ class BookController extends Controller
                 }
                 try {
                     Mail::to(config('services.admin_requests.notify_email'))->queue(new GenericAppNotification(
-                        'New book submitted — ' . $book->title,
+                        'New book submitted â€” ' . $book->title,
                         "\"{$book->title}\" (book #{$book->id}) was submitted by " . ($author->email ?? 'an author') . ".\n\n" .
                         "Log in to the admin panel and open Books to review it."
                     ));
@@ -524,7 +524,7 @@ class BookController extends Controller
                 'purchasers:id',
             ])->findOrFail($id);
 
-            // Count the view — skip for the book's own author
+            // Count the view â€” skip for the book's own author
             $viewerId = auth()->id();
             $isOwner  = $viewerId && (
                 $book->author_id === $viewerId ||
@@ -587,7 +587,7 @@ class BookController extends Controller
                 Cache::put("audio_chapter_backfill_{$book->id}", true, now()->addHours(24));
                 BackfillAudioChapterPagesJob::dispatch($book)->onQueue('audio');
                 // When QUEUE_CONNECTION=sync the job runs inline above and writes
-                // updated page numbers to the DB — refresh so BookResource serves
+                // updated page numbers to the DB â€” refresh so BookResource serves
                 // the new data in this same response rather than stale in-memory values.
                 $book->refresh();
             }
@@ -1206,7 +1206,7 @@ class BookController extends Controller
                 'Book updated successfully.'
             );
         } catch (\Throwable $th) {
-            return $this->error('Failed to update book', 500, null, $th);
+            return $this->error('Failed to update book', 500, null);
         }
     }
 
@@ -1257,7 +1257,7 @@ class BookController extends Controller
                 "Book visibility updated to {$newVisibility} successfully."
             );
         } catch (\Throwable $th) {
-            return $this->error('Failed to toggle book visibility', 500, null, $th);
+            return $this->error('Failed to toggle book visibility', 500, null);
         }
     }
 
@@ -1309,7 +1309,7 @@ class BookController extends Controller
 
             return $this->error('Failed to delete book.', 500);
         } catch (\Throwable $th) {
-            return $this->error('Failed to delete book: ' . $th->getMessage(), 500, null, $th);
+            return $this->error('Failed to delete book: ' . $th->getMessage(), 500, null);
         }
     }
 
@@ -1344,7 +1344,7 @@ class BookController extends Controller
             return $this->success($extracted, 'Extraction successful');
         } catch (\Throwable $th) {
             // dd($th);
-            return $this->error($th->getMessage(), 500, null, $th);
+            return $this->error($th->getMessage(), 500, null);
         }
     }
 
@@ -1597,7 +1597,7 @@ class BookController extends Controller
             }
 
             // Note: the DB check constraint only allows 'pending', 'paid', 'failed'
-            // for digital_book_purchases.status — 'cancelled' is not valid.
+            // for digital_book_purchases.status â€” 'cancelled' is not valid.
 
             // Reject if user already owns any of the requested books (cross-account aware).
             $purchaseService = app(BookPurchaseService::class);
@@ -1651,7 +1651,7 @@ class BookController extends Controller
             }
 
             if ($totalAmount <= 0) {
-                // Discount makes the book(s) free — grant or pre-order
+                // Discount makes the book(s) free â€” grant or pre-order
                 $purchaseService = app(BookPurchaseService::class);
                 $grantedIds   = [];
                 $preorderedIds = [];
@@ -2172,7 +2172,7 @@ class BookController extends Controller
                 }
             }
 
-            // Resolve primary author — fall back to first book_authors pivot entry
+            // Resolve primary author â€” fall back to first book_authors pivot entry
             $authorId = $book->author_id ?? $book->authors->first()?->id;
             if (!$authorId) {
                 return $this->error('This book has no author assigned.', 422);
@@ -2351,7 +2351,7 @@ class BookController extends Controller
                 $newState ? 'Book has been archived and hidden from public listings.' : 'Book has been unarchived and is now visible.'
             );
         } catch (\Throwable $th) {
-            return $this->error('Failed to update archive status.', 500, null, $th);
+            return $this->error('Failed to update archive status.', 500, null);
         }
     }
 
@@ -2386,7 +2386,7 @@ class BookController extends Controller
                 'Stock updated successfully.'
             );
         } catch (\Throwable $th) {
-            return $this->error('Failed to update stock.', 500, null, $th);
+            return $this->error('Failed to update stock.', 500, null);
         }
     }
 
@@ -2409,7 +2409,7 @@ class BookController extends Controller
             // (webhook failures, receipt validation races, etc.) so the library is
             // always consistent regardless of which platform the user opens first.
             // Wrapped in its own try/catch so a heal failure never hides books the
-            // user already owns — it logs and continues rather than returning 500.
+            // user already owns â€” it logs and continues rather than returning 500.
             try {
                 $ownedBookIds = DB::table('book_user')->where('user_id', $user->id)->pluck('book_id')->all();
 
@@ -2551,7 +2551,7 @@ class BookController extends Controller
             'healed_book_ids' => $missingIds,
             'healed_count'    => count($missingIds),
         ], empty($missingIds)
-            ? 'Library is already in sync — nothing to heal.'
+            ? 'Library is already in sync â€” nothing to heal.'
             : 'Library healed successfully.');
     }
 
@@ -2604,13 +2604,13 @@ class BookController extends Controller
     /**
      * Admin-only: heal ALL users' libraries in one pass.
      * Finds every user who has paid purchases not reflected in book_user
-     * and syncs them. Safe to run multiple times — addBooksToUserLibrary
+     * and syncs them. Safe to run multiple times â€” addBooksToUserLibrary
      * is idempotent.
      * POST /admin/heal-all-libraries
      */
     public function adminHealAllLibraries(): JsonResponse
     {
-        // Lift the PHP execution time limit — this endpoint may need to process
+        // Lift the PHP execution time limit â€” this endpoint may need to process
         // many users and must not be killed mid-run, leaving partial state.
         set_time_limit(0);
 

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Auth;
 
@@ -66,7 +66,7 @@ class AuthController extends Controller
             // can return a specific message instead of the generic "wrong password".
             if (! in_array($user->default_login, ['email', 'password_only', null], true)
                 && ! Hash::check($request->password, $user->password)) {
-                $provider = ucfirst($user->default_login); // 'Google', 'Apple', …
+                $provider = ucfirst($user->default_login); // 'Google', 'Apple', â€¦
                 return $this->error(
                     "This account was originally created with {$provider}. "
                     . "To sign in with email and password, use 'Forgot Password' to set a password first.",
@@ -98,7 +98,7 @@ class AuthController extends Controller
 
             // 2FA gate
             if (! empty($user->mfa_secret)) {
-                // Layer 2A: Authenticator app (TOTP) — for users who have set it up
+                // Layer 2A: Authenticator app (TOTP) â€” for users who have set it up
                 $totpCode     = $request->input('totp_code');
                 $recoveryCode = $request->input('recovery_code');
 
@@ -116,7 +116,7 @@ class AuthController extends Controller
                     }
                 }
             } elseif ($user->default_login !== 'password_only') {
-                // Layer 2B: Email OTP — mandatory for all users without an authenticator app
+                // Layer 2B: Email OTP â€” mandatory for all users without an authenticator app
                 $sessionToken = $this->generateLoginSession($user);
                 return response()->json([
                     'email_otp_required' => true,
@@ -125,17 +125,17 @@ class AuthController extends Controller
                 ], 200);
             }
 
-            // Reached only for TOTP-verified users — issue token
+            // Reached only for TOTP-verified users â€” issue token
             return $this->issueToken($user, $request->ip());
         } catch (\Exception $e) {
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         } catch (\Throwable $th) {
 
-            return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while processing your request.', 500, $th->getMessage());
         }
     }
 
-    // ── Email OTP login endpoints ─────────────────────────────────────────────
+    // â”€â”€ Email OTP login endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     public function verifyLoginOtp(Request $request)
     {
@@ -179,7 +179,7 @@ class AuthController extends Controller
             );
         }
 
-        // OTP verified — clean up all session cache keys
+        // OTP verified â€” clean up all session cache keys
         Cache::forget("login_session:{$sessionToken}");
         Cache::forget("login_otp:{$sessionToken}");
         Cache::forget($attemptKey);
@@ -225,7 +225,7 @@ class AuthController extends Controller
         return $this->success(null, 'A new verification code has been sent to your email.');
     }
 
-    // ── Shared token issuance ─────────────────────────────────────────────────
+    // â”€â”€ Shared token issuance â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private function issueToken(User $user, string $ip)
     {
@@ -255,7 +255,7 @@ class AuthController extends Controller
         ], 'Login successful', 200);
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // â”€â”€ Private helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     private function generateLoginSession(User $user): string
     {
@@ -277,7 +277,7 @@ class AuthController extends Controller
             : ($user->username ?? 'there');
 
         Mail::send('emails.login_otp', ['name' => $displayName, 'otp' => $otp], function ($message) use ($user) {
-            $message->to($user->email)->subject('Sign-in Verification Code — SBA Reads');
+            $message->to($user->email)->subject('Sign-in Verification Code â€” SBA Reads');
         });
     }
 
@@ -343,7 +343,7 @@ class AuthController extends Controller
 
             return $this->success(null, 'If an account exists for that email, we have sent it a code.', 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while processing your request.', 500, $th->getMessage());
         }
     }
 
@@ -403,7 +403,7 @@ class AuthController extends Controller
 
             return $this->success(['reset_token' => $token], 'OTP verified successfully', 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while processing your request.', 500, $th->getMessage());
         }
     }
 
@@ -458,7 +458,7 @@ class AuthController extends Controller
 
             return $this->success(null, 'Password reset successful', 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while processing your request.', 500, $th->getMessage());
         }
     }
 
@@ -578,7 +578,7 @@ class AuthController extends Controller
                 'redirect_to'  => 'admin',
             ], 'Account activated successfully. Welcome to SBA Reads Admin.');
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while activating your account.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while activating your account.', 500, $th->getMessage());
         }
     }
 
@@ -590,7 +590,7 @@ class AuthController extends Controller
             return $this->success(null, 'Logged out successfully', 200);
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while processing your request.', 500, $th->getMessage());
         } catch (\Exception $e) {
             return $this->error('An error occurred while processing your request.', 500, $e->getMessage(), $e);
         }
@@ -611,7 +611,7 @@ class AuthController extends Controller
         ];
 
         Mail::send('emails.otp', $data, function ($message) use ($user) {
-            $message->to($user->email)->subject('Password Reset OTP — SBA Reads');
+            $message->to($user->email)->subject('Password Reset OTP â€” SBA Reads');
         });
     }
 

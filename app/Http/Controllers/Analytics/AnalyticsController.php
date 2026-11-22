@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Analytics;
 
@@ -26,7 +26,7 @@ class AnalyticsController extends Controller
             // throw $th;
             dd($th);
 
-            return $this->error('Failed to retrieve analytics.', 500, null, $th);
+            return $this->error('Failed to retrieve analytics.', 500, null);
         }
     }
 
@@ -46,7 +46,7 @@ class AnalyticsController extends Controller
 
             return $this->success($monthlyRevenue, 'Monthly revenue data retrieved successfully.');
         } catch (\Throwable $th) {
-            return $this->error('Failed to retrieve monthly revenue data.', 500, null, $th);
+            return $this->error('Failed to retrieve monthly revenue data.', 500, null);
         }
     }
 }

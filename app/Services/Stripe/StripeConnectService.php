@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Services\Stripe;
 
@@ -76,7 +76,7 @@ class StripeConnectService
 
             return $customer;
         } catch (\Throwable $th) {
-            return $this->error('Error creating Stripe customer', 500, $th->getMessage(), $th);
+            return $this->error('Error creating Stripe customer', 500, $th->getMessage());
         }
     }
 
@@ -103,7 +103,7 @@ class StripeConnectService
             'west virginia'=>'WV','wisconsin'=>'WI','wyoming'=>'WY','district of columbia'=>'DC',
         ];
         $lower = strtolower(trim($state));
-        return $map[$lower] ?? strtoupper($state); // already a code → uppercase it
+        return $map[$lower] ?? strtoupper($state); // already a code â†’ uppercase it
     }
 
     public function createCustomAccount($payload, $user)
@@ -208,7 +208,7 @@ class StripeConnectService
             });
         } catch (\Throwable $th) {
             Log::error('createCustomAccount failed', ['error' => $th->getMessage(), 'file' => $th->getFile(), 'line' => $th->getLine()]);
-            return $this->error('Error creating Stripe account', 500, $th->getMessage(), $th);
+            return $this->error('Error creating Stripe account', 500, $th->getMessage());
         }
     }
 
@@ -288,7 +288,7 @@ class StripeConnectService
             });
         } catch (\Throwable $th) {
             Log::error('updateCustomAccount failed', ['error' => $th->getMessage(), 'file' => $th->getFile(), 'line' => $th->getLine()]);
-            return $this->error('Error updating Stripe account', 500, $th->getMessage(), $th);
+            return $this->error('Error updating Stripe account', 500, $th->getMessage());
         }
     }
 
@@ -336,7 +336,7 @@ class StripeConnectService
                 'user_id' => $user->id,
                 'error'   => $th->getMessage(),
             ]);
-            return $this->error('Error uploading document to Stripe. Please try again.', 500, $th->getMessage(), $th);
+            return $this->error('Error uploading document to Stripe. Please try again.', 500, $th->getMessage());
         }
     }
 
@@ -440,7 +440,7 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-            return $this->error('Error creating Stripe payment method', 500, $th->getMessage(), $th);
+            return $this->error('Error creating Stripe payment method', 500, $th->getMessage());
         }
     }
 
@@ -503,7 +503,7 @@ class StripeConnectService
 
             return $paymentMethod;
         } catch (\Throwable $th) {
-            return $this->error('Error creating Stripe bank account', 500, $th->getMessage(), $th);
+            return $this->error('Error creating Stripe bank account', 500, $th->getMessage());
         }
     }
 
@@ -540,7 +540,7 @@ class StripeConnectService
                 'error' => null,
             ], 200);
         } catch (\Throwable $th) {
-            return $this->error('Error retrieving payment methods', 500, $th->getMessage(), $th);
+            return $this->error('Error retrieving payment methods', 500, $th->getMessage());
         }
     }
 
@@ -582,7 +582,7 @@ class StripeConnectService
 
             return $paymentIntent;
         } catch (\Throwable $th) {
-            return $this->error('Error creating payment intent: ' . $th->getMessage(), 500, $th->getMessage(), $th);
+            return $this->error('Error creating payment intent: ' . $th->getMessage(), 500, $th->getMessage());
         }
     }
 
@@ -605,7 +605,7 @@ class StripeConnectService
 
             return $paymentIntent;
         } catch (\Throwable $th) {
-            return $this->error('Error retrieving Payment Intent', 500, $th->getMessage(), $th);
+            return $this->error('Error retrieving Payment Intent', 500, $th->getMessage());
         }
     }
 
@@ -708,7 +708,7 @@ class StripeConnectService
 
             return $this->success($data, 'Account balance retrieved successfully', 200);
         } catch (\Throwable $th) {
-            return $this->error('Error retrieving account balance', 500, $th->getMessage(), $th);
+            return $this->error('Error retrieving account balance', 500, $th->getMessage());
         }
     }
 
@@ -774,7 +774,7 @@ class StripeConnectService
 
             return $this->success($payoutRecord, 'Payout initiated successfully', 200);
         } catch (\Throwable $th) {
-            return $this->error('Error creating payout', 500, $th->getMessage(), $th);
+            return $this->error('Error creating payout', 500, $th->getMessage());
         }
     }
 }

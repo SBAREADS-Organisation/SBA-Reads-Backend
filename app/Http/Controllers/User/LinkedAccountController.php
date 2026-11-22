@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\User;
 
@@ -107,7 +107,7 @@ class LinkedAccountController extends Controller
             ], ucfirst($request->account_type) . ' account linked successfully.', 201);
         } catch (\Throwable $th) {
             DB::rollBack();
-            return $this->error('An error occurred while linking the account.', 500, config('app.debug') ? $th->getMessage() : null, $th);
+            return $this->error('An error occurred while linking the account.', 500, config('app.debug') ? $th->getMessage() : null);
         }
     }
 
@@ -142,7 +142,7 @@ class LinkedAccountController extends Controller
                 'token'        => $token,
             ], 'Linked account retrieved.', 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while retrieving the linked account.', 500, config('app.debug') ? $th->getMessage() : null, $th);
+            return $this->error('An error occurred while retrieving the linked account.', 500, config('app.debug') ? $th->getMessage() : null);
         }
     }
 
@@ -174,7 +174,7 @@ class LinkedAccountController extends Controller
 
             return $this->success(null, 'Account unlinked successfully.', 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while unlinking the account.', 500, config('app.debug') ? $th->getMessage() : null, $th);
+            return $this->error('An error occurred while unlinking the account.', 500, config('app.debug') ? $th->getMessage() : null);
         }
     }
 }

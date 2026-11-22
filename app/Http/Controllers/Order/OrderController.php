@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Order;
 
@@ -80,7 +80,7 @@ class OrderController extends Controller
 
             return $this->success(OrderResource::collection($orders), 'All orders retrieved');
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while fetching all orders. Try again!', 500, null, $th);
+            return $this->error('An error occurred while fetching all orders. Try again!', 500, null);
         }
     }
 
@@ -132,7 +132,7 @@ class OrderController extends Controller
 
             return $this->success(OrderResource::collection($orders), 'User orders retrieved successfully');
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while fetching user orders. Try again!' . $th->getMessage(), 500, null, $th);
+            return $this->error('An error occurred while fetching user orders. Try again!' . $th->getMessage(), 500, null);
         }
     }
 
@@ -200,7 +200,7 @@ class OrderController extends Controller
             return $response;
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while placing order.';
-            return $this->error($message, 500, null, $th);
+            return $this->error($message, 500, null);
         }
     }
 
@@ -229,7 +229,7 @@ class OrderController extends Controller
             // throw $th;
             $message = $th->getMessage() ?? 'An error occured while retrieving orders';
 
-            return $this->error($message, 500, null, $th);
+            return $this->error($message, 500, null);
         }
     }
 
@@ -246,7 +246,7 @@ class OrderController extends Controller
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?: 'An error occurred while tracking your order. Please try again.';
 
-            return $this->error($message, 500, null, $th);
+            return $this->error($message, 500, null);
         }
     }
 
@@ -313,7 +313,7 @@ class OrderController extends Controller
                 });
             }
 
-            // On completion: deduct from stock permanently (reserved → sold)
+            // On completion: deduct from stock permanently (reserved â†’ sold)
             if ($request->status === 'completed' || $request->status === 'delivered') {
                 $order->items->each(function ($item) {
                     if ($item->book) {
@@ -379,7 +379,7 @@ class OrderController extends Controller
 
             return $this->success($order, 'Order status updated successfully');
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while updating order status.', 500, null, $th);
+            return $this->error('An error occurred while updating order status.', 500, null);
         }
     }
 }

@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Admin\AppVersion;
 
@@ -27,7 +27,7 @@ class AppVersionController extends Controller
             return $this->success($appVersions, 'App versions retrieved successfully.');
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, null, $th);
+            return $this->error('An error occurred while processing your request.', 500, null);
         }
     }
 
@@ -56,7 +56,7 @@ class AppVersionController extends Controller
         } catch (\Throwable $th) {
             // throw $th;
             // dd($th);
-            return $this->error('An error occurred while processing your request.', 500, null, $th);
+            return $this->error('An error occurred while processing your request.', 500, null);
         }
     }
 
@@ -75,7 +75,7 @@ class AppVersionController extends Controller
             return $this->success($appVersion, 'App version retrieved successfully.');
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, null, $th);
+            return $this->error('An error occurred while processing your request.', 500, null);
         }
     }
 
@@ -109,7 +109,7 @@ class AppVersionController extends Controller
             return $this->success($appVersion, 'App version updated successfully.');
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, null, $th);
+            return $this->error('An error occurred while processing your request.', 500, null);
         }
     }
 
@@ -130,7 +130,7 @@ class AppVersionController extends Controller
             return $this->success(null, 'App version deleted successfully.', 204);
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while processing your request.', 500, null, $th);
+            return $this->error('An error occurred while processing your request.', 500, null);
         }
     }
 }

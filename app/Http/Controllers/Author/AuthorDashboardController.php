@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Author;
 
@@ -34,7 +34,7 @@ class AuthorDashboardController extends Controller
                 $q->where('author_id', $author->id);
             })->pluck('id');
 
-            // Revenue placeholder — computed from gross sales after split is applied below
+            // Revenue placeholder â€” computed from gross sales after split is applied below
 
             // Books metrics - Enhanced with proper counting
             $books_published = Book::whereHas('authors', function ($q) use ($author) {
@@ -88,7 +88,7 @@ class AuthorDashboardController extends Controller
                 $total_sales  = round($ngnRevenue / 0.75, 2);
                 $dominantCurrency = 'NGN';
             } else {
-                // No transactions yet — fall back to book_user pivot sum.
+                // No transactions yet â€” fall back to book_user pivot sum.
                 $total_sales = $this->calculateTotalSales($authorBooks->toArray());
                 $revenue     = round($total_sales * 0.75, 2);
                 // Default to USD so the empty state matches the wallet ($0.00 everywhere).
@@ -155,7 +155,7 @@ class AuthorDashboardController extends Controller
             return $this->success($response_data, 'Author dashboard data retrieved successfully.');
         } catch (\Throwable $th) {
 
-            return $this->error('An error occurred while retrieving author dashboard data.', 500, null, $th);
+            return $this->error('An error occurred while retrieving author dashboard data.', 500, null);
         }
     }
 

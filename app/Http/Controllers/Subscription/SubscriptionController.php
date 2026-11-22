@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Subscription;
 
@@ -51,7 +51,7 @@ class SubscriptionController extends Controller
 
             return $this->success($subscription, 'Active subscription retrieved.');
         } catch (\Throwable $th) {
-            return $this->error('Failed to retrieve subscription.', 500, $th->getMessage(), $th);
+            return $this->error('Failed to retrieve subscription.', 500, $th->getMessage());
         }
     }
 

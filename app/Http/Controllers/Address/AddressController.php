@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Http\Controllers\Address;
 
@@ -43,7 +43,7 @@ class AddressController extends Controller
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while creating address.';
 
-            return $this->error($message, 500, null, $th);
+            return $this->error($message, 500, null);
         }
     }
 
@@ -54,7 +54,7 @@ class AddressController extends Controller
         } catch (\Throwable $th) {
             $message = $th->getMessage() ?? 'An error occurred while retrieving addresses.';
 
-            return $this->error($message, 500, null, $th);
+            return $this->error($message, 500, null);
         }
     }
 }

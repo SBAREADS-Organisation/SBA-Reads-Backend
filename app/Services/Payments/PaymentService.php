@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 namespace App\Services\Payments;
 
@@ -44,7 +44,7 @@ class PaymentService
                 return $this->createStripePayment($data, $user, $reference);
             }
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while creating the payment intent: ' . $th->getMessage(), 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while creating the payment intent: ' . $th->getMessage(), 500, $th->getMessage());
         }
     }
 
@@ -152,7 +152,7 @@ class PaymentService
 
         return $transaction;
     } catch (\Throwable $th) {
-        return $this->error('An error occurred while creating the Paystack payment: ' . $th->getMessage(), 500, $th->getMessage(), $th);
+        return $this->error('An error occurred while creating the Paystack payment: ' . $th->getMessage(), 500, $th->getMessage());
     }
 }
 
@@ -222,7 +222,7 @@ class PaymentService
 
             return $this->success(['status' => $status], 'Transaction status '.$status, 200);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while verifying the transaction.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while verifying the transaction.', 500, $th->getMessage());
         }
     }
 
@@ -256,7 +256,7 @@ class PaymentService
             return $payment;
         } catch (\Throwable $th) {
             // throw $th;
-            return $this->error('An error occurred while storing the transaction.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while storing the transaction.', 500, $th->getMessage());
         }
     }
 
@@ -272,7 +272,7 @@ class PaymentService
         try {
             return Transaction::with('user')->find($id);
         } catch (\Throwable $th) {
-            return $this->error('An error occurred while retrieving the transaction.', 500, $th->getMessage(), $th);
+            return $this->error('An error occurred while retrieving the transaction.', 500, $th->getMessage());
         }
     }
 

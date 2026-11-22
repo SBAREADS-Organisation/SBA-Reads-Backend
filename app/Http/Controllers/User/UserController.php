@@ -495,46 +495,42 @@ class UserController extends Controller
     {
         try {
             $user = $request->user();
-            // dd($request->all());
 
-            // Common validation rules
+            // ── Validation ────────────────────────────────────────────────────
             $rules = [
-                'name' => 'nullable|string|max:255',
-                'profile_info.username' => [
+                'name'                 => 'nullable|string|max:255',
+                'profile_info.username'=> [
                     'nullable', 'string', 'max:255',
-                    // Ignore this user's own row. Allow same-email accounts (reader +
-                    // author dual accounts) to share a username by only enforcing
-                    // uniqueness against users with a different email address.
+                    // Allow same-email dual accounts (reader + author) to share a
+                    // username; only enforce uniqueness against different-email users.
                     Rule::unique('users', 'username')
                         ->ignoreModel($user)
                         ->where(fn ($q) => $q->where('email', '!=', $user->email)),
                 ],
-                'profile_info.bio' => 'nullable|string|max:5000',
-                'profile_info.pronouns' => 'nullable|string|max:50',
-                'preferences' => 'nullable|array',
-                // 'profile_picture' => 'nullable|array',
-                'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
-                // 'profile_picture.public_id' => 'nullable|string|max:255',
+                'profile_info.bio'     => 'nullable|string|max:5000',
+                'profile_info.pronouns'=> 'nullable|string|max:50',
+                'preferences'          => 'nullable|array',
+                'profile_picture'      => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
             ];
 
             if ($user->account_type === 'author') {
-                // Add author-specific required fields
                 $rules = array_merge($rules, [
-                    'socials'             => 'nullable|array|max:20',
-                    'socials.*.platform'  => 'nullable|string|max:50',
-                    'socials.*.url'       => 'nullable|url|max:2048',
-                    'preferences.genres'  => 'nullable|array',
-                    'preferences.genres.*'=> 'nullable|string|max:50',
+                    'socials'              => 'nullable|array|max:20',
+                    'socials.*.platform'   => 'nullable|string|max:50',
+                    // 'sometimes' skips the url rule when the value is missing or
+                    // an empty string — prevents spurious validation failures when
+                    // the mobile client sends blank social fields.
+                    'socials.*.url'        => 'sometimes|nullable|url|max:2048',
+                    'preferences.genres'   => 'nullable|array',
+                    'preferences.genres.*' => 'nullable|string|max:50',
                 ]);
-            } /*else {
-                return $this->error('Invalid account type.', 400, null);
-            }*/
+            }
 
             $messages = [
                 'profile_info.username.unique' => 'This pen name is already taken. Please choose a different one.',
                 'profile_info.bio.max'         => 'Your bio is too long. Please keep it under 5000 characters.',
                 'profile_picture.max'          => 'Profile photo is too large. Please choose a photo under 5MB.',
-                'socials.*.url.max'            => 'One of your social links is too long.',
+                'socials.*.url.url'            => 'One of your social links is not a valid URL.',
             ];
 
             $validator = Validator::make(
@@ -549,11 +545,8 @@ class UserController extends Controller
             }
 
             // ── Profile picture upload (non-fatal) ───────────────────────────
-            // Isolated in its own try-catch so a media upload failure (S3 hiccup,
-            // timeout, wrong format) never aborts the rest of the profile save.
-            // Normalize legacy string values (old code stored plain URL strings).
-            $profilePicture   = is_array($user->profile_picture) ? $user->profile_picture : [];
-            $pictureUploadId  = null;
+            $profilePicture  = is_array($user->profile_picture) ? $user->profile_picture : [];
+            $pictureUploadId = null;
 
             if ($request->hasFile('profile_picture')) {
                 try {
@@ -566,7 +559,7 @@ class UserController extends Controller
                     ];
                     $pictureUploadId = (int) $upload['id'];
                 } catch (\Throwable $uploadEx) {
-                    Log::error('updateProfile: profile picture upload failed — profile saved without new photo', [
+                    Log::error('updateProfile: photo upload failed — continuing without new photo', [
                         'user_id' => $user->id,
                         'error'   => $uploadEx->getMessage(),
                     ]);
@@ -574,7 +567,6 @@ class UserController extends Controller
             }
 
             // ── Core profile fields ───────────────────────────────────────────
-            Log::info('updateProfile: assigning fields', ['user_id' => $user->id, 'step' => 'core_fields']);
             $penName = $request->input('profile_info.username');
             if ($penName) {
                 $user->username   = $penName;
@@ -589,37 +581,49 @@ class UserController extends Controller
                 $user->last_name  = $nameParts[1] ?? '';
             }
 
-            $user->bio             = $request->input('profile_info.bio', $user->bio);
-            $user->pronouns        = $request->input('profile_info.pronouns', $user->pronouns);
+            $user->bio             = $request->input('profile_info.bio') ?? $user->bio;
+            $user->pronouns        = $request->input('profile_info.pronouns') ?? $user->pronouns;
             $user->profile_picture = $profilePicture;
 
-            // ── Preferences (merge, guard against non-array) ──────────────────
-            Log::info('updateProfile: merging preferences', ['user_id' => $user->id, 'step' => 'preferences']);
-            $existingPreferences = is_array($user->preferences) ? $user->preferences : [];
-            $newPreferences      = is_array($request->input('preferences')) ? $request->input('preferences') : [];
-            $user->preferences   = array_merge($existingPreferences, $newPreferences);
+            // ── Preferences (safe-decode guards against legacy / corrupt JSON) ─
+            $rawPrefs            = $user->getRawOriginal('preferences');
+            $existingPreferences = [];
+            if ($rawPrefs) {
+                $decoded = json_decode($rawPrefs, true);
+                if (is_array($decoded)) $existingPreferences = $decoded;
+            }
+            $newPreferences    = is_array($request->input('preferences')) ? $request->input('preferences') : [];
+            $user->preferences = array_merge($existingPreferences, $newPreferences);
 
             // ── Author-only fields ────────────────────────────────────────────
             if ($user->account_type === 'author') {
-                Log::info('updateProfile: setting author fields', ['user_id' => $user->id, 'step' => 'author_fields']);
                 if ($request->has('socials')) {
-                    $existingInfo        = is_array($user->profile_info) ? $user->profile_info : [];
-                    $user->profile_info  = array_merge($existingInfo, [
-                        'socials' => $request->input('socials', []),
-                    ]);
+                    $rawInfo      = $user->getRawOriginal('profile_info');
+                    $existingInfo = [];
+                    if ($rawInfo) {
+                        $decoded = json_decode($rawInfo, true);
+                        if (is_array($decoded)) $existingInfo = $decoded;
+                    }
+                    // Strip empty-URL entries the mobile client may send
+                    $socials = array_values(array_filter(
+                        $request->input('socials', []),
+                        fn ($s) => is_array($s) && !empty($s['url']) && filter_var($s['url'], FILTER_VALIDATE_URL)
+                    ));
+                    $user->profile_info = array_merge($existingInfo, ['socials' => $socials]);
                 }
 
-                $existingSettings = is_array($user->settings) ? $user->settings : [];
-                $newSettings      = is_array($request->input('settings')) ? $request->input('settings') : [];
-                $user->settings   = array_merge($existingSettings, $newSettings);
+                $rawSettings      = $user->getRawOriginal('settings');
+                $existingSettings = [];
+                if ($rawSettings) {
+                    $decoded = json_decode($rawSettings, true);
+                    if (is_array($decoded)) $existingSettings = $decoded;
+                }
+                $newSettings    = is_array($request->input('settings')) ? $request->input('settings') : [];
+                $user->settings = array_merge($existingSettings, $newSettings);
             }
 
-            Log::info('updateProfile: saving user', ['user_id' => $user->id, 'step' => 'save']);
             $user->save();
-            Log::info('updateProfile: save complete', ['user_id' => $user->id, 'step' => 'save_done']);
 
-            // Link uploaded photo to this user (deferred until after save so we
-            // have a confirmed user_id even for brand-new accounts).
             if ($pictureUploadId) {
                 MediaUpload::where('id', $pictureUploadId)->update([
                     'mediable_type' => 'user',
@@ -627,25 +631,23 @@ class UserController extends Controller
                 ]);
             }
 
-            return $this->success(
-                new UserResource($user),
-                'Profile updated successfully!',
-                200
-            );
+            return $this->success(new UserResource($user), 'Profile updated successfully!');
+
+        } catch (\Illuminate\Database\UniqueConstraintViolationException) {
+            // Race-condition window between validation SELECT and the actual save.
+            return $this->error('This pen name is already taken. Please choose a different one.', 422);
         } catch (\Throwable $th) {
             Log::error('updateProfile: unexpected error', [
                 'user_id'   => $request->user()?->id,
+                'exception' => get_class($th),
                 'error'     => $th->getMessage(),
                 'file'      => $th->getFile(),
                 'line'      => $th->getLine(),
-                'exception' => get_class($th),
-                'trace'     => $th->getTraceAsString(),
             ]);
             return $this->error(
                 'An error occurred while updating your profile.',
                 500,
-                config('app.debug') ? '[' . get_class($th) . '] ' . $th->getMessage() : 'An error occurred while updating your profile.',
-                $th
+                config('app.debug') ? '[' . get_class($th) . '] ' . $th->getMessage() : null
             );
         }
     }
@@ -1255,7 +1257,7 @@ class UserController extends Controller
             return $this->success(null, "User ({$email}) has been permanently deleted.", 200);
 
         } catch (\Throwable $th) {
-            return $this->error('Failed to delete user.', 500, null, $th);
+            return $this->error('Failed to delete user.', 500);
         }
     }
 
@@ -1337,7 +1339,7 @@ class UserController extends Controller
             return $this->success(null, 'Your account has been permanently deleted.', 200);
 
         } catch (\Throwable $th) {
-            return $this->error('Failed to delete account. Please try again or contact support@sbareads.com.', 500, null, $th);
+            return $this->error('Failed to delete account. Please try again or contact support@sbareads.com.', 500);
         }
     }
 
