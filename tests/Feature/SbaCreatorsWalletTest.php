@@ -63,6 +63,70 @@ class SbaCreatorsWalletTest extends TestCase
             ->assertJsonPath('data.available.currency', 'USD');
     }
 
+    private function authorWithBank(float $earned): User
+    {
+        Role::findOrCreate('author', 'api');
+        $author = User::factory()->create(['account_type' => 'author', 'paystack_recipient_code' => 'RCP_test', 'payout_method' => 'paystack', 'bank_name' => 'OPay']);
+        $author->assignRole(Role::findByName('author', 'api'));
+        $this->sale($author, $earned);
+        Sanctum::actingAs($author);
+
+        return $author;
+    }
+
+    private function available(): float
+    {
+        return (float) $this->getJson('/api/author/wallet/balance')->json('data.available.amount');
+    }
+
+    #[Test]
+    public function a_withdrawal_is_recorded_before_money_moves_and_lowers_the_balance(): void
+    {
+        $this->authorWithBank(6572.45);
+        $sentReference = null;
+        $this->mock(\App\Services\Paystack\PaystackTransferService::class)->shouldReceive('initiateTransfer')
+            ->once()->andReturnUsing(function ($kobo, $recipient, $reason, $reference) use (&$sentReference) {
+                // The payout is already on record when Paystack is asked to send it.
+                $this->assertDatabaseHas('transactions', ['reference' => $reference, 'status' => 'pending', 'purpose_type' => 'paystack_payout']);
+                $this->assertSame(328600, $kobo);
+                $sentReference = $reference;
+
+                return ['reference' => $reference, 'status' => 'pending', 'transfer_code' => 'TRF_1'];
+            });
+
+        $this->postJson('/api/author/wallet/paystack-withdraw', ['amount' => 3286])->assertOk();
+
+        $this->assertNotNull($sentReference);
+        $this->assertEquals(3286.45, $this->available());
+        $this->assertDatabaseHas('transactions', ['reference' => $sentReference, 'description' => 'Withdrawal to OPay']);
+    }
+
+    #[Test]
+    public function a_withdrawal_paystack_refuses_gives_the_money_back(): void
+    {
+        $this->authorWithBank(5000);
+        $this->mock(\App\Services\Paystack\PaystackTransferService::class)->shouldReceive('initiateTransfer')
+            ->andThrow(new \RuntimeException('Paystack transfer failed: Invalid recipient'));
+
+        $this->postJson('/api/author/wallet/paystack-withdraw', ['amount' => 2000])->assertStatus(422);
+
+        $this->assertEquals(5000, $this->available());
+        $this->assertDatabaseHas('transactions', ['purpose_type' => 'paystack_payout', 'status' => 'failed']);
+    }
+
+    #[Test]
+    public function a_withdrawal_with_no_answer_from_paystack_stays_pending_so_it_cannot_be_paid_twice(): void
+    {
+        $this->authorWithBank(5000);
+        $this->mock(\App\Services\Paystack\PaystackTransferService::class)->shouldReceive('initiateTransfer')
+            ->andThrow(new \Illuminate\Http\Client\ConnectionException('timed out'));
+
+        $this->postJson('/api/author/wallet/paystack-withdraw', ['amount' => 5000])->assertOk()->assertJsonPath('data.status', 'pending');
+
+        $this->assertEquals(0, $this->available());
+        $this->postJson('/api/author/wallet/paystack-withdraw', ['amount' => 5000])->assertStatus(422);
+    }
+
     #[Test]
     public function creator_earnings_are_withdrawable_once_a_bank_is_added(): void
     {

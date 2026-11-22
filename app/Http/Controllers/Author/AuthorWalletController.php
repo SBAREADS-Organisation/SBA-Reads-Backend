@@ -303,29 +303,34 @@ class AuthorWalletController extends Controller
             );
         }
 
+        // Record the payout BEFORE sending money, so the balance always goes down by what was sent
+        // and a withdrawal can never be paid twice. (purpose_id is required by the transactions table.)
+        $reference = 'sbawd_' . Str::lower(Str::random(24));
+        $payout = Transaction::create([
+            'id'               => (string) Str::uuid(),
+            'user_id'          => $author->id,
+            'reference'        => $reference,
+            'status'           => 'pending',
+            'currency'         => 'NGN',
+            'amount'           => $amountNGN,
+            'type'             => 'payout',
+            'direction'        => 'debit',
+            'payment_provider' => 'paystack',
+            'purpose_type'     => 'paystack_payout',
+            'purpose_id'       => (string) $author->id,
+            'description'      => 'Withdrawal to ' . ($author->bank_name ?: 'your bank account'),
+        ]);
+
         try {
             $amountKobo = (int) round($amountNGN * 100);
 
             $transfer = $this->paystack->initiateTransfer(
                 $amountKobo,
                 $author->paystack_recipient_code,
-                'Author royalty withdrawal'
+                'Author royalty withdrawal',
+                $reference
             );
-
-            // Record the payout so future balance() calls subtract it
-            Transaction::create([
-                'id'               => (string) Str::uuid(),
-                'user_id'          => $author->id,
-                'reference'        => $transfer['reference'] ?? ('ps_wd_' . uniqid()),
-                'status'           => 'pending',
-                'currency'         => 'NGN',
-                'amount'           => $amountNGN,
-                'direction'        => 'debit',
-                'payment_provider' => 'paystack',
-                'purpose_type'     => 'paystack_payout',
-                'description'      => 'Withdrawal to Nigerian bank account',
-                'meta_data'        => $transfer,
-            ]);
+            $payout->update(['meta_data' => $transfer]);
 
             return $this->success([
                 'amount'        => $amountNGN,
@@ -333,7 +338,20 @@ class AuthorWalletController extends Controller
                 'transfer_code' => $transfer['transfer_code'] ?? null,
                 'status'        => $transfer['status'] ?? 'pending',
             ], 'Withdrawal initiated. Funds will arrive in your bank account within 1–3 business days.');
+        } catch (\Illuminate\Http\Client\ConnectionException $e) {
+            // We can't tell whether Paystack received it. Keep it pending (the balance stays reduced)
+            // until Paystack's webhook confirms or fails it; a failure gives the money back.
+            Log::error('Paystack withdrawal: no answer from Paystack', ['user_id' => $author->id, 'reference' => $reference, 'error' => $e->getMessage()]);
+
+            return $this->success([
+                'amount'    => $amountNGN,
+                'currency'  => 'NGN',
+                'reference' => $reference,
+                'status'    => 'pending',
+            ], 'Your withdrawal is being confirmed with the bank. If it does not go through, the money returns to your wallet automatically.');
         } catch (\Throwable $e) {
+            // Paystack said no, so no money moved: give the balance back.
+            $payout->update(['status' => 'failed', 'meta_data' => ['error' => $e->getMessage()]]);
             Log::error('Paystack withdrawal failed', ['user_id' => $author->id, 'error' => $e->getMessage()]);
 
             $message = $e->getMessage();

@@ -12,7 +12,7 @@ class PaystackTransferService
 
     public function __construct()
     {
-        $this->secretKey = config('services.paystack.secret', '');
+        $this->secretKey = (string) (config('services.paystack.secret') ?? '');
     }
 
     /**
@@ -61,15 +61,18 @@ class PaystackTransferService
     public function initiateTransfer(
         int    $amountKobo,
         string $recipientCode,
-        string $reason = 'Author royalty payout'
+        string $reason = 'Author royalty payout',
+        ?string $reference = null
     ): array {
+        // Our own reference lets the payout be recorded before the money moves, and matched by the webhook.
         $response = Http::withToken($this->secretKey)
-            ->post("{$this->baseUrl}/transfer", [
+            ->post("{$this->baseUrl}/transfer", array_filter([
                 'source'    => 'balance',
                 'amount'    => $amountKobo,
                 'recipient' => $recipientCode,
                 'reason'    => $reason,
-            ]);
+                'reference' => $reference,
+            ]));
 
         if (! $response->successful() || ! $response->json('status')) {
             $message = $response->json('message') ?? 'Unknown Paystack error';
@@ -132,13 +135,33 @@ class PaystackTransferService
      */
     public function listBanks(): array
     {
-        $response = Http::withToken($this->secretKey)
-            ->get("{$this->baseUrl}/bank", ['currency' => 'NGN', 'per_page' => 100]);
-
-        if (! $response->successful()) {
-            return [];
+        // Every Nigerian bank (Paystack pages the list), kept for 12 hours. A failed fetch isn't cached.
+        $banks = \Illuminate\Support\Facades\Cache::get('paystack_ngn_banks');
+        if (is_array($banks) && $banks) {
+            return $banks;
         }
 
-        return $response->json('data') ?? [];
+        $banks = [];
+        $next = null;
+        for ($page = 0; $page < 10; $page++) {
+            $response = Http::withToken($this->secretKey)->get("{$this->baseUrl}/bank", array_filter([
+                'currency' => 'NGN', 'perPage' => 100, 'use_cursor' => 'true', 'next' => $next,
+            ]));
+            if (! $response->successful()) {
+                break;
+            }
+            $banks = array_merge($banks, $response->json('data') ?? []);
+            $next = $response->json('meta.next');
+            if (! $next) {
+                break;
+            }
+        }
+
+        $banks = collect($banks)->unique('code')->sortBy(fn ($b) => strtolower($b['name'] ?? ''))->values()->all();
+        if ($banks) {
+            \Illuminate\Support\Facades\Cache::put('paystack_ngn_banks', $banks, now()->addHours(12));
+        }
+
+        return $banks;
     }
 }
