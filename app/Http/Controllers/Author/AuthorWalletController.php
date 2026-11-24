@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Services\Paystack\CurrencyConversionService;
 use App\Services\Paystack\PaystackTransferService;
 use App\Services\Stripe\StripeConnectService;
+use App\Services\Wallet\NairaWallet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -110,10 +111,9 @@ class AuthorWalletController extends Controller
         if ($payoutMethod === 'paystack') {
             $rate = $this->safeRate('USD', 'NGN');
 
-            // NGN earnings — directly withdrawable via Paystack (funds are in the platform's Paystack account)
-            $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
-                ->where('direction', 'credit')->where('status', 'succeeded')
-                ->where('currency', 'NGN')->sum('amount');
+            // NGN earnings — withdrawable via Paystack once past the hold period (see NairaWallet).
+            $wallet      = NairaWallet::for($author->id);
+            $lifetimeNGN = $wallet['earned'];
 
             // USD earnings from Stripe card purchases only — IAP earnings are excluded because
             // they are processed separately via IAPPayoutController and converted to NGN via Paystack.
@@ -126,35 +126,23 @@ class AuthorWalletController extends Controller
 
             $lifetimeUSDinNGN = round($lifetimeUSD * $rate, 2);
 
-            // Already paid out: manual withdrawals (debit) + auto-payouts already sent by the job (credit).
-            // Both reduce what the author can still manually withdraw — without this, auto-payout credits
-            // would remain in "available" forever and allow a second manual withdrawal of the same funds.
-            $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
-                ->where('currency', 'NGN')
-                ->whereIn('status', ['succeeded', 'pending'])
-                ->where('payment_provider', 'paystack')
-                ->where(function ($q) {
-                    $q->where(function ($inner) {
-                        // Manual author-initiated withdrawals
-                        $inner->where('direction', 'debit')
-                              ->where('purpose_type', 'paystack_payout');
-                    })->orWhere(function ($inner) {
-                        // Auto-payouts already sent by ProcessAuthorPayout job
-                        $inner->where('direction', 'credit')
-                              ->whereIn('purpose_type', ['order', 'digital_book_purchase']);
-                    });
-                })
-                ->sum('amount');
-
-            // Only NGN is withdrawable via Paystack — USD sits in the Stripe connected account
-            $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);
+            // Only NGN is withdrawable via Paystack — USD sits in the Stripe connected account.
+            // Earnings wait the hold period first; automatic payouts and withdrawals are taken off.
+            $available = $wallet['available'];
 
             $hasRecipient = ! empty($author->paystack_recipient_code);
-            $canWithdraw  = $available >= 100 && $hasRecipient;
+            $bankHold     = $this->bankChangeHold($author);
+            $canWithdraw  = $available >= 100 && $hasRecipient && ! $bankHold;
 
             $withdrawNote = ! $hasRecipient
                 ? 'Add a Nigerian bank account to withdraw your NGN earnings.'
-                : ($available < 100 ? 'Minimum withdrawal is ₦100. Keep selling to build up your balance!' : null);
+                : ($bankHold
+                    ? 'Your bank account was just changed, so withdrawals open on ' . $bankHold->format('j M, g:i a') . '. This keeps your money safe.'
+                    : ($available < 100
+                        ? ($wallet['pending'] > 0
+                            ? $this->pendingNote($wallet)
+                            : 'Minimum withdrawal is ₦100. Keep selling to build up your balance!')
+                        : null));
 
             // USD earnings available for a manual payout request (for authors with no Stripe account).
             // Subtract amounts already covered by pending/processing/completed requests.
@@ -195,6 +183,10 @@ class AuthorWalletController extends Controller
             return $this->success([
                 'payout_method'        => 'paystack',
                 'available'            => ['amount' => round($available, 2), 'currency' => 'NGN'],
+                'pending'              => ['amount' => $wallet['pending'], 'currency' => 'NGN'],
+                'next_release_at'      => $wallet['next_release_at']?->toISOString(),
+                'hold_days'            => $wallet['hold_days'],
+                'withdrawals_open_at'  => $bankHold?->toISOString(),
                 'pending_iap'          => ['amount' => round($iapPending * $rate, 2), 'currency' => 'NGN'],
                 'lifetime_earned'      => ['amount' => round($lifetimeNGN + $lifetimeUSDinNGN, 2), 'currency' => 'NGN'],
                 'pending_usd_in_ngn'   => $lifetimeUSDinNGN,
@@ -216,21 +208,24 @@ class AuthorWalletController extends Controller
         // ── No payout method set yet ─────────────────────────────────────────
         // Naira and dollar earnings are counted separately so each is shown in its own currency
         // (naira sales such as SBA Creators were previously labelled as dollars here).
-        $earned = fn (array $currencies) => (float) Transaction::where('user_id', $author->id)
+        $wallet      = NairaWallet::for($author->id);
+        $lifetimeNGN = $wallet['earned'];
+        $lifetimeUSD = (float) Transaction::where('user_id', $author->id)
             ->where('direction', 'credit')
             ->where('status', 'succeeded')
-            ->whereIn('currency', $currencies)
+            ->whereIn('currency', ['USD', 'usd'])
             ->sum('amount');
-        $lifetimeNGN = $earned(['NGN', 'ngn']);
-        $lifetimeUSD = $earned(['USD', 'usd']);
         $currency    = $lifetimeNGN > 0 || $lifetimeUSD <= 0 ? 'NGN' : 'USD';
-        $amount      = $currency === 'NGN' ? $lifetimeNGN : $lifetimeUSD;
+        $amount      = $currency === 'NGN' ? $wallet['available'] : $lifetimeUSD;
 
         return $this->success([
             'payout_method'    => null,
             'available'        => ['amount' => round($amount, 2), 'currency' => $currency],
+            'pending'          => ['amount' => $currency === 'NGN' ? $wallet['pending'] : 0, 'currency' => $currency],
+            'next_release_at'  => $currency === 'NGN' ? $wallet['next_release_at']?->toISOString() : null,
+            'hold_days'        => $wallet['hold_days'],
             'pending_iap'      => ['amount' => $iapPending, 'currency' => 'USD'],
-            'lifetime_earned'  => ['amount' => round($amount, 2), 'currency' => $currency],
+            'lifetime_earned'  => ['amount' => round($currency === 'NGN' ? $lifetimeNGN : $lifetimeUSD, 2), 'currency' => $currency],
             'stripe_account_id'=> null,
             'can_withdraw'     => false,
             'withdraw_note'    => 'Add your bank account to withdraw your earnings.',
@@ -256,27 +251,19 @@ class AuthorWalletController extends Controller
         // withdrawal requests cannot both pass the balance check simultaneously.
         $author = \App\Models\User::lockForUpdate()->findOrFail($author->id);
 
-        // Only NGN credits are withdrawable via Paystack (USD from Stripe is not in the Paystack account)
-        $lifetimeNGN = (float) Transaction::where('user_id', $author->id)
-            ->where('direction', 'credit')->where('status', 'succeeded')
-            ->where('currency', 'NGN')->sum('amount');
+        // A newly changed bank account waits before money can be sent to it.
+        if ($until = $this->bankChangeHold($author)) {
+            return $this->error('Your bank account was just changed, so withdrawals open on ' . $until->format('j M, g:i a')
+                . '. If you did not make this change, contact support@sbareads.com straight away.', 423);
+        }
 
-        $alreadyPaidOut = (float) Transaction::where('user_id', $author->id)
-            ->where('currency', 'NGN')
-            ->whereIn('status', ['succeeded', 'pending'])
-            ->where('payment_provider', 'paystack')
-            ->where(function ($q) {
-                $q->where(function ($inner) {
-                    $inner->where('direction', 'debit')
-                          ->where('purpose_type', 'paystack_payout');
-                })->orWhere(function ($inner) {
-                    $inner->where('direction', 'credit')
-                          ->whereIn('purpose_type', ['order', 'digital_book_purchase']);
-                });
-            })
-            ->sum('amount');
+        // Only cleared NGN earnings are withdrawable via Paystack (USD from Stripe is not in the Paystack account).
+        $wallet    = NairaWallet::for($author->id);
+        $available = $wallet['available'];
 
-        $available = max(0.0, $lifetimeNGN - $alreadyPaidOut);
+        if ($amountNGN > $available && $wallet['pending'] > 0 && $amountNGN <= $available + $wallet['pending']) {
+            return $this->error('You can withdraw ₦' . number_format($available, 2) . ' now. ' . $this->pendingNote($wallet), 422);
+        }
 
         if ($amountNGN > $available) {
             // Check if the gap is due to USD earnings pending admin processing
@@ -367,6 +354,21 @@ class AuthorWalletController extends Controller
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** When withdrawals reopen after a bank account change, or null if they're open. */
+    private function bankChangeHold($author): ?\Illuminate\Support\Carbon
+    {
+        $until = $author->payout_hold_until ? \Illuminate\Support\Carbon::parse($author->payout_hold_until) : null;
+
+        return $until && $until->isFuture() ? $until : null;
+    }
+
+    private function pendingNote(array $wallet): string
+    {
+        return '₦' . number_format($wallet['pending'], 2) . ' from recent sales becomes available '
+            . ($wallet['next_release_at'] ? 'from ' . $wallet['next_release_at']->format('j M') : 'soon')
+            . ' (earnings wait ' . $wallet['hold_days'] . ' days in case of refunds).';
+    }
 
     private function lifetimeEarned(int $userId, string $currency): array
     {

@@ -109,6 +109,18 @@ class PaystackTransferService
      *
      * @throws \RuntimeException when Paystack cannot resolve the account
      */
+    /** The naira balance in the SBA Reads Paystack account (what payouts are paid from). */
+    public function nairaBalance(): float
+    {
+        $response = Http::withToken($this->secretKey)->get("{$this->baseUrl}/balance");
+        if (! $response->successful() || ! $response->json('status')) {
+            throw new \RuntimeException('Could not read the Paystack balance: ' . ($response->json('message') ?? $response->status()));
+        }
+        $ngn = collect($response->json('data') ?? [])->firstWhere('currency', 'NGN');
+
+        return round(((float) ($ngn['balance'] ?? 0)) / 100, 2);
+    }
+
     public function resolveAccount(string $accountNumber, string $bankCode): string
     {
         $response = Http::withToken($this->secretKey)
