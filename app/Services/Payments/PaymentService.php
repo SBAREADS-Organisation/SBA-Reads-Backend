@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Services\Payments;
 
@@ -50,6 +50,10 @@ class PaymentService
 
     protected function createStripePayment($data, $user, $reference): JsonResponse|Transaction
     {
+        // Website buyers get a Stripe-hosted card page; the app keeps using a payment intent and its own card sheet.
+        if (! empty($data->stripe_checkout)) {
+            return $this->createStripeCheckout($data, $user, $reference);
+        }
 
         $paymentIntentPayload = [
             'amount' => $this->convertToSubunit($data->amount, $data->currency),
@@ -98,6 +102,45 @@ class PaymentService
                 config('app.debug') ? 'Stripe service returned an unhandled type.' : null
             );
         }
+    }
+
+    /** A Stripe Checkout page: the transaction keeps the page link where Paystack's link would go. */
+    protected function createStripeCheckout($data, $user, $reference): JsonResponse|Transaction
+    {
+        try {
+            $session = $this->stripe->createCheckoutSession([
+                'amount' => $this->convertToSubunit($data->amount, $data->currency),
+                'currency' => $data->currency,
+                'purpose' => $data->purpose,
+                'purpose_id' => $data->purpose_id ?? 0,
+                'reference' => $reference,
+                'description' => $data->description ?? null,
+                'success_url' => $data->stripe_checkout->success_url,
+                'cancel_url' => $data->stripe_checkout->cancel_url,
+            ], $user);
+        } catch (\Throwable $th) {
+            Log::error('Error creating Stripe checkout: ' . $th->getMessage());
+
+            return $this->error('We could not start the card payment. Please try again.', 502, config('app.debug') ? $th->getMessage() : null);
+        }
+
+        return Transaction::create([
+            'id' => Str::uuid(),
+            'user_id' => $user->id,
+            'reference' => $reference,
+            'payment_intent_id' => $session->id,
+            'payment_client_secret' => $session->url,
+            'amount' => $data->amount,
+            'currency' => strtoupper($data->currency),
+            'payment_provider' => 'stripe',
+            'description' => $data->description ?? null,
+            'purpose_type' => $data->purpose,
+            'purpose_id' => $data->purpose_id ?? null,
+            'meta_data' => array_merge((array) json_decode(json_encode($data->meta_data ?? []), true), ['stripe_checkout_session' => $session->id]),
+            'status' => 'pending',
+            'type' => 'purchase',
+            'direction' => 'debit',
+        ]);
     }
 
     protected function createPaystackPayment($data, $user, $reference): JsonResponse|Transaction

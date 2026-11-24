@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Services\Stripe;
 
@@ -542,6 +542,41 @@ class StripeConnectService
         } catch (\Throwable $th) {
             return $this->error('Error retrieving payment methods', 500, $th->getMessage());
         }
+    }
+
+    /**
+     * A Stripe-hosted card page for website buyers paying in dollars (or another Stripe currency).
+     * The payment it creates carries the same metadata as createPaymentIntent, so the existing
+     * payment_intent.succeeded webhook fulfils it exactly like an app payment.
+     */
+    public function createCheckoutSession(array $payload, $user): \Stripe\Checkout\Session
+    {
+        $metadata = [
+            'user_id' => $user->id,
+            'description' => $payload['description'] ?? '',
+            'purpose' => $payload['purpose'] ?? '',
+            'purpose_id' => $payload['purpose_id'],
+            'reference' => $payload['reference'],
+        ];
+
+        return \Stripe\Checkout\Session::create(array_filter([
+            'mode' => 'payment',
+            'customer_email' => $user->email,
+            'client_reference_id' => $payload['reference'],
+            'line_items' => [[
+                'quantity' => 1,
+                'price_data' => [
+                    'currency' => strtolower($payload['currency']),
+                    'unit_amount' => $payload['amount'],
+                    'product_data' => ['name' => mb_substr($payload['description'] ?: 'SBA Reads purchase', 0, 250)],
+                ],
+            ]],
+            'payment_intent_data' => array_filter(['metadata' => $metadata, 'description' => $payload['description'] ?? null, 'receipt_email' => $user->email]),
+            'metadata' => $metadata,
+            'success_url' => $payload['success_url'],
+            'cancel_url' => $payload['cancel_url'],
+            'expires_at' => now()->addMinutes(60)->timestamp,
+        ], fn ($v) => $v !== null));
     }
 
     // Payment intent creation

@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 namespace App\Http\Controllers\Book;
 
@@ -1568,6 +1568,8 @@ class BookController extends Controller
                 'books.*'       => 'required|integer|exists:books,id',
                 'currency'      => 'required|string|size:3|in:USD,EUR,GBP,CAD,AUD,NGN,GHS,KES,ZAR',
                 'discount_code' => 'nullable|string|max:64',
+                'checkout'      => 'nullable|in:web',
+                'return_path'   => 'nullable|string|max:200',
             ]);
 
             if ($validator->fails()) {
@@ -1578,6 +1580,7 @@ class BookController extends Controller
             $bookIds  = array_unique($request->input('books'));
             $currency = strtoupper($request->input('currency'));
             $provider = $this->getPaymentProvider($currency);
+            $webCheckout = $this->stripeWebCheckout($request, $provider);
 
             // Deduplication: block a second request for the same books within 60 seconds.
             // Protects against double-taps and network retries creating duplicate
@@ -1763,7 +1766,7 @@ class BookController extends Controller
 
             return DB::transaction(function () use (
                 $user, $bookIds, $books, $totalAmount, $platformFeeAmount,
-                $authorPayoutPercent, $currency, $provider, $payableAmount, $discountCodeModel
+                $authorPayoutPercent, $currency, $provider, $payableAmount, $discountCodeModel, $webCheckout
             ) {
                 $purchase = DigitalBookPurchase::create([
                     'user_id'             => $user->id,
@@ -1804,6 +1807,7 @@ class BookController extends Controller
                     'description' => 'Digital books purchase',
                     'purpose'     => 'digital_book_purchase',
                     'purpose_id'  => $purchase->id,
+                    'stripe_checkout' => $webCheckout,
                     'meta_data'   => [
                         'book_ids'         => $bookIds,
                         'user_id'          => $user->id,
@@ -1834,7 +1838,8 @@ class BookController extends Controller
                     'platform_fee_amount'=> $platformFeeAmount,
                     'status'             => 'pending',
                     'payment_intent_id'  => $transaction->payment_intent_id,
-                    'authorization_url'  => $provider === 'paystack' ? $transaction->payment_client_secret : null,
+                    // Paystack's page, or Stripe's card page for website buyers paying in dollars.
+                    'authorization_url'  => ($provider === 'paystack' || $webCheckout) ? $transaction->payment_client_secret : null,
                 ], 'Book purchase initiated successfully. Complete payment to access books.');
             });
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -2157,6 +2162,7 @@ class BookController extends Controller
 
             $currency           = strtoupper($request->input('currency', 'USD'));
             $provider           = $this->getPaymentProvider($currency);
+            $webCheckout        = $this->stripeWebCheckout($request, $provider);
             $priceUsd           = (float) ($book->audio_price ?? 10.00);
             $authorCutPercent   = config('payments.audio_books.author_payout_percent', 0.30);
             $platformCutPercent = config('payments.audio_books.platform_fee_percent', 0.70);
@@ -2180,7 +2186,7 @@ class BookController extends Controller
 
             return DB::transaction(function () use (
                 $user, $book, $authorId, $priceUsd, $authorCut, $platformCut,
-                $priceConverted, $currency, $provider
+                $priceConverted, $currency, $provider, $webCheckout
             ) {
                 // Reuse an existing pending record to avoid duplicate records on retry
                 $purchase = AudioBookPurchase::where('user_id', $user->id)
@@ -2216,6 +2222,7 @@ class BookController extends Controller
                     'description' => 'Audio book purchase: ' . $book->title,
                     'purpose'     => 'audio_book_purchase',
                     'purpose_id'  => $purchase->id,
+                    'stripe_checkout' => $webCheckout,
                     'meta_data'   => [
                         'book_id'          => $book->id,
                         'user_id'          => $user->id,
@@ -2243,7 +2250,7 @@ class BookController extends Controller
                     'platform_fee'      => $platformCut,
                     'status'            => 'pending',
                     'payment_intent_id' => $transaction->payment_intent_id,
-                    'authorization_url' => $provider === 'paystack'
+                    'authorization_url' => ($provider === 'paystack' || $webCheckout)
                         ? $transaction->payment_client_secret
                         : null,
                 ], 'Audio purchase initiated. Complete payment to unlock audio.');
@@ -2298,6 +2305,19 @@ class BookController extends Controller
                 $e->getMessage()
             );
         }
+    }
+
+    /**
+     * Website card payments (Stripe): a hosted card page that returns the buyer to our website.
+     * Only the path comes from the request; the site address is ours, so the return can't be sent elsewhere.
+     */
+    private function stripeWebCheckout(Request $request, string $provider): ?array
+    {
+        if ($provider !== 'stripe' || $request->input('checkout') !== 'web') {
+            return null;
+        }
+
+        return \App\Support\WebCheckout::urls((string) $request->input('return_path', '/library'));
     }
 
     /**

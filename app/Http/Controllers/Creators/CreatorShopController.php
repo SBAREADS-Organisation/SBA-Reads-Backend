@@ -118,8 +118,15 @@ class CreatorShopController extends Controller
         }
         $quote = $this->service->quote($product, $discount, $affiliate);
 
+        // Buyers abroad can pay by card in US dollars (Stripe). Instalments and automatic renewal
+        // need a saved Paystack card, so those stay with naira payments.
+        $inDollars = strtoupper((string) $request->input('pay_in')) === 'USD';
+
         // Pay in instalments: courses only, at or above the minimum, card or link for the later payments.
         $instalments = $request->integer('instalments');
+        if ($instalments && $inDollars) {
+            return $this->error('Instalments are paid in naira. Choose "Pay in full" to pay in US dollars.', 422);
+        }
         if ($instalments) {
             if (! $product->allowsInstalments() || $instalments < 2 || $instalments > $product->instalments_max || $quote['price'] < (float) config('creators.instalment_min_ngn')) {
                 return $this->error('This course can\'t be paid in that many instalments.', 422);
@@ -164,8 +171,9 @@ class CreatorShopController extends Controller
         try {
             return $this->startPayment($user, $product, $quote, $slot, [
                 'instalments' => $instalments ?: null,
-                'auto_renew' => $product->isMembership() && $request->boolean('auto_renew'),
+                'auto_renew' => ! $inDollars && $product->isMembership() && $request->boolean('auto_renew'),
                 'upsell' => $upsell,
+                'usd' => $inDollars,
             ]);
         } catch (SlotTaken) {
             return $this->error('That time has just been taken. Please choose another.', 409);
@@ -222,10 +230,21 @@ class CreatorShopController extends Controller
         }
         $quote = $this->service->quote($product, $discount, $affiliate);
 
+        // What a buyer abroad pays by card, at today's rate (shown before they choose to pay in dollars).
+        $usd = null;
+        if ($quote['amount_paid'] > 0) {
+            try {
+                $usd = ceil(app(\App\Services\Paystack\CurrencyConversionService::class)->convert((float) $quote['amount_paid'], $product->currency, 'USD') * 100) / 100;
+            } catch (\Throwable) {
+                $usd = null;
+            }
+        }
+
         return $this->success([
             'list_price' => $quote['list_price'],
             'discount' => $quote['discount'],
             'amount_to_pay' => $quote['amount_paid'],
+            'amount_to_pay_usd' => $usd,
             'buyer_fee' => $quote['fee_payer'] === 'buyer' ? $quote['fee'] : 0,
             'code' => $discount?->code,
         ], $discount ? 'Code applied.' : 'Price retrieved.');
@@ -293,14 +312,29 @@ class CreatorShopController extends Controller
                 $locked->update(['purchase_id' => $purchase->id, 'held_until' => now()->addMinutes(self::HOLD_MINUTES)]);
             }
 
+            // In dollars: the naira total at today's rate, rounded up to the cent. The purchase keeps its
+            // naira amounts, so the creator is credited exactly as for a naira sale.
+            $currency = $product->currency;
+            $amount = $charge;
+            $meta = ['product_id' => $product->id, 'purchase_id' => $purchase->id];
+            if (! empty($options['usd'])) {
+                $amount = ceil(app(\App\Services\Paystack\CurrencyConversionService::class)->convert($charge, $product->currency, 'USD') * 100) / 100;
+                if ($amount < 0.5) {
+                    throw new \RuntimeException('Below the smallest card payment.');
+                }
+                $currency = 'USD';
+                $meta += ['naira_amount' => $charge];
+            }
+
             $transaction = app(PaymentService::class)->createPayment([
-                'amount' => $charge,
-                'currency' => $product->currency,
+                'amount' => $amount,
+                'currency' => $currency,
                 'description' => 'SBA Creators: ' . $title . ($product->isMembership() ? ' (1 month)' : '')
                     . ($purchase->isInstalments() ? " (instalment 1 of {$purchase->instalment_count})" : ''),
                 'purpose' => 'creator_purchase',
                 'purpose_id' => $purchase->id,
-                'meta_data' => ['product_id' => $product->id, 'purchase_id' => $purchase->id],
+                'meta_data' => $meta,
+                'stripe_checkout' => ! empty($options['usd']) ? \App\Support\WebCheckout::urls("/learn/{$product->id}") : null,
             ], $user);
 
             if ($transaction instanceof JsonResponse) {
@@ -310,8 +344,8 @@ class CreatorShopController extends Controller
             return $this->success([
                 'authorization_url' => $transaction->payment_client_secret,
                 'reference' => $transaction->reference,
-                'amount' => $charge,
-                'currency' => $product->currency,
+                'amount' => $amount,
+                'currency' => $currency,
             ], 'Complete your payment to get access.');
         });
     }

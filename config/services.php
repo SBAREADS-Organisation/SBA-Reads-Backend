@@ -105,6 +105,11 @@ return [
         'model'   => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
     ],
 
+    // The public website, where Stripe's card page returns buyers to.
+    'web' => [
+        'url' => env('WEB_APP_URL', 'https://sbareads.com'),
+    ],
+
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'model'   => env('OPENAI_MODEL', 'gpt-4o'),

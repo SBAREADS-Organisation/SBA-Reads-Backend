@@ -78,15 +78,46 @@ class StripeWebhookService
                     $this->processSuccessfulOrder($transaction, $user);
                     break;
 
+                // SBA Creators bought on the website with an international card. The creator is credited
+                // in naira exactly as for a Paystack sale (the purchase keeps its naira amounts).
+                case 'creator_purchase':
+                    if ($this->creatorAmountMatches($transaction, $paymentIntent)
+                        && ($purchase = \App\Models\CreatorPurchase::find($transaction->purpose_id))) {
+                        app(\App\Services\Creators\CreatorService::class)->fulfilPurchase($purchase);
+                    }
+                    break;
+
                 default:
                     break;
             }
         } catch (\Exception $e) {
+            if (($transaction ?? null) && str_starts_with((string) $transaction->purpose_type, 'creator_')) {
+                \App\Services\Creators\CreatorAlerts::send('A card payment was received but could not be applied', [
+                    'reference' => $transaction->reference, 'purpose' => $transaction->purpose_type,
+                    'purpose_id' => $transaction->purpose_id, 'error' => $e->getMessage(),
+                ]);
+            }
             Log::error('StripeWebhookService::handlePaymentIntentSucceeded failed', [
                 'message'   => $e->getMessage(),
                 'reference' => $paymentIntent->metadata->reference ?? null,
             ]);
         }
+    }
+
+    /** Stripe must report at least the amount we asked for, in the same currency; otherwise nothing is granted. */
+    protected function creatorAmountMatches(Transaction $transaction, PaymentIntent $paymentIntent): bool
+    {
+        $received = $this->paymentService->convertFromSubunit((int) ($paymentIntent->amount_received ?? $paymentIntent->amount ?? 0), (string) $paymentIntent->currency);
+        if (strtoupper((string) $paymentIntent->currency) === strtoupper((string) $transaction->currency)
+            && $received >= (float) $transaction->amount - 0.01) {
+            return true;
+        }
+        \App\Services\Creators\CreatorAlerts::send('A card payment came in for less than the price, so nothing was granted', [
+            'reference' => $transaction->reference, 'expected' => $transaction->currency . ' ' . $transaction->amount,
+            'received' => strtoupper((string) $paymentIntent->currency) . ' ' . $received, 'purpose_id' => $transaction->purpose_id,
+        ]);
+
+        return false;
     }
 
     /**
