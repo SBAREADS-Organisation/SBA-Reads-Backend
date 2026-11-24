@@ -603,6 +603,27 @@ class CreatorService
     }
 
     /** Extends a store's paid plan by one period from whichever is later: now, or its current end. */
+    /** What a plan costs for a billing period (monthly, quarterly or annual), with the saving for paying ahead. */
+    public static function planPrice(string $plan, string $period = 'monthly'): float
+    {
+        $billing = config("creators.billing.{$period}") ?? config('creators.billing.monthly');
+
+        return round((float) config("creators.plans.{$plan}.price_ngn") * $billing['months'] * (1 - $billing['discount']));
+    }
+
+    /** The plans, each with its price for every billing period. */
+    public static function plansWithPrices(): array
+    {
+        return collect(config('creators.plans'))->map(fn ($plan, $key) => $plan + [
+            'periods' => collect(config('creators.billing'))->map(fn ($b, $period) => [
+                'label' => $b['label'],
+                'months' => $b['months'],
+                'price' => self::planPrice($key, $period),
+                'saving' => round($plan['price_ngn'] * $b['months'] - self::planPrice($key, $period)),
+            ])->all(),
+        ])->all();
+    }
+
     public function fulfilPlan(CreatorStore $store, string $plan, string $reference): void
     {
         DB::transaction(function () use ($store, $plan, $reference) {
@@ -619,9 +640,13 @@ class CreatorService
                 $plan === config('creators.trial_plan') && $store->onTrial() => $store->trial_ends_at,
                 default => now(),
             };
+            // One month, or the whole quarter or year paid for at once.
+            $months = max(1, (int) ($meta?->meta_data['months'] ?? 1));
             $store->update([
                 'plan' => $plan,
-                'plan_paid_until' => $from->copy()->addDays((int) config('creators.plan_days')),
+                'plan_paid_until' => $months === 1
+                    ? $from->copy()->addDays((int) config('creators.plan_days'))
+                    : $from->copy()->addMonthsNoOverflow($months),
             ]);
 
             if ($meta) {

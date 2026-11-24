@@ -10,6 +10,7 @@ use App\Models\CreatorSlot;
 use App\Models\CreatorStore;
 use App\Services\Cloudinary\CloudinaryMediaUploadService;
 use App\Services\Creators\CreatorPresenter;
+use App\Services\Creators\CreatorService;
 use App\Services\Payments\PaymentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -55,7 +56,8 @@ class CreatorStudioController extends Controller
     public function plans(): JsonResponse
     {
         return $this->success([
-            'plans' => config('creators.plans'),
+            'plans' => CreatorService::plansWithPrices(),
+            'billing' => config('creators.billing'),
             'trial_days' => config('creators.trial_days'),
         ], 'Plans retrieved.');
     }
@@ -64,14 +66,14 @@ class CreatorStudioController extends Controller
     {
         $store = $this->myStore($request);
         if (! $store) {
-            return $this->success(['store' => null, 'plans' => config('creators.plans')], 'No store yet.');
+            return $this->success(['store' => null, 'plans' => CreatorService::plansWithPrices()], 'No store yet.');
         }
 
         $paid = CreatorPurchase::where('store_id', $store->id)->where('status', 'paid');
 
         return $this->success([
             'store' => $this->presenter->store($store, true),
-            'plans' => config('creators.plans'),
+            'plans' => CreatorService::plansWithPrices(),
             'stats' => [
                 'products' => $store->products()->count(),
                 'published' => $store->products()->where('status', 'published')->count(),
@@ -154,20 +156,25 @@ class CreatorStudioController extends Controller
         if (! $store) {
             return $this->error('Create your store first.', 404);
         }
-        $validator = Validator::make($request->all(), ['plan' => 'required|in:pro,business']);
+        $validator = Validator::make($request->all(), [
+            'plan' => 'required|in:pro,business',
+            'period' => 'sometimes|in:' . implode(',', array_keys(config('creators.billing'))),
+        ]);
         if ($validator->fails()) {
             return $this->validationError($validator);
         }
 
         $plan = $request->input('plan');
-        $price = (float) config("creators.plans.{$plan}.price_ngn");
+        $period = $request->input('period', 'monthly');
+        $months = (int) config("creators.billing.{$period}.months");
+        $price = CreatorService::planPrice($plan, $period);
         $transaction = app(PaymentService::class)->createPayment([
             'amount' => $price,
             'currency' => 'NGN',
-            'description' => 'SBA Creators ' . config("creators.plans.{$plan}.name") . ' plan (1 month)',
+            'description' => 'SBA Creators ' . config("creators.plans.{$plan}.name") . ' plan (' . ($months === 1 ? '1 month' : "{$months} months") . ')',
             'purpose' => 'creator_plan',
             'purpose_id' => $store->id,
-            'meta_data' => ['store_id' => $store->id, 'plan' => $plan],
+            'meta_data' => ['store_id' => $store->id, 'plan' => $plan, 'period' => $period, 'months' => $months],
         ], $request->user());
 
         if ($transaction instanceof JsonResponse) {
@@ -177,6 +184,8 @@ class CreatorStudioController extends Controller
         return $this->success([
             'authorization_url' => $transaction->payment_client_secret,
             'reference' => $transaction->reference,
+            'amount' => $price,
+            'months' => $months,
         ], 'Complete your payment to activate your plan.');
     }
 

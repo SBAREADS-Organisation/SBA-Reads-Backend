@@ -254,6 +254,29 @@ class SbaCreatorsTest extends TestCase
     }
 
     #[Test]
+    public function a_plan_can_be_paid_quarterly_or_yearly_for_less(): void
+    {
+        $store = $this->openStore();
+        $store->update(['trial_ends_at' => now()->subDay()]);
+
+        $plans = $this->getJson('/api/creators/plans')->assertOk()->json('data.plans');
+        $this->assertEquals(20250, $plans['pro']['periods']['quarterly']['price']);   // 3 months, 10% off
+        $this->assertEquals(75000, $plans['pro']['periods']['annual']['price']);      // 12 months for the price of 10
+        $this->assertEquals(15000, $plans['pro']['periods']['annual']['saving']);
+
+        $this->postJson('/api/creators/studio/store/plan', ['plan' => 'pro', 'period' => 'annual'])->assertOk()->assertJsonPath('data.months', 12);
+        $this->assertEquals(75000, $this->payments[0]['amount']);
+        $this->confirmPayment('creator_plan', $store->id);
+        $this->assertTrue($store->fresh()->plan_paid_until->isSameDay(now()->addMonthsNoOverflow(12)));
+
+        $this->postJson('/api/creators/studio/store/plan', ['plan' => 'pro', 'period' => 'quarterly'])->assertOk();
+        $this->confirmPayment('creator_plan', $store->id);
+        $this->assertTrue($store->fresh()->plan_paid_until->isSameDay(now()->addMonthsNoOverflow(15)));
+
+        $this->postJson('/api/creators/studio/store/plan', ['plan' => 'pro', 'period' => 'weekly'])->assertStatus(422);
+    }
+
+    #[Test]
     public function upload_links_only_accept_supported_files(): void
     {
         $product = $this->publishedCourse();

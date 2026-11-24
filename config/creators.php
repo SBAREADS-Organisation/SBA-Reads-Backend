@@ -25,6 +25,13 @@ return [
         'business' => ['name' => 'Business', 'price_ngn' => 15000, 'fee_ngn' => 0.015, 'fee_foreign' => 0.035],
     ],
 
+    // How long a paid plan can be bought for at once, and the saving for paying ahead.
+    'billing' => [
+        'monthly' => ['label' => 'Monthly', 'months' => 1, 'discount' => 0],
+        'quarterly' => ['label' => 'Every 3 months', 'months' => 3, 'discount' => 0.10],
+        'annual' => ['label' => 'Yearly', 'months' => 12, 'discount' => 1 / 6], // two months free
+    ],
+
     'min_price_ngn' => 100,
 
     // Courses at or above this price can be split into 2-4 monthly payments.
