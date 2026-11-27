@@ -20,9 +20,10 @@ return [
     'plan_days' => 30,
 
     'plans' => [
-        'starter' => ['name' => 'Starter', 'price_ngn' => 0, 'fee_ngn' => 0.04, 'fee_foreign' => 0.06],
-        'pro' => ['name' => 'Pro', 'price_ngn' => 7500, 'fee_ngn' => 0.025, 'fee_foreign' => 0.045],
-        'business' => ['name' => 'Business', 'price_ngn' => 15000, 'fee_ngn' => 0.015, 'fee_foreign' => 0.035],
+        // upload_mb: the largest single video or download file. 5 GB is the most one direct upload can take.
+        'starter' => ['name' => 'Starter', 'price_ngn' => 0, 'fee_ngn' => 0.04, 'fee_foreign' => 0.06, 'upload_mb' => 1024],
+        'pro' => ['name' => 'Pro', 'price_ngn' => 7500, 'fee_ngn' => 0.025, 'fee_foreign' => 0.045, 'upload_mb' => 2048],
+        'business' => ['name' => 'Business', 'price_ngn' => 15000, 'fee_ngn' => 0.015, 'fee_foreign' => 0.035, 'upload_mb' => 5120],
     ],
 
     // How long a paid plan can be bought for at once, and the saving for paying ahead.
@@ -41,7 +42,8 @@ return [
     'instalment_max_failures' => 3,
     'max_price_ngn' => 10000000,
 
-    // What creators may upload, by lesson or file type.
+    // What creators may upload, by lesson or file type. Videos and download files are
+    // capped by the store's plan (plans.*.upload_mb); max_mb here is the fallback.
     'uploads' => [
         'video' => ['types' => ['mp4' => 'video/mp4', 'mov' => 'video/quicktime', 'webm' => 'video/webm'], 'max_mb' => 2048],
         'pdf' => ['types' => ['pdf' => 'application/pdf'], 'max_mb' => 200],

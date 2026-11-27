@@ -486,8 +486,17 @@ class CreatorStudioController extends Controller
         if (! isset($rules['types'][$extension])) {
             return $this->error('That file type is not supported. Use ' . strtoupper(implode(', ', array_keys($rules['types']))) . '.', 422);
         }
-        if ($request->integer('size') > $rules['max_mb'] * 1024 * 1024) {
-            return $this->error("That file is too large. The limit is {$rules['max_mb']} MB.", 422);
+        $store = $product->store;
+        $limit = $store->uploadLimitMb($kind);
+        if ($request->integer('size') > $limit * 1024 * 1024) {
+            $nice = $limit >= 1024 ? rtrim(rtrim(number_format($limit / 1024, 1), '0'), '.') . ' GB' : "{$limit} MB";
+            $plan = $store->activePlan();
+            $bigger = collect(config('creators.plans'))->filter(fn ($p) => ($p['upload_mb'] ?? 0) > $limit)->keys()->first();
+            $upgrade = in_array($kind, ['video', 'file'], true) && $bigger
+                ? ' Upgrade to ' . config("creators.plans.{$bigger}.name") . ' for bigger files.'
+                : '';
+
+            return $this->error("That file is too large. Your " . config("creators.plans.{$plan}.name") . " plan allows up to {$nice} per file.{$upgrade}", 422);
         }
 
         $key = "creators/{$product->store_id}/{$product->id}/" . Str::uuid() . ".{$extension}";

@@ -35,6 +35,7 @@ class CreatorPresenter
                 'on_trial' => $store->onTrial(),
                 'fee_rate' => $store->feeRate('NGN'),
                 'suspended' => $store->suspended,
+                'upload_limits_mb' => $store->uploadLimits(),
             ];
         }
 

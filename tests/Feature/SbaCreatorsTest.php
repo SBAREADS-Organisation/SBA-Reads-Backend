@@ -75,6 +75,12 @@ class SbaCreatorsTest extends TestCase
         return CreatorProduct::find($id);
     }
 
+    /** The message an API error response shows the user. */
+    private function said($response): string
+    {
+        return (string) ($response->json('error') ?? $response->json('message'));
+    }
+
     /** Runs the same code a confirmed Paystack payment runs. */
     private function confirmPayment(string $purpose, int $purposeId): void
     {
@@ -283,6 +289,40 @@ class SbaCreatorsTest extends TestCase
 
         $this->postJson("/api/creators/studio/products/{$product->id}/upload-url", ['kind' => 'video', 'file_name' => 'talk.exe', 'size' => 100])->assertStatus(422);
         $this->postJson("/api/creators/studio/products/{$product->id}/upload-url", ['kind' => 'pdf', 'file_name' => 'big.pdf', 'size' => 999 * 1024 * 1024])->assertStatus(422);
+    }
+
+    #[Test]
+    public function bigger_plans_can_upload_bigger_files(): void
+    {
+        $product = $this->publishedCourse();
+        $store = $product->store;
+        $url = "/api/creators/studio/products/{$product->id}/upload-url";
+        $gb = fn (float $n) => (int) ($n * 1024 * 1024 * 1024);
+        $tooLarge = fn ($response) => $response->status() === 422 && str_contains((string) $this->said($response), 'too large');
+
+        // The free trial is Pro: up to 2 GB.
+        $this->getJson('/api/creators/studio/store')->assertJsonPath('data.store.upload_limits_mb.video', 2048);
+        $this->assertFalse($tooLarge($this->postJson($url, ['kind' => 'video', 'file_name' => 'talk.mp4', 'size' => $gb(1.5)])));
+        $response = $this->postJson($url, ['kind' => 'video', 'file_name' => 'talk.mp4', 'size' => $gb(3)]);
+        $this->assertTrue($tooLarge($response));
+        $this->assertStringContainsString('Pro plan allows up to 2 GB', $this->said($response));
+        $this->assertStringContainsString('Upgrade to Business', $this->said($response));
+
+        // Starter: up to 1 GB.
+        $store->update(['trial_ends_at' => now()->subDay()]);
+        $response = $this->postJson($url, ['kind' => 'file', 'file_name' => 'pack.zip', 'size' => $gb(1.5)]);
+        $this->assertTrue($tooLarge($response));
+        $this->assertStringContainsString('Upgrade to Pro', $this->said($response));
+
+        // Business: up to 5 GB, and nothing bigger to upgrade to.
+        $store->update(['plan' => 'business', 'plan_paid_until' => now()->addMonth()]);
+        $this->assertFalse($tooLarge($this->postJson($url, ['kind' => 'video', 'file_name' => 'talk.mp4', 'size' => $gb(4)])));
+        $response = $this->postJson($url, ['kind' => 'video', 'file_name' => 'talk.mp4', 'size' => $gb(6)]);
+        $this->assertTrue($tooLarge($response));
+        $this->assertStringNotContainsString('Upgrade', $this->said($response));
+
+        // PDFs stay at 200 MB on every plan.
+        $this->assertTrue($tooLarge($this->postJson($url, ['kind' => 'pdf', 'file_name' => 'notes.pdf', 'size' => 250 * 1024 * 1024])));
     }
 
     #[Test]

@@ -48,6 +48,23 @@ class CreatorStore extends Model
         return $this->onTrial() ? config('creators.trial_plan') : 'starter';
     }
 
+    /** The largest file, in MB, this store may upload for a lesson kind (video, pdf, file or cover). */
+    public function uploadLimitMb(string $kind): int
+    {
+        $fixed = (int) config("creators.uploads.{$kind}.max_mb", 0);
+        if (! in_array($kind, ['video', 'file'], true)) {
+            return $fixed;
+        }
+
+        return (int) (config('creators.plans.' . $this->activePlan() . '.upload_mb') ?? $fixed);
+    }
+
+    /** Upload limits in MB for every kind, for the studio to show. */
+    public function uploadLimits(): array
+    {
+        return collect(array_keys(config('creators.uploads')))->mapWithKeys(fn ($kind) => [$kind => $this->uploadLimitMb($kind)])->all();
+    }
+
     public function feeRate(string $currency = 'NGN'): float
     {
         $plan = config('creators.plans.' . $this->activePlan());
