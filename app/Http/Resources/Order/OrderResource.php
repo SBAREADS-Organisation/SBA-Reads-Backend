@@ -15,6 +15,7 @@ class OrderResource extends JsonResource
             'tracking_number'  => $this->tracking_number,
             'status'           => $this->status,
             'total_amount'     => $this->total_amount,
+            'currency'         => $this->currency,
             'delivery_type'    => $this->delivery_type ?? 'delivery',
             'delivery_address' => $this->deliveryAddress?->address,
             'delivery_state'   => $this->delivery_state,
