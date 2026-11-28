@@ -90,6 +90,12 @@ class BookService
         $data['slug'] = $count ? "{$slugBase}-{$count}" : $slugBase;
         $mediaUploadIds = [];
 
+        // The database requires a table of contents. The app sends one; the website
+        // sends none, so a missing one is stored as an empty list.
+        if (empty($data['table_of_contents'])) {
+            $data['table_of_contents'] = [];
+        }
+
         // Merge pricing fields (if any)
         if (! empty($data['pricing'])) {
             $data['actual_price'] = $data['pricing']['actual_price'] ?? null;

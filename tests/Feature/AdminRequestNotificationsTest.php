@@ -74,6 +74,42 @@ class AdminRequestNotificationsTest extends TestCase
     }
 
     #[Test]
+    public function a_book_from_the_web_form_is_saved_without_a_table_of_contents(): void
+    {
+        // The website sends no table of contents, unlike the app. The book must still save.
+        Storage::fake('s3');
+        $media = \App\Models\MediaUpload::create([
+            'context' => 'book_cover', 'type' => 'image', 'folder' => 'covers', 'public_id' => 'covers/x',
+            'url' => 'https://img.example/x.png', 'watermarked' => false, 'is_temporary' => false,
+        ]);
+        $this->mock(\App\Services\Cloudinary\CloudinaryMediaUploadService::class)
+            ->shouldReceive('upload')->once()->andReturn(['url' => 'https://img.example/x.png', 'public_id' => 'covers/x', 'id' => $media->id]);
+
+        $author = User::factory()->create(['account_type' => 'author', 'kyc_status' => 'verified']);
+        Sanctum::actingAs($author);
+
+        $this->post('/api/books', [
+            'books' => [[
+                'title' => 'Woman You Are Distinct',
+                'description' => 'Be original.',
+                'actual_price' => '9.99',
+                'currency' => 'USD',
+                'genres' => ['Non-Fiction'],
+                'isbn' => '9781005183158',
+                'author_id' => $author->id,
+                'authors' => [$author->id],
+                'meta_data' => ['pages' => '49'],
+                'cover_image' => UploadedFile::fake()->create('1003503880.png', 100, 'image/png'),
+                'files' => [UploadedFile::fake()->create('book.pdf', 100, 'application/pdf')],
+            ]],
+        ], ['Accept' => 'application/json'])->assertCreated();
+
+        $book = Book::where('title', 'Woman You Are Distinct')->firstOrFail();
+        $this->assertSame([], $book->table_of_contents);
+        $this->assertSame('9781005183158', $book->isbn);
+    }
+
+    #[Test]
     public function a_usd_payout_request_emails_the_admin_inbox_and_staff_once_each(): void
     {
         $staff = $this->admin();
